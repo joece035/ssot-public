@@ -102,3 +102,14 @@ alias node-register='${SSOT:-$HOME/ssot}/bootstrap/nodes/node-register.sh'
 alias node-status='${SSOT:-$HOME/ssot}/bootstrap/nodes/node-status.sh'
 alias nodestatus='${SSOT:-$HOME/ssot}/bootstrap/nodes/node-status.sh'
 alias ns='${SSOT:-$HOME/ssot}/bootstrap/nodes/node-status.sh'
+
+# ============================================================
+# SYSTEM DASHBOARD
+# ============================================================
+# dashboard          — full dashboard (all sections)
+# dashboard --ssh    — include live SSH tests
+# dashboard --compact — minimal view
+# dashboard --json   — JSON output
+# db                 — shorthand for dashboard
+alias dashboard='${SSOT:-$HOME/ssot}/tools/dashboard.sh'
+alias db='${SSOT:-$HOME/ssot}/tools/dashboard.sh'
