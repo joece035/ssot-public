@@ -173,7 +173,7 @@ esac
 _install_pkg openssh  ssh
 _install_pkg openssl  openssl  "apk=openssl"
 _install_pkg curl     curl
-_install_pkg jq       jq
+_install_pkg jq       jq      "winget=jqlang.jq"
 _install_pkg rsync    rsync
 
 ok "Stage 1: Essential packages ready"
