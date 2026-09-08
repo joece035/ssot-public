@@ -1,0 +1,26 @@
+# ============================================================
+# .gitignore — SSOT Repository
+# ============================================================
+
+# ── Secrets (NEVER commit) ──
+.env
+*.env.local
+*.env.production
+
+# ── Temp & state files ──
+/tmp/
+*.swp
+*~
+*.bak
+*.tmp
+.DS_Store
+Thumbs.db
+
+# ── Editor ──
+.vscode/
+.idea/
+*.code-workspace
+
+# ── OS ──
+Desktop.ini
+*.lnk

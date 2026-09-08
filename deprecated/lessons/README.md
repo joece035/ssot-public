@@ -1,0 +1,1 @@
+*/lessons/ is my lerning and practicing place i uses AI assistant to help me to lerning bash and script for automating my work. so never fix or change the files in this folder unless i ask you to do it. but if you find any mistake please give an advice in comments to correct it and notice me
