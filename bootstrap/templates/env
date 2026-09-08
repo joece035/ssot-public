@@ -23,11 +23,13 @@ esac
 [ -f ~/.env ] && . ~/.env
 
 # ── 3. SSOT auto-detection (if not set in ~/.env) ──
+# Priority: bashscripts (a/personal) > ssot (b/shared)
+# To override: set SSOT in ~/.env or use 'repo a/b' at runtime
 if [[ -z "${SSOT:-}" ]]; then
-    if [[ -d "$HOME/ssot" ]]; then
-        export SSOT="$HOME/ssot"
-    elif [[ -d "$HOME/bashscripts" ]]; then
+    if [[ -d "$HOME/bashscripts" ]]; then
         export SSOT="$HOME/bashscripts"
+    elif [[ -d "$HOME/ssot" ]]; then
+        export SSOT="$HOME/ssot"
     fi
 fi
 
@@ -148,6 +150,20 @@ repo() {
         echo "🗑️  Removed old symlinks"
     fi
     shell_setup "${MY_DEVICE:-${JOE_ENV:-}}"
+
+    # Re-create tool symlinks in ~/.local/bin/
+    local _bin="$HOME/.local/bin"
+    mkdir -p "$_bin"
+    for _tool in joe node-status; do
+        if [[ -f "$repository/joe.sh" && "$_tool" == "joe" ]]; then
+            cp "$repository/joe.sh" "$_bin/$_tool"
+            chmod +x "$_bin/$_tool"
+        elif [[ -f "$repository/bootstrap/nodes/node-status.sh" && "$_tool" == "node-status" ]]; then
+            cp "$repository/bootstrap/nodes/node-status.sh" "$_bin/$_tool"
+            chmod +x "$_bin/$_tool"
+        fi
+    done
+    echo "🔧 Updated ~/.local/bin/ tools from $repository"
 
     # Source joe.sh from new repo if it exists
     if [[ -f "$repository/joe.sh" ]]; then

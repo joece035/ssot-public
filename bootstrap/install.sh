@@ -41,6 +41,88 @@ warn() { printf '   %s!%s %s\n' "${_YELLOW}" "${_RESET}" "$*" >&2; }
 die()  { printf '%s✗%s %s\n' "${_BOLD}${_RED}" "${_RESET}" "$*" >&2; exit 1; }
 
 # ============================================================
+# STAGE Pre-0 — Backup & Clean Previous Installation
+# ============================================================
+# Backs up all files that will be modified into $BACKUP_DIR/installationbk/
+# then removes them so install starts from a clean state.
+# ============================================================
+STAGE_TS="$(date +%Y%m%d_%H%M%S)"
+BACKUP_DIR="$HOME/.ssot-backups/installationbk/$STAGE_TS"
+mkdir -p "$BACKUP_DIR"
+
+log "Stage Pre-0: Backing up previous installation → $BACKUP_DIR"
+
+# ── Backup files (copy, don't move — keep originals as safety net) ──
+_backup_file() {
+    local src="$1"
+    if [[ -L "$src" ]]; then
+        # Symlink: record target
+        local tgt
+        tgt="$(readlink "$src" 2>/dev/null)"
+        echo "symlink → $tgt" > "$BACKUP_DIR/$(basename "$src").meta"
+        ok "  Backed up symlink: $(basename "$src") → $tgt"
+    elif [[ -f "$src" ]]; then
+        cp "$src" "$BACKUP_DIR/$(basename "$src")"
+        ok "  Backed up: $(basename "$src")"
+    fi
+}
+
+_backup_file "$HOME/.bashrc"
+_backup_file "$HOME/.zshrc"
+_backup_file "$HOME/.bash_aliases"
+_backup_file "$HOME/.local/bin/env"
+_backup_file "$HOME/.ssh/config"
+_backup_file "$HOME/.env"
+
+# ── Backup and record all symlinks in ~/.local/bin/ ──
+if [[ -d "$HOME/.local/bin" ]]; then
+    _symlink_count=0
+    while IFS= read -r -d '' link; do
+        _tgt="$(readlink "$link" 2>/dev/null)"
+        echo "symlink → $_tgt" > "$BACKUP_DIR/bin_$(basename "$link").meta"
+        _symlink_count=$((_symlink_count + 1))
+    done < <(find "$HOME/.local/bin" -maxdepth 1 -type l -print0 2>/dev/null)
+    [[ $_symlink_count -gt 0 ]] && ok "  Backed up $_symlink_count symlink(s) from ~/.local/bin/"
+fi
+
+# ── Clean: Remove all previous installation artifacts ──
+log "Stage Pre-0: Cleaning previous installation state"
+
+# Remove ~/.local/bin/ contents (env, joe, syncctl, etc.)
+if [[ -d "$HOME/.local/bin" ]]; then
+    rm -f "$HOME/.local/bin/env"
+    rm -f "$HOME/.local/bin/joe"
+    rm -f "$HOME/.local/bin/syncctl"
+    rm -f "$HOME/.local/bin/node-status"
+    ok "  Cleaned ~/.local/bin/ (env, joe, syncctl, node-status)"
+fi
+
+# Remove shell profile symlinks (will be re-created in Stage 4)
+for _rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
+    if [[ -L "$_rc" ]]; then
+        rm -f "$_rc"
+        ok "  Removed symlink: $(basename "$_rc")"
+    fi
+done
+
+# Remove .bash_aliases symlink if it exists
+if [[ -L "$HOME/.bash_aliases" ]]; then
+    rm -f "$HOME/.bash_aliases"
+    ok "  Removed symlink: .bash_aliases"
+fi
+
+# Clean broken symlinks in ~/
+while IFS= read -r -d '' link; do
+    if [[ ! -e "$link" ]]; then
+        rm -f "$link"
+    fi
+done < <(find "$HOME" -maxdepth 1 -type l -print0 2>/dev/null)
+
+unset SSOT 2>/dev/null || true
+ok "  Cleaned environment state"
+ok "Stage Pre-0: Previous installation backed up & cleaned"
+
+# ============================================================
 # STAGE 0 — Detect Environment
 # ============================================================
 # Priority: argument > MY_DEVICE env > auto-detect
@@ -463,24 +545,23 @@ log "Stage 4.5: Generating global environment manager"
 BIN_DIR="$HOME/.local/bin"
 mkdir -p "$BIN_DIR"
 
-ENV_TEMPLATE="$SSOT/bootstrap/templates/env"
 ENV_TARGET="$BIN_DIR/env"
 
-if [[ -f "$ENV_TEMPLATE" ]]; then
-    # Backup existing env if it's not a symlink
-    if [[ -f "$ENV_TARGET" && ! -L "$ENV_TARGET" ]]; then
-        _bak="${ENV_TARGET}.bak.$(date +%s)"
-        cp "$ENV_TARGET" "$_bak"
-        warn "Backed up existing $ENV_TARGET → $_bak"
+# Find template: try $SSOT first, then fallback to ~/ssot
+ENV_TEMPLATE=""
+for _dir in "$SSOT" "$HOME/ssot" "$HOME/bashscripts"; do
+    if [[ -f "$_dir/bootstrap/templates/env" ]]; then
+        ENV_TEMPLATE="$_dir/bootstrap/templates/env"
+        break
     fi
+done
 
-    # Copy template to target
+if [[ -n "$ENV_TEMPLATE" ]]; then
     cp "$ENV_TEMPLATE" "$ENV_TARGET"
     chmod +x "$ENV_TARGET"
-    ok "Created: $ENV_TARGET (global environment manager)"
+    ok "Created: $ENV_TARGET (from $ENV_TEMPLATE)"
 else
-    warn "Template not found: $ENV_TEMPLATE — generating minimal env"
-    # Generate minimal env inline
+    warn "Template not found in any repo — generating minimal env"
     cat > "$ENV_TARGET" << 'ENVEOF'
 #!/bin/bash
 # ~/.local/bin/env — Global Environment Manager (minimal)
@@ -496,8 +577,8 @@ esac
 
 # SSOT auto-detection
 if [[ -z "${SSOT:-}" ]]; then
-    [[ -d "$HOME/ssot" ]] && export SSOT="$HOME/ssot"
     [[ -d "$HOME/bashscripts" ]] && export SSOT="$HOME/bashscripts"
+    [[ -z "${SSOT:-}" && -d "$HOME/ssot" ]] && export SSOT="$HOME/ssot"
 fi
 
 # Source joe.sh if SSOT is set
