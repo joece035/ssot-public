@@ -43,25 +43,13 @@ shell_setup() {
     [[ -z "$env_" ]] && { echo "shell_setup: no environment specified"; return 1; }
 
     local profile_dir="${SSOT}/profiles/$(echo "$env_" | tr '[:upper:]' '[:lower:]')"
-    local shell_rc=""
-    local bash_rc=""
 
-    # Determine which shell RC files to create
+    # All environments have BOTH .bashrc and .zshrc
+    # (user switches via sws() helper), except GIT-BASH (bash only)
+    local need_bash=true
+    local need_zsh=true
     case "$env_" in
-        TERMUX|MUMU|OPPO)
-            # Android: both zsh and bash
-            shell_rc="$HOME/.zshrc"
-            bash_rc="$HOME/.bashrc"
-            ;;
-        WSL|GIT-BASH|ACODEX)
-            # Desktop: bash only (or default shell)
-            shell_rc="$HOME/.bashrc"
-            bash_rc="$HOME/.bashrc"
-            ;;
-        *)
-            echo "shell_setup: unknown environment '$env_'"
-            return 1
-            ;;
+        GIT-BASH) need_zsh=false ;;
     esac
 
     # Helper: create symlink if source exists
@@ -87,10 +75,8 @@ shell_setup() {
     }
 
     echo "🔗 Wiring shell profiles for $env_..."
-    _link "$shell_rc" "$profile_dir/$(basename "$shell_rc")"
-    if [[ "$shell_rc" != "$bash_rc" ]]; then
-        _link "$bash_rc" "$profile_dir/.bashrc"
-    fi
+    [[ "$need_bash" == true ]] && _link "$HOME/.bashrc" "$profile_dir/.bashrc"
+    [[ "$need_zsh" == true ]]  && _link "$HOME/.zshrc" "$profile_dir/.zshrc"
 }
 
 # ============================================================
