@@ -1445,7 +1445,11 @@ fm_push() {
     "-e 'ssh -p'   |ระบุ port ของเครื่องปลายทาง ($r_port)"
 
   _step "Pushing: $src → $r_name:$dst"
-  rsync -az --update --info=progress2 -e "ssh -p $r_port" "$src" "${r_user}@${r_ip}:$dst" && _ok "Push สำเร็จ"
+  if [[ "${_SSOT_HAS_RSYNC:-0}" -eq 1 ]]; then
+    rsync -az --update --info=progress2 -e "ssh -p $r_port" "$src" "${r_user}@${r_ip}:$dst" && _ok "Push สำเร็จ"
+  else
+    scp -P "$r_port" -r "$src" "${r_user}@${r_ip}:$dst" && _ok "Push สำเร็จ (scp)"
+  fi
 }
 
 fm_pull() {
@@ -1467,7 +1471,11 @@ fm_pull() {
     "Pull          |ดึง code ที่แก้ใน $r_name กลับมาที่เครื่องปัจจุบัน"
 
   _step "Pulling: $r_name:$src → $dst"
-  rsync -az --update --info=progress2 -e "ssh -p $r_port" "${r_user}@${r_ip}:$src" "$dst" && _ok "Pull สำเร็จ"
+  if [[ "${_SSOT_HAS_RSYNC:-0}" -eq 1 ]]; then
+    rsync -az --update --info=progress2 -e "ssh -p $r_port" "${r_user}@${r_ip}:$src" "$dst" && _ok "Pull สำเร็จ"
+  else
+    scp -P "$r_port" -r "${r_user}@${r_ip}:$src" "$dst" && _ok "Pull สำเร็จ (scp)"
+  fi
 }
 
 fm_rls() {
@@ -2441,8 +2449,13 @@ xfm_sync() {
     local ssh_opt="-o ConnectTimeout=8 -o BatchMode=yes"
     [[ -f "$key" ]] && ssh_opt="$ssh_opt -i $key"
     [[ -n "$port" ]] && ssh_opt="$ssh_opt -p $port"
-    rsync -avz --progress --delete -e "ssh $ssh_opt" "$src_p" "$user@$host:$dst_p" \
-      && _ok "sync สำเร็จ"
+    if [[ "${_SSOT_HAS_RSYNC:-0}" -eq 1 ]]; then
+      rsync -avz --progress --delete -e "ssh $ssh_opt" "$src_p" "$user@$host:$dst_p" \
+        && _ok "sync สำเร็จ"
+    else
+      scp -P "$port" -r "$src_p" "$user@$host:$dst_p" \
+        && _ok "sync สำเร็จ (scp, no --delete)"
+    fi
     return
   fi
 
@@ -2454,8 +2467,13 @@ xfm_sync() {
     local ssh_opt="-o ConnectTimeout=8 -o BatchMode=yes"
     [[ -f "$key" ]] && ssh_opt="$ssh_opt -i $key"
     [[ -n "$port" ]] && ssh_opt="$ssh_opt -p $port"
-    rsync -avz --progress --delete -e "ssh $ssh_opt" "$user@$host:$src_p" "$dst_p" \
-      && _ok "sync สำเร็จ"
+    if [[ "${_SSOT_HAS_RSYNC:-0}" -eq 1 ]]; then
+      rsync -avz --progress --delete -e "ssh $ssh_opt" "$user@$host:$src_p" "$dst_p" \
+        && _ok "sync สำเร็จ"
+    else
+      scp -P "$port" -r "$user@$host:$src_p" "$dst_p" \
+        && _ok "sync สำเร็จ (scp, no --delete)"
+    fi
     return
   fi
 
@@ -2473,8 +2491,13 @@ xfm_sync() {
   local ssh_opt="-o ConnectTimeout=8 -o BatchMode=yes"
   [[ -f "$key" ]] && ssh_opt="$ssh_opt -i $key"
   [[ -n "$port" ]] && ssh_opt="$ssh_opt -p $port"
-  rsync -avz --progress --delete -e "ssh $ssh_opt" "$relay_dir/" "$user@$host:$dst_p" \
-    && _ok "sync สำเร็จ"
+  if [[ "${_SSOT_HAS_RSYNC:-0}" -eq 1 ]]; then
+    rsync -avz --progress --delete -e "ssh $ssh_opt" "$relay_dir/" "$user@$host:$dst_p" \
+      && _ok "sync สำเร็จ"
+  else
+    scp -P "$port" -r "$relay_dir/" "$user@$host:$dst_p" \
+      && _ok "sync สำเร็จ (scp, no --delete)"
+  fi
   rm -rf "$relay_dir"
 }
 

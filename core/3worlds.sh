@@ -20,6 +20,15 @@
 # Env from ~/ssot/00-env.sh
 
 # ============================================================
+# TRANSPORT AUTO-DETECT
+# ============================================================
+# _SSOT_HAS_RSYNC: 1 if rsync available, 0 if not (Git Bash → scp fallback)
+_SSOT_HAS_RSYNC=0
+if command -v rsync >/dev/null 2>&1; then
+    _SSOT_HAS_RSYNC=1
+fi
+
+# ============================================================
 # SECTION 0: WORLD DETECTION
 # ============================================================
 # _MY_WORLD: human-readable world tag (kept for backward compat).
@@ -166,23 +175,39 @@ twp() {
 # ---Helper functions---  
 # _rsync_to <user> <host> <port> <local_src> <remote_dst>
 #   → Push local file/dir to remote node via rsync over SSH.
+#   → Falls back to scp on Git Bash (no rsync available).
 _rsync_to() {
   local user="$1" host="$2" port="$3" src="$4" dst="$5"
-  rsync -az --update --info=progress2 -e "ssh -p ${port}"         "$src" "${user}@${host}:${dst}"
+  if [[ "$_SSOT_HAS_RSYNC" -eq 1 ]]; then
+    rsync -az --update --info=progress2 -e "ssh -p ${port}"         "$src" "${user}@${host}:${dst}"
+  else
+    scp -P "${port}" -r "$src" "${user}@${host}:${dst}"
+  fi
 }
 
 # _rsync_to_delete <user> <host> <port> <local_src> <remote_dst>
 #   → Like _rsync_to but deletes destination files not in source.
+#   → scp fallback: copy only (no --delete equivalent).
 _rsync_to_delete() {
   local user="$1" host="$2" port="$3" src="$4" dst="$5"
-  rsync -az --delete --info=progress2 -e "ssh -p ${port}"         "$src" "${user}@${host}:${dst}"
+  if [[ "$_SSOT_HAS_RSYNC" -eq 1 ]]; then
+    rsync -az --delete --info=progress2 -e "ssh -p ${port}"         "$src" "${user}@${host}:${dst}"
+  else
+    echo "⚠️  scp: no --delete mode, doing plain copy" >&2
+    scp -P "${port}" -r "$src" "${user}@${host}:${dst}"
+  fi
 }
 
 # _rsync_from <user> <host> <port> <remote_src> <local_dst>
 #   → Pull file/dir from remote node to local via rsync over SSH.
+#   → Falls back to scp on Git Bash (no rsync available).
 _rsync_from() {
   local user="$1" host="$2" port="$3" src="$4" dst="$5"
-  rsync -az --update --info=progress2 -e "ssh -p ${port}"         "${user}@${host}:${src}" "$dst"
+  if [[ "$_SSOT_HAS_RSYNC" -eq 1 ]]; then
+    rsync -az --update --info=progress2 -e "ssh -p ${port}"         "${user}@${host}:${src}" "$dst"
+  else
+    scp -P "${port}" -r "${user}@${host}:${src}" "$dst"
+  fi
 }
 # ============================================================
 # SECTION 3: FILE TRANSFER LAYER (WSL ↔ Termux)

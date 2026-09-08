@@ -162,10 +162,16 @@ push_cmd() {
     cn 10 bi ">> Pushing to ${TARGET_HOST} (${TARGET_USER}@${TARGET_HOST}:${TARGET_PORT})..."
     
     # รัน rsync: แยก -e "ssh -p ..." ออกจาก source และ destination
-    rsync -avz --progress \
-        -e "ssh -p ${TARGET_PORT}" \
-        "${src}" \
-        "${TARGET_USER}@${TARGET_HOST}:${dest}"
+    if [[ "${_SSOT_HAS_RSYNC:-0}" -eq 1 ]]; then
+      rsync -avz --progress \
+          -e "ssh -p ${TARGET_PORT}" \
+          "${src}" \
+          "${TARGET_USER}@${TARGET_HOST}:${dest}"
+    else
+      scp -P "${TARGET_PORT}" -r \
+          "${src}" \
+          "${TARGET_USER}@${TARGET_HOST}:${dest}"
+    fi
 }
 
 # ============================================================
@@ -187,10 +193,16 @@ pull_cmd() {
 
     cn 10 bi "<< Pulling from ${TARGET_HOST} (${TARGET_USER}@${TARGET_HOST}:${TARGET_PORT})..."
 
-    rsync -avz --progress \
-        -e "ssh -p ${TARGET_PORT}" \
-        "${TARGET_USER}@${TARGET_HOST}:${remote_src}" \
-        "${local_dest}"
+    if [[ "${_SSOT_HAS_RSYNC:-0}" -eq 1 ]]; then
+      rsync -avz --progress \
+          -e "ssh -p ${TARGET_PORT}" \
+          "${TARGET_USER}@${TARGET_HOST}:${remote_src}" \
+          "${local_dest}"
+    else
+      scp -P "${TARGET_PORT}" -r \
+          "${TARGET_USER}@${TARGET_HOST}:${remote_src}" \
+          "${local_dest}"
+    fi
 }
 
 
@@ -199,8 +211,11 @@ _rsync () {
     local dest  =${2:-}
     local host  =${3:-$HOST_} # รับเป็นชื่อ alias เช่น mumu หรือ termux
     
-    #rsync -avz "file.txt" "host:/path/destination/"
-    rsync -avz "${src}" "${host}:${dest}" && cn 10 bi "DOWNLOAD DONE : ${src} ${dest}"
+    if [[ "${_SSOT_HAS_RSYNC:-0}" -eq 1 ]]; then
+      rsync -avz "${src}" "${host}:${dest}" && cn 10 bi "DOWNLOAD DONE : ${src} ${dest}"
+    else
+      scp -r "${src}" "${host}:${dest}" && cn 10 bi "DOWNLOAD DONE (scp) : ${src} ${dest}"
+    fi
 }
 
 

@@ -26,18 +26,34 @@
 _FM_LOADED=1
 
 # Dependency: if 3worlds transport not loaded, define stubs
+# These stubs auto-detect rsync availability (Git Bash → scp fallback)
 if ! declare -f _rsync_to &>/dev/null; then
+  _SSOT_HAS_RSYNC=0
+  command -v rsync >/dev/null 2>&1 && _SSOT_HAS_RSYNC=1
   _rsync_to() {
     local user="$1" host="$2" port="$3" src="$4" dst="$5"
-    rsync -az --update --info=progress2 -e "ssh -p ${port}" "$src" "${user}@${host}:${dst}"
+    if [[ "$_SSOT_HAS_RSYNC" -eq 1 ]]; then
+      rsync -az --update --info=progress2 -e "ssh -p ${port}" "$src" "${user}@${host}:${dst}"
+    else
+      scp -P "${port}" -r "$src" "${user}@${host}:${dst}"
+    fi
   }
   _rsync_to_delete() {
     local user="$1" host="$2" port="$3" src="$4" dst="$5"
-    rsync -az --delete --info=progress2 -e "ssh -p ${port}" "$src" "${user}@${host}:${dst}"
+    if [[ "$_SSOT_HAS_RSYNC" -eq 1 ]]; then
+      rsync -az --delete --info=progress2 -e "ssh -p ${port}" "$src" "${user}@${host}:${dst}"
+    else
+      echo "⚠️  scp: no --delete mode, doing plain copy" >&2
+      scp -P "${port}" -r "$src" "${user}@${host}:${dst}"
+    fi
   }
   _rsync_from() {
     local user="$1" host="$2" port="$3" src="$4" dst="$5"
-    rsync -az --update --info=progress2 -e "ssh -p ${port}" "${user}@${host}:${src}" "$dst"
+    if [[ "$_SSOT_HAS_RSYNC" -eq 1 ]]; then
+      rsync -az --update --info=progress2 -e "ssh -p ${port}" "${user}@${host}:${src}" "$dst"
+    else
+      scp -P "${port}" -r "${user}@${host}:${src}" "$dst"
+    fi
   }
 fi
 
@@ -49,19 +65,22 @@ fi
 #   _FM_PROTO = rsync | scp  (MUMU has no rsync)
 _fm_node_vars() {
   local node="${1:-}"
+  # Auto-detect transport: use rsync if available, scp otherwise (Git Bash)
+  local _proto="scp"
+  [[ "${_SSOT_HAS_RSYNC:-0}" -eq 1 ]] && _proto="rsync"
   case "$node" in
     t|tm|termux|TERMUX)
       _FM_USER="${NODE_TERMUX_USER}"
       _FM_HOST="${NODE_TERMUX_HOST}"
       _FM_PORT="${NODE_TERMUX_PORT}"
-      _FM_PROTO="rsync"
+      _FM_PROTO="$_proto"
       _FM_TAG="TERMUX"
       ;;
     w|wsl|WSL)
       _FM_USER="${NODE_WSL_USER}"
       _FM_HOST="${NODE_WSL_HOST}"
       _FM_PORT="${NODE_WSL_PORT}"
-      _FM_PROTO="rsync"
+      _FM_PROTO="$_proto"
       _FM_TAG="WSL"
       ;;
     win|window|windows|WIN)
@@ -75,7 +94,7 @@ _fm_node_vars() {
       _FM_USER="${NODE_MUMU_USER}"
       _FM_HOST="${NODE_MUMU_HOST}"
       _FM_PORT="${NODE_MUMU_PORT}"
-      _FM_PROTO="rsync"
+      _FM_PROTO="$_proto"
       _FM_TAG="MUMU"
       ;;
     o|op|oppo|OPPO)
