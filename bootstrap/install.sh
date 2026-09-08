@@ -6,12 +6,20 @@
 # Works on: Termux, MuMu, WSL, Git Bash.
 #
 # Usage:
-    
 #   curl -fsSL https://raw.githubusercontent.com/joece035/ssot-public/main/bootstrap/install.sh | bash
 #
 # Or clone first, then run:
 #   git clone https://github.com/joece035/ssot-public.git ~/ssot
 #   bash ~/ssot/bootstrap/install.sh
+#
+# Specify device (important for Termux — auto-detect returns "TERMUX" for all):
+#   bash ~/ssot/bootstrap/install.sh <device>
+#   bash ~/ssot/bootstrap/install.sh termux    # physical Android phone
+#   bash ~/ssot/bootstrap/install.sh mumu      # MuMu emulator
+#   bash ~/ssot/bootstrap/install.sh oppo      # Oppo phone
+#
+# Or set MY_DEVICE env var:
+#   MY_DEVICE=oppo bash ~/ssot/bootstrap/install.sh
 #
 # Idempotent: safe to re-run. Skips completed steps.
 # ============================================================
@@ -35,21 +43,28 @@ die()  { printf '%s✗%s %s\n' "${_BOLD}${_RED}" "${_RESET}" "$*" >&2; exit 1; }
 # ============================================================
 # STAGE 0 — Detect Environment
 # ============================================================
+# Priority: argument > MY_DEVICE env > auto-detect
+# Auto-detect limitations:
+#   - Termux on ALL devices returns "TERMUX" (can't distinguish phone/emulator)
+#   - Use argument or MY_DEVICE to specify: termux, mumu, oppo, etc.
+# ============================================================
 detect_joe_env() {
-    # Allow override via argument or MY_DEVICE env var
+    # 1. Explicit argument (highest priority)
     if [[ -n "${1:-}" ]]; then
         echo "$1"
         return
     fi
+    # 2. MY_DEVICE env var (set in ~/.env or before running)
     if [[ -n "${MY_DEVICE:-}" ]]; then
         echo "$MY_DEVICE"
         return
     fi
+    # 3. Auto-detect (limited on Termux)
     if [[ -d "/data/data/com.termux" ]]; then
         if getprop ro.product.model 2>/dev/null | grep -qiE '(MuMu|vphone)'; then
             echo "MUMU"
         else
-            echo "TERMUX"
+            echo "TERMUX"  # ← All Termux devices get this; use argument to specify
         fi
     elif grep -qi microsoft /proc/version 2>/dev/null; then
         echo "WSL"
@@ -58,14 +73,21 @@ detect_joe_env() {
     elif command -v apk 2>/dev/null; then
         echo "ACODEX"
     else
-        echo "${1:-${MY_DEVICE:-$JOE_ENV}}"
+        echo "UNKNOWN"
     fi
 }
 
 log "Stage 0: Detecting environment"
 JOE_ENV="$(detect_joe_env "${1:-}")"
 export JOE_ENV
-ok "Environment: $JOE_ENV"
+
+# Also set MY_DEVICE if provided via argument
+if [[ -n "${1:-}" ]]; then
+    MY_DEVICE="$1"
+    export MY_DEVICE
+fi
+
+ok "Environment: $JOE_ENV (MY_DEVICE=${MY_DEVICE:-auto})"
 
 # ============================================================
 # ============================================================

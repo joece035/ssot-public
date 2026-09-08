@@ -147,7 +147,7 @@ repo() {
         rm -f "$HOME/.bashrc" "$HOME/.zshrc" 2>/dev/null
         echo "🗑️  Removed old symlinks"
     fi
-    shell_setup "${JOE_ENV:-}"
+    shell_setup "${MY_DEVICE:-${JOE_ENV:-}}"
 
     # Source joe.sh from new repo if it exists
     if [[ -f "$repository/joe.sh" ]]; then
