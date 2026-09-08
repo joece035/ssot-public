@@ -26,13 +26,15 @@ export NVM_DIR="$HOME/.nvm"
 nvm use default >/dev/null 2>&1 || true
 
 # ── 4. ENVIRONMENT & PATHS ──
+# ~/.local/bin/env handles: PATH, ~/.env, SSOT auto-detect, joe.sh
 _check -f "$HOME/.local/bin/env" "source"
-export PATH="$HOME/.local/bin:$PATH"
+
+# Environment-specific overrides
+export JOE_ENV="${JOE_ENV:-ACODEX}"
+export MY_DEVICE="${MY_DEVICE:-ACODEX}"
+
+# Extra PATH entries
 export PATH="$HOME/.local/lib/openclaw/bin:$PATH"
-export SSOT="$HOME/ssot"
-export JOE_ENV="ACODEX"
-export MY_DEVICE="ACODEX"
-[ -f $HOME/.env ] && source $HOME/.env
 
 # ── 5. ALIASES & COMPLETIONS ──
 [ -f $HOME/.bash_aliases ] && source $HOME/.bash_aliases

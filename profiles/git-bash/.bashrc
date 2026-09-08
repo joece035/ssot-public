@@ -27,13 +27,15 @@ if [ -d "$NVM_DIR" ]; then
 fi
 
 # ── 4. ENVIRONMENT & PATHS ──
+# ~/.local/bin/env handles: PATH, ~/.env, SSOT auto-detect, joe.sh
 [ -f "$HOME/.local/bin/env" ] && . "$HOME/.local/bin/env"
-export PATH="$HOME/.local/bin:$PATH"
+
+# Environment-specific overrides
+export JOE_ENV="${JOE_ENV:-GIT-BASH}"
+export MY_DEVICE="${MY_DEVICE:-GIT-BASH}"
+
+# Extra PATH entries
 export PATH="$HOME/.local/lib/openclaw/bin:$PATH"
-export SSOT="${SSOT:-$HOME/ssot}"
-export JOE_ENV="GIT-BASH"
-export MY_DEVICE="GIT-BASH"
-[ -f ~/.env ] && source ~/.env
 
 # ── 5. ALIASES & COMPLETIONS ──
 [ -f ~/.bash_aliases ] && source ~/.bash_aliases

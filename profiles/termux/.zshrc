@@ -68,13 +68,24 @@ if [[ -z "${_OMZ_SOURCED:-}" ]]; then
 fi
 
 # -- ZSH/Bash compat layer (BEFORE joe.sh) ---------------------
-[[ -f "$HOME/.env" ]] && source "$HOME/.env"
+# ~/.local/bin/env handles: PATH, ~/.env, SSOT auto-detect, joe.sh
+[[ -f "$HOME/.local/bin/env" ]] && source "$HOME/.local/bin/env"
+
+# Environment-specific overrides
+export JOE_ENV="${JOE_ENV:-TERMUX}"
+export MY_DEVICE="${MY_DEVICE:-TERMUX}"
+
+# ZSH/Bash compat layer
 SSOT="${SSOT:-$HOME/ssot}"
 [[ -f "$SSOT/.zsh-bash-compat.sh" ]] && source "$SSOT/.zsh-bash-compat.sh"
 
 # -- JOE SSOT single entry point --------------------------------
-# joe.sh: JOE_ENV detection -> 00-env.sh -> 01-colors.sh -> functions
-[[ -f "$SSOT/joe.sh" ]] && source "$SSOT/joe.sh"
+# joe.sh is auto-sourced by ~/.local/bin/env via SSOT
+# CRLF guard: convert CRLF→LF if needed
+if [[ -f "${SSOT}/joe.sh" ]] && grep -qU $'\r' "${SSOT}/joe.sh" 2>/dev/null; then
+    sed -i 's/\r$//' "${SSOT}/joe.sh"
+    echo "⚠️  CRLF→LF: joe.sh (auto-fixed)"
+fi
 
 # -- Powerlevel10k config --------------------------------------
 [[ -f "$HOME/.p10k.zsh" ]] && source "$HOME/.p10k.zsh"

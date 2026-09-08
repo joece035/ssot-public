@@ -396,6 +396,64 @@ if [[ "$SHELL_RC" != "$BASH_RC" ]]; then
 fi
 
 # ============================================================
+# STAGE 4.5 — Generate Global Environment Manager (~/.local/bin/env)
+# ============================================================
+# This file provides:
+#   - PATH setup (~/.local/bin)
+#   - Load ~/.env (secrets & overrides)
+#   - shell_setup() — symlink shell profiles
+#   - repo() — switch between ~/bashscripts and ~/ssot
+# ============================================================
+log "Stage 4.5: Generating global environment manager"
+
+BIN_DIR="$HOME/.local/bin"
+mkdir -p "$BIN_DIR"
+
+ENV_TEMPLATE="$SSOT/bootstrap/templates/env"
+ENV_TARGET="$BIN_DIR/env"
+
+if [[ -f "$ENV_TEMPLATE" ]]; then
+    # Backup existing env if it's not a symlink
+    if [[ -f "$ENV_TARGET" && ! -L "$ENV_TARGET" ]]; then
+        local _bak="${ENV_TARGET}.bak.$(date +%s)"
+        cp "$ENV_TARGET" "$_bak"
+        warn "Backed up existing $ENV_TARGET → $_bak"
+    fi
+
+    # Copy template to target
+    cp "$ENV_TEMPLATE" "$ENV_TARGET"
+    chmod +x "$ENV_TARGET"
+    ok "Created: $ENV_TARGET (global environment manager)"
+else
+    warn "Template not found: $ENV_TEMPLATE — generating minimal env"
+    # Generate minimal env inline
+    cat > "$ENV_TARGET" << 'ENVEOF'
+#!/bin/bash
+# ~/.local/bin/env — Global Environment Manager (minimal)
+
+# PATH setup
+case ":${PATH}:" in
+    *:"$HOME/.local/bin":*) ;;
+    *) export PATH="$HOME/.local/bin:$PATH" ;;
+esac
+
+# Load private env vars
+[ -f ~/.env ] && . ~/.env
+
+# SSOT auto-detection
+if [[ -z "${SSOT:-}" ]]; then
+    [[ -d "$HOME/ssot" ]] && export SSOT="$HOME/ssot"
+    [[ -d "$HOME/bashscripts" ]] && export SSOT="$HOME/bashscripts"
+fi
+
+# Source joe.sh if SSOT is set
+[[ -n "${SSOT:-}" && -f "${SSOT}/joe.sh" ]] && source "${SSOT}/joe.sh" 2>/dev/null
+ENVEOF
+    chmod +x "$ENV_TARGET"
+    ok "Created: $ENV_TARGET (minimal)"
+fi
+
+# ============================================================
 # STAGE 5 — Create Tool Symlinks
 # ============================================================
 log "Stage 5: Creating tool symlinks"
