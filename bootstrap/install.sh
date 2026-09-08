@@ -109,6 +109,18 @@ ok "Environment: $JOE_ENV (MY_DEVICE=${MY_DEVICE:-auto})"
 
 log "Stage 1: Installing essential packages"
 
+# ── Ensure Git for Windows paths are in PATH ──
+# Git Bash may have rsync, ssh, etc. in /usr/bin or /mingw64/bin
+# but these aren't always in PATH when running from external shells
+if [[ "$JOE_ENV" == "GIT-BASH" ]]; then
+    for _gfw_bin in "/usr/bin" "/mingw64/bin" "/mingw32/bin"; do
+        [[ -d "$_gfw_bin" ]] && case ":${PATH}:" in
+            *:"$_gfw_bin":*) ;;
+            *) export PATH="$_gfw_bin:$PATH" ;;
+        esac
+    done
+fi
+
 # Source pkg_manager if available (repo may already be cloned)
 _PKG_MGR="$HOME/ssot/functions/pkg_manager.sh"
 if [[ -f "$_PKG_MGR" ]]; then
