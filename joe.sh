@@ -177,6 +177,7 @@ ssot_load(){
         "$SSOT/core/profiles.sh"
         "$SSOT/core/theme.sh"
         "$SSOT/functions"/*.sh
+        "$SSOT/personal/joe_scripts.sh"
     )
     #-- run main cmd
     _check -f "source_files" "source" 2>/dev/null
