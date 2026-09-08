@@ -169,11 +169,7 @@ _render_repository() {
     if [[ -d "$current_repo/.git" ]]; then
         local branch
         branch=$(cd "$current_repo" && git branch --show-current 2>/dev/null || echo "?")
-        local dirty=""
-        if ! cd "$current_repo" 2>/dev/null || ! git diff --quiet 2>/dev/null; then
-            dirty=" (dirty)"
-        fi
-        git_status="branch: ${branch}${dirty}"
+        git_status="branch: ${branch}"
     fi
 
     if [[ "$_OPT_JSON" == "true" ]]; then
@@ -193,19 +189,21 @@ _render_repository() {
     $repo_a_exists && repo_a_badge="✅"
     $repo_b_exists && repo_b_badge="✅"
 
-    # Highlight current
-    local marker_a="  "
-    local marker_b="  "
-    [[ "$current_repo" == *"/bashscripts" ]] && marker_a="${_G}◀${_Z} "
-    [[ "$current_repo" == *"/ssot" ]] && marker_b="${_G}◀${_Z} "
-
     printf "  ${_B}${_C}%s  %s${_Z}\n" "$icon" "$title"
     printf "  ${_D}┌──────────────────────────────────────────────────────┐${_Z}\n"
     printf "  ${_D}│${_Z}  %-16s ${_W}%-38s${_Z}  ${_D}│${_Z}\n" "Current:" "$repo_label"
     printf "  ${_D}│${_Z}  %-16s ${_C}%-38s${_Z}  ${_D}│${_Z}\n" "SSOT Path:" "$current_repo"
     printf "  ${_D}├──────────────────────────────────────────────────────┤${_Z}\n"
-    printf "  ${_D}│${_Z}  %s${_B}a)${_Z} %-14s %s %-22s  ${_D}│${_Z}\n" "$marker_a" "~/bashscripts" "$repo_a_badge" "(personal)"
-    printf "  ${_D}│${_Z}  %s${_B}b)${_Z} %-14s %s %-22s  ${_D}│${_Z}\n" "$marker_b" "~/ssot" "$repo_b_badge" "(shared)"
+    if [[ "$current_repo" == *"/bashscripts" ]]; then
+        printf '  \033[2m│\033[0m  \033[1ma)\033[0m %-14s ✅ %-22s  \033[2m│\033[0m\n' "~/bashscripts" "(personal)"
+        printf '  \033[2m│\033[0m  \033[0;32m◀\033[0m \033[1mb)\033[0m %-14s ✅ %-22s  \033[2m│\033[0m\n' "~/ssot" "(shared)"
+    elif [[ "$current_repo" == *"/ssot" ]]; then
+        printf '  \033[2m│\033[0m    \033[1ma)\033[0m %-14s ✅ %-22s  \033[2m│\033[0m\n' "~/bashscripts" "(personal)"
+        printf '  \033[2m│\033[0m  \033[0;32m◀\033[0m \033[1mb)\033[0m %-14s ✅ %-22s  \033[2m│\033[0m\n' "~/ssot" "(shared)"
+    else
+        printf '  \033[2m│\033[0m    \033[1ma)\033[0m %-14s ✅ %-22s  \033[2m│\033[0m\n' "~/bashscripts" "(personal)"
+        printf '  \033[2m│\033[0m    \033[1mb)\033[0m %-14s ✅ %-22s  \033[2m│\033[0m\n' "~/ssot" "(shared)"
+    fi
     printf "  ${_D}├──────────────────────────────────────────────────────┤${_Z}\n"
     printf "  ${_D}│${_Z}  %-16s %-38s  ${_D}│${_Z}\n" "Git:" "$git_status"
     printf "  ${_D}└──────────────────────────────────────────────────────┘${_Z}\n"
@@ -278,17 +276,17 @@ _render_shell_profile() {
 
     printf "  ${_B}${_C}%s  %s${_Z}\n" "$icon" "$title"
     printf "  ${_D}┌──────────────────────────────────────────────────────┐${_Z}\n"
-    printf "  ${_D}│${_Z}  %-14s %-32s ${_D}│${_Z}\n" ".bashrc:" "$bashrc_status"
+    printf '  \033[2m│\033[0m  %-14s %b %-32s \033[2m│\033[0m\n' ".bashrc:" "$bashrc_status" ""
     if [[ -n "$bashrc_target" ]]; then
-        printf "  ${_D}│${_Z}  ${_D}├→ %-52s${_Z}  ${_D}│${_Z}\n" "$bashrc_target"
+        printf '  \033[2m│\033[0m  \033[2m├→ %-52s\033[0m  \033[2m│\033[0m\n' "$bashrc_target"
         [[ "$bashrc_profile" != "—" ]] && \
-        printf "  ${_D}│${_Z}  ${_D}│  profile: ${_C}%-41s${_Z}  ${_D}│${_Z}\n" "$bashrc_profile"
+        printf '  \033[2m│\033[0m  \033[2m│  profile: \033[0;36m%-41s\033[0m  \033[2m│\033[0m\n' "$bashrc_profile"
     fi
-    printf "  ${_D}│${_Z}  %-14s %-32s ${_D}│${_Z}\n" ".zshrc:" "$zshrc_status"
+    printf '  \033[2m│\033[0m  %-14s %b %-32s \033[2m│\033[0m\n' ".zshrc:" "$zshrc_status" ""
     if [[ -n "$zshrc_target" ]]; then
-        printf "  ${_D}│${_Z}  ${_D}├→ %-52s${_Z}  ${_D}│${_Z}\n" "$zshrc_target"
+        printf '  \033[2m│\033[0m  \033[2m├→ %-52s\033[0m  \033[2m│\033[0m\n' "$zshrc_target"
         [[ "$zshrc_profile" != "—" ]] && \
-        printf "  ${_D}│${_Z}  ${_D}│  profile: ${_C}%-41s${_Z}  ${_D}│${_Z}\n" "$zshrc_profile"
+        printf '  \033[2m│\033[0m  \033[2m│  profile: \033[0;36m%-41s\033[0m  \033[2m│\033[0m\n' "$zshrc_profile"
     fi
     printf "  ${_D}└──────────────────────────────────────────────────────┘${_Z}\n"
     printf '\n'
@@ -369,8 +367,8 @@ _render_ai_profile() {
     printf "  ${_D}│${_Z}  %-16s %-38s  ${_D}│${_Z}\n" "Provider:" "$provider"
     printf "  ${_D}├──────────────────────────────────────────────────────┤${_Z}\n"
     printf "  ${_D}│${_Z}  %-16s %-38s  ${_D}│${_Z}\n" "API Key:" "$key_display"
-    printf "  ${_D}│${_Z}  %-16s %-38s  ${_D}│${_Z}\n" "Key Status:" "$key_status"
-    printf "  ${_D}│${_Z}  %-16s %-38s  ${_D}│${_Z}\n" "Zen Key:" "$zen_status"
+    printf '  \033[2m│\033[0m  %-16s %b %-38s \033[2m│\033[0m\n' "Key Status:" "$key_status" ""
+    printf '  \033[2m│\033[0m  %-16s %b %-38s \033[2m│\033[0m\n' "Zen Key:" "$zen_status" ""
     printf "  ${_D}└──────────────────────────────────────────────────────┘${_Z}\n"
     printf '\n'
 }
@@ -392,8 +390,8 @@ _render_nodes() {
         return
     fi
 
-    # Count nodes
-    local total=0 ready=0 warn=0 fail=0
+    # ── Pass 1: Count + JSON accumulate (no stdout rendering) ──
+    local total=0 ready=0 warn=0
     local node_data=""
 
     for node_file in "$nodes_dir"/*.node.env; do
@@ -402,7 +400,6 @@ _render_nodes() {
         name="${name%.node.env}"
         ((total++))
 
-        # Source node env
         local upper
         upper="$(echo "$name" | tr '[:lower:]' '[:upper:]')"
         source "$node_file" 2>/dev/null || true
@@ -411,8 +408,6 @@ _render_nodes() {
         local host_var="NODE_${upper}_HOST"
         local user_var="NODE_${upper}_USER"
         local port_var="NODE_${upper}_PORT"
-
-        # Special case for window.node.env (uses NODE_WIN_*)
         if [[ "$name" == "window" ]]; then
             ip_var="NODE_WIN_IP"; host_var="NODE_WIN_HOST"
             user_var="NODE_WIN_USER"; port_var="NODE_WIN_PORT"
@@ -423,77 +418,34 @@ _render_nodes() {
         local user="${!user_var:-}"
         local port="${!port_var:-}"
 
-        # Check completeness
         local missing=()
         [[ -z "$ip" ]] && missing+=("IP")
         [[ -z "$user" ]] && missing+=("USER")
         [[ -z "$port" ]] && missing+=("PORT")
 
-        # Determine status
-        local status_icon="✅"
         local status_text="ready"
         if [[ ${#missing[@]} -gt 0 ]]; then
-            status_icon="⚠️ "
             status_text="incomplete"
             ((warn++))
         else
             ((ready++))
         fi
 
-        # Live SSH test
-        local ssh_icon=""
-        if [[ "$_OPT_SSH" == "true" && -n "$ip" && -n "$user" && -n "$port" ]]; then
-            if [[ "$name" == "$_THIS_NODE" ]]; then
-                # Local check
-                if ss -tln 2>/dev/null | grep -q ":${port} " 2>/dev/null || pgrep -x sshd >/dev/null 2>&1; then
-                    ssh_icon=" ${_G}(ssh: ok)${_Z}"
-                else
-                    ssh_icon=" ${_Y}(ssh: ?)${_Z}"
-                fi
-            else
-                ssh_icon=" ${_D}(ssh: ...)${_Z}"
-            fi
-        fi
-
-        # Node icon
-        local node_icon
-        case "$name" in
-            wsl)    node_icon="🖥️ " ;;
-            termux) node_icon="📱" ;;
-            mumu)   node_icon="🤖" ;;
-            window) node_icon="🪟" ;;
-            oppo)   node_icon="📱" ;;
-            acodex) node_icon="📟" ;;
-            *)      node_icon="🔵" ;;
-        esac
-
-        # This device marker
-        local this_badge=""
-        [[ "$name" == "$_THIS_NODE" ]] && this_badge=" ${_G}◀${_Z}"
-
-        if [[ "$_OPT_JSON" != "true" ]]; then
-            printf "  ${_D}├─${_Z} %s ${_B}%-10s${_Z}%b %-20s %s\n" \
-                "$node_icon" "$name" "$this_badge" "$status_icon $status_text" "$ssh_icon"
-            printf "  ${_D}│${_Z}    ${_D}%-14s${_Z} %s\n" "ip:" "${ip:-—}"
-            printf "  ${_D}│${_Z}    ${_D}%-14s${_Z} %s\n" "user@port:" "${user:-?}@${port:-?}"
-        fi
-
         # JSON accumulate
-        if [[ "$_OPT_JSON" == "true" ]]; then
-            [[ -n "$node_data" ]] && node_data="${node_data},"
-            node_data+="{\"name\":\"${name}\",\"ip\":\"${ip}\",\"host\":\"${host}\",\"user\":\"${user}\",\"port\":\"${port}\",\"status\":\"${status_text}\"}"
-        fi
+        [[ -n "$node_data" ]] && node_data="${node_data},"
+        node_data+="{\"name\":\"${name}\",\"ip\":\"${ip}\",\"host\":\"${host}\",\"user\":\"${user}\",\"port\":\"${port}\",\"status\":\"${status_text}\"}"
     done
 
+    # JSON mode: output and return
     if [[ "$_OPT_JSON" == "true" ]]; then
         _json_add_section "nodes" "{\"total\":${total},\"ready\":${ready},\"warn\":${warn},\"nodes\":[${node_data}]}"
         return
     fi
 
+    # ── Pass 2: Render visual output ──
     printf "  ${_B}${_C}%s  %s${_Z}\n" "$icon" "$title"
     printf "  ${_D}┌──────────────────────────────────────────────────────┐${_Z}\n"
 
-    # Render nodes
     for node_file in "$nodes_dir"/*.node.env; do
         [[ -f "$node_file" ]] || continue
         local name="${node_file##*/}"
@@ -507,7 +459,6 @@ _render_nodes() {
         local host_var="NODE_${upper}_HOST"
         local user_var="NODE_${upper}_USER"
         local port_var="NODE_${upper}_PORT"
-
         if [[ "$name" == "window" ]]; then
             ip_var="NODE_WIN_IP"; host_var="NODE_WIN_HOST"
             user_var="NODE_WIN_USER"; port_var="NODE_WIN_PORT"
@@ -523,8 +474,7 @@ _render_nodes() {
         [[ -z "$port" ]] && missing+=("PORT")
 
         local status_icon="✅"
-        local status_text="ready"
-        [[ ${#missing[@]} -gt 0 ]] && { status_icon="⚠️ "; status_text="incomplete"; }
+        [[ ${#missing[@]} -gt 0 ]] && status_icon="⚠️ "
 
         local node_icon
         case "$name" in
@@ -616,7 +566,7 @@ _render_vault() {
 
     printf "  ${_B}${_C}%s  %s${_Z}\n" "$icon" "$title"
     printf "  ${_D}┌──────────────────────────────────────────────────────┐${_Z}\n"
-    printf "  ${_D}│${_Z}  %-16s %-38s  ${_D}│${_Z}\n" "Health:" "$vault_health"
+    printf '  \033[2m│\033[0m  %-16s %b %-38s \033[2m│\033[0m\n' "Health:" "$vault_health" ""
     printf "  ${_D}├──────────────────────────────────────────────────────┤${_Z}\n"
     printf "  ${_D}│${_Z}  ${_D}%-16s${_Z} %-38s  ${_D}│${_Z}\n" ".env.example:" "$([ -f "$env_example" ] && echo "✅ ${env_example_size}B" || echo "❌ missing")"
     printf "  ${_D}│${_Z}  ${_D}%-16s${_Z} %-38s  ${_D}│${_Z}\n" "core/.env.enc:" "$([ -f "$env_enc" ] && echo "✅ ${env_enc_size}B" || echo "❌ missing")"
