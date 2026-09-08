@@ -186,7 +186,17 @@ _install_pkg openssh  ssh
 _install_pkg openssl  openssl  "apk=openssl"
 _install_pkg curl     curl
 _install_pkg jq       jq      "winget=jqlang.jq"
-_install_pkg rsync    rsync
+
+# rsync: optional on Git Bash (not available via winget, skip gracefully)
+if [[ "$JOE_ENV" == "GIT-BASH" ]]; then
+    if command -v rsync >/dev/null 2>&1; then
+        ok "  already installed: rsync"
+    else
+        warn "  rsync not available on Git Bash — skipping (use WSL for rsync)"
+    fi
+else
+    _install_pkg rsync    rsync
+fi
 
 ok "Stage 1: Essential packages ready"
 
