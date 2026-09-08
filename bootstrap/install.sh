@@ -255,7 +255,7 @@ chmod 600 "$ENV_FILE" 2>/dev/null || true
 
 # ── 2b. Vault Detection & Auto-Unlock ──
 VAULT_FILE="$SSOT/core/.env.enc"
-VAULT_SCRIPT="$SSOT/bootstrap/ssot-vault.sh"
+VAULT_SCRIPT="$SSOT/bootstrap/vault/ssot-vault.sh"
 
 # Check if secrets are already populated
 _secrets_populated=false
@@ -447,7 +447,7 @@ ENV_TARGET="$BIN_DIR/env"
 if [[ -f "$ENV_TEMPLATE" ]]; then
     # Backup existing env if it's not a symlink
     if [[ -f "$ENV_TARGET" && ! -L "$ENV_TARGET" ]]; then
-        local _bak="${ENV_TARGET}.bak.$(date +%s)"
+        _bak="${ENV_TARGET}.bak.$(date +%s)"
         cp "$ENV_TARGET" "$_bak"
         warn "Backed up existing $ENV_TARGET → $_bak"
     fi
@@ -483,6 +483,43 @@ fi
 ENVEOF
     chmod +x "$ENV_TARGET"
     ok "Created: $ENV_TARGET (minimal)"
+fi
+
+# ============================================================
+# STAGE 4.7 — Broken Symlink Scanner & Cleanup
+# ============================================================
+# Scan critical directories for broken symlinks and remove them.
+# This prevents issues from previous installs or manual edits.
+# ============================================================
+log "Stage 4.7: Scanning for broken symlinks"
+
+_broken_count=0
+
+# Helper: scan a directory for broken symlinks and remove them
+_scan_broken() {
+    local dir="$1"
+    local label="$2"
+    [[ ! -d "$dir" ]] && return 0
+
+    while IFS= read -r -d '' link; do
+        if [[ ! -e "$link" ]]; then
+            warn "  Removing broken symlink: $link"
+            rm -f "$link"
+            _broken_count=$((_broken_count + 1))
+        fi
+    done < <(find "$dir" -maxdepth 1 -type l -print0 2>/dev/null)
+}
+
+# Scan ~/.local/bin/
+_scan_broken "$HOME/.local/bin" "~/.local/bin"
+
+# Scan ~/
+_scan_broken "$HOME" "~"
+
+if [[ $_broken_count -gt 0 ]]; then
+    ok "Removed $_broken_count broken symlink(s)"
+else
+    ok "No broken symlinks found"
 fi
 
 # ============================================================
@@ -543,7 +580,69 @@ log "Stage 7: Verification"
 
 _errors=0
 
-# Check joe.sh exists and is valid
+# ── 7a. Critical file preservation checks ──
+# These files MUST exist and NOT be empty after install
+log "  Checking critical files..."
+
+_critical_files=(
+    "$HOME/.env"
+    "$SSOT/joe.sh"
+    "$SSOT/bootstrap/00-env.sh"
+    "$SSOT/core/01-colors.sh"
+    "$SSOT/core/aliases.sh"
+    "$SSOT/core/3worlds.sh"
+    "$HOME/.local/bin/env"
+)
+
+for _cf in "${_critical_files[@]}"; do
+    if [[ -f "$_cf" ]]; then
+        if [[ -s "$_cf" ]]; then
+            ok "  $(basename "$_cf") — exists and not empty"
+        else
+            warn "  $(basename "$_cf") — exists but EMPTY!"
+            _errors=$((_errors + 1))
+        fi
+    else
+        warn "  $(basename "$_cf") — MISSING at $_cf"
+        _errors=$((_errors + 1))
+    fi
+done
+
+# ── 7b. Shell profile checks ──
+# Verify .bashrc and .zshrc exist (as file or symlink)
+for _rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
+    if [[ -L "$_rc" ]]; then
+        _target="$(readlink "$_rc" 2>/dev/null)"
+        if [[ -e "$_rc" ]]; then
+            ok "  $(basename "$_rc") — symlink → $(basename "$_target")"
+        else
+            warn "  $(basename "$_rc") — BROKEN symlink → $_target"
+            rm -f "$_rc"
+            _errors=$((_errors + 1))
+        fi
+    elif [[ -f "$_rc" ]]; then
+        ok "  $(basename "$_rc") — regular file (not symlinked)"
+    else
+        warn "  $(basename "$_rc") — MISSING"
+        _errors=$((_errors + 1))
+    fi
+done
+
+# ── 7c. .bash_aliases check ──
+if [[ -f "$HOME/.bash_aliases" ]]; then
+    ok "  .bash_aliases — exists"
+elif [[ -L "$HOME/.bash_aliases" ]]; then
+    if [[ -e "$HOME/.bash_aliases" ]]; then
+        ok "  .bash_aliases — symlink OK"
+    else
+        warn "  .bash_aliases — BROKEN symlink"
+        rm -f "$HOME/.bash_aliases"
+    fi
+else
+    warn "  .bash_aliases — not found (non-critical)"
+fi
+
+# ── 7d. joe.sh syntax check ──
 if [[ -f "$SSOT/joe.sh" ]] && bash -n "$SSOT/joe.sh" 2>/dev/null; then
     ok "joe.sh — exists and syntax valid"
 else
@@ -551,7 +650,7 @@ else
     _errors=$((_errors + 1))
 fi
 
-# Check .env has JOE_ENV
+# ── 7e. .env configuration check ──
 if grep -q "^export JOE_ENV=" "$HOME/.env" 2>/dev/null; then
     ok "~/.env — JOE_ENV configured"
 else
@@ -559,7 +658,7 @@ else
     _errors=$((_errors + 1))
 fi
 
-# Check shell profile sources joe.sh
+# ── 7f. Shell profile sources joe.sh check ──
 if [[ -L "$SHELL_RC" ]]; then
     _target="$(readlink "$SHELL_RC")"
     if grep -q "joe.sh" "$_target" 2>/dev/null; then
@@ -575,7 +674,7 @@ else
     fi
 fi
 
-# Check key modules exist
+# ── 7g. Key modules existence check ──
 for _mod in "bootstrap/00-env.sh" "core/01-colors.sh" "core/aliases.sh" "core/3worlds.sh"; do
     if [[ -f "$SSOT/$_mod" ]]; then
         ok "$_mod — found"
@@ -585,7 +684,7 @@ for _mod in "bootstrap/00-env.sh" "core/01-colors.sh" "core/aliases.sh" "core/3w
     fi
 done
 
-# Syntax-check all .sh files in core/ (quick scan)
+# ── 7h. Syntax check all .sh files ──
 if command -v bash >/dev/null 2>&1; then
     _syntax_fails=0
     for _f in "$SSOT"/core/*.sh "$SSOT"/functions/*.sh; do
@@ -599,6 +698,20 @@ if command -v bash >/dev/null 2>&1; then
     else
         warn "Syntax check — $_syntax_fails file(s) have errors"
     fi
+fi
+
+# ── 7i. Final broken symlink scan ──
+_final_broken=0
+while IFS= read -r -d '' link; do
+    if [[ ! -e "$link" ]]; then
+        warn "Final scan: broken symlink at $link"
+        rm -f "$link"
+        _final_broken=$((_final_broken + 1))
+    fi
+done < <(find "$HOME/.local/bin" -maxdepth 1 -type l -print0 2>/dev/null)
+
+if [[ $_final_broken -gt 0 ]]; then
+    ok "Cleaned $_final_broken broken symlink(s) in final scan"
 fi
 
 # ============================================================
