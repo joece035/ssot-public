@@ -61,10 +61,20 @@ detect_joe_env() {
     fi
     # 3. Auto-detect (limited on Termux)
     if [[ -d "/data/data/com.termux" ]]; then
-        if getprop ro.product.model 2>/dev/null | grep -qiE '(MuMu|vphone)'; then
+        # Check multiple properties for MuMu/emulator detection
+        _model="$(getprop ro.product.model 2>/dev/null)"
+        _brand="$(getprop ro.product.brand 2>/dev/null)"
+        _hardware="$(getprop ro.hardware 2>/dev/null)"
+        _display="$(getprop ro.build.display.id 2>/dev/null)"
+
+        # MuMu indicators: model contains MuMu/vphone, or brand is MuMu
+        if echo "$_model $_brand $_display" | grep -qiE '(MuMu|vphone)'; then
             echo "MUMU"
+        # Standard emulator indicators: goldfish (QEMU), ranchu (Android Emulator)
+        elif echo "$_hardware" | grep -qiE '(goldfish|ranchu)'; then
+            echo "MUMU"  # Treat generic emulator as MuMu (user can override with arg)
         else
-            echo "TERMUX"  # ← All Termux devices get this; use argument to specify
+            echo "TERMUX"  # Physical device or unknown emulator
         fi
     elif grep -qi microsoft /proc/version 2>/dev/null; then
         echo "WSL"
