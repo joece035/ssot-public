@@ -4,9 +4,7 @@
 # ======================================================
 
 # 1. Colors loaded from 01-colors.sh via joe.sh (no redefinition needed)
-if ! command -v rc >/dev/null 2>&1; then
-   _check -f "$SSOT/core/random-color.sh"  "source" 2>/dev/null 
-fi
+# rc() is provided by 01-colors.sh — no fallback needed
 # 2. ฟังก์ชันตรวจสอบ Git Branch แบบไม่หน่วงเครื่อง (Lightweight Git Status)
 _git_prompt() {
     if command -v git >/dev/null 2>&1; then

@@ -195,9 +195,9 @@ export TAILSCALE_IP_WINDOW=100.69.181.45
 export TAILSCALE_IP_WSL=100.80.195.120
 export TAILSCALE_IP_MUMU=100.100.176.94
 
-# ── Dynamic Node Registry Loader (drop-in profiles from $SSOT/nodes/*.node.env) ──
-if [[ -f "${SSOT:-$HOME/ssot}/nodes/loader.sh" ]]; then
-    source "${SSOT:-$HOME/ssot}/nodes/loader.sh"
+# ── Dynamic Node Registry Loader (drop-in profiles from $SSOT/bootstrap/nodes/*.node.env) ──
+if [[ -f "${SSOT:-$HOME/ssot}/bootstrap/nodes/loader.sh" ]]; then
+    source "${SSOT:-$HOME/ssot}/bootstrap/nodes/loader.sh"
 fi
 
 # ============================================================
@@ -356,7 +356,7 @@ esac
 #-- Zshshell-setup
 zsh_setup(){
     local device=${1:-$MY_DEVICE} #-- TERMUX || MUMU
-    local zsh_path="${SSOT:-$HOME/ssot}"/tools/.zshrc
+    local zsh_path="${SSOT:-$HOME/ssot}/profiles/${device}/.zshrc"
         case "$device" in
             TERMUX|termux)
                     if  [[ -f "$HOME/.zshrc" ]]; then

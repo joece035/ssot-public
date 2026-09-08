@@ -80,8 +80,9 @@ alias envmgr='bash "$SSOT/tools/env-manager.sh"'
 
 
 
-alias statscal='python3 "$SSOT/tools/statscal/statscal.py"'
-alias wr='python3 "$SSOT/tools/statscal/statscal.py"'
+# statscal — uncomment if tools/statscal/statscal.py exists
+# alias statscal='python3 "$SSOT/tools/statscal/statscal.py"'
+# alias wr='python3 "$SSOT/tools/statscal/statscal.py"'
 
 # ============================================================
 # SSOT SECRET VAULT
@@ -94,10 +95,10 @@ alias wr='python3 "$SSOT/tools/statscal/statscal.py"'
 # vault lock_pubkey   — encrypt pubkeys → core/pubkeys.enc
 # vault unlock_pubkey — decrypt + install to authorized_keys
 # vault pubkey-status — show key status
-alias vault='${SSOT:-$HOME/ssot}/tools/ssot-vault.sh'
-alias ssot-vault='${SSOT:-$HOME/ssot}/tools/ssot-vault.sh'
-alias secret-setup='${SSOT:-$HOME/ssot}/bootstrap/secret-setup.sh'
-alias node-register='${SSOT:-$HOME/ssot}/tools/node-register.sh'
-alias node-status='${SSOT:-$HOME/ssot}/tools/node-status.sh'
-alias nodestatus='${SSOT:-$HOME/ssot}/tools/node-status.sh'
-alias ns='${SSOT:-$HOME/ssot}/tools/node-status.sh'
+alias vault='${SSOT:-$HOME/ssot}/bootstrap/vault/ssot-vault.sh'
+alias ssot-vault='${SSOT:-$HOME/ssot}/bootstrap/vault/ssot-vault.sh'
+alias secret-setup='${SSOT:-$HOME/ssot}/bootstrap/vault/secret-setup.sh'
+alias node-register='${SSOT:-$HOME/ssot}/bootstrap/nodes/node-register.sh'
+alias node-status='${SSOT:-$HOME/ssot}/bootstrap/nodes/node-status.sh'
+alias nodestatus='${SSOT:-$HOME/ssot}/bootstrap/nodes/node-status.sh'
+alias ns='${SSOT:-$HOME/ssot}/bootstrap/nodes/node-status.sh'

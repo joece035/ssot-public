@@ -50,17 +50,17 @@ fi
 alias ktmux="tmux kill-server"
 
 # OpenClaw Completion
-[ -f "/home/usercivenz/.openclaw-2/completions/openclaw.bash" ] && source "/home/usercivenz/.openclaw-2/completions/openclaw.bash"
+[ -f "$HOME/.openclaw-2/completions/openclaw.bash" ] && source "$HOME/.openclaw-2/completions/openclaw.bash"
 
 # opencode
-export PATH=/home/usercivenz/.opencode/bin:$PATH
+export PATH="$HOME/.opencode/bin:$PATH"
 
 
 # Added by Antigravity CLI installer
-export PATH="/home/usercivenz/.local/bin:$PATH"
+export PATH="$HOME/.local/bin:$PATH"
 
 # pnpm
-export PNPM_HOME="/home/usercivenz/.local/share/pnpm"
+export PNPM_HOME="$HOME/.local/share/pnpm"
 case ":$PATH:" in
   *":$PNPM_HOME/bin:"*) ;;
   *) export PATH="$PNPM_HOME/bin:$PATH" ;;

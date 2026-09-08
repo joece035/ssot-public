@@ -32,7 +32,7 @@ SSOT="$(cd "$(dirname "$0")/.." && pwd)"
 export SSOT
 export JOE_CORE="$SSOT/core"
 export JOE_FUNCTIONS="$SSOT/functions"
-export JOE_PLUGINS="$SSOT/plugins"
+export JOE_PLUGINS="$SSOT/deprecated/plugins"
 export JOE_TOOLS="$SSOT/tools"
 
 echo "🔧 Installing JOE_ENV from: $SSOT"
@@ -184,7 +184,7 @@ shell_setup(){
                     ;;
                 ACODEX)
                     if [[ ! -f "$HOME/.bashrc" ]]; then
-                         pf="${SSOT}/profiles/acodenx/.bashrc"
+                         pf="${SSOT}/profiles/acodex/.bashrc"
                         if [[ -f "$pf" ]]; then
                             ln -s "$pf" "$HOME/.bashrc" && echo "symlink $pf >>> $HOME/.bashrc done" || echo "FAIL"
                         else
@@ -192,7 +192,7 @@ shell_setup(){
                         fi
                     fi     
                     if [[ ! -f "$HOME/.zshrc" ]]; then
-                         pf="${SSOT}/profiles/acodenx/.zshrc"
+                         pf="${SSOT}/profiles/acodex/.zshrc"
                          if [[ -f "$pf" ]]; then
                              ln -s "$pf" "$HOME/.zshrc" && echo "symlink $pf >>> $HOME/.zshrc done" || echo "FAIL"
                          else

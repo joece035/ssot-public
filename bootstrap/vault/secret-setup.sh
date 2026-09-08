@@ -47,7 +47,7 @@ fi
 
 # ── 3. Paths ──
 VAULT_FILE="$SSOT/core/.env.enc"
-VAULT_SCRIPT="$SSOT/tools/ssot-vault.sh"
+VAULT_SCRIPT="$SSOT/bootstrap/vault/ssot-vault.sh"
 EXAMPLE_FILE="$SSOT/.env.example"
 LOCAL_ENV="$HOME/.env"
 SSOT_ENV="$SSOT/.env"

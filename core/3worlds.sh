@@ -141,7 +141,6 @@ if ! declare -F ps_remote >/dev/null 2>&1; then
   # Resolve SSOT path robustly — $SSOT may not be set if 3worlds.sh was
   # sourced standalone (e.g. during testing).
   _ssh_cfg="${SSOT:-$(dirname "${BASH_SOURCE[0]}")}/core/ssh-config.sh"
-  [[ -f "$_ssh_cfg" ]] || _ssh_cfg="/home/usercivenz/ssot/core/ssh-config.sh"
   if [[ -f "$_ssh_cfg" ]]; then
     source "$_ssh_cfg"
   fi
@@ -493,7 +492,7 @@ _st_autostart() {
       # No task — install helper lives in ssot/tools/
       cn lr b " 🔌 NO TASK 'Syncthing' FOUND"
       cn lm bu "RUN ONCE:"
-      c 220 b "     bash ~/ssot/tools/install-syncthing-service.sh"
+      c 220 b "     syncthing serve --gui-address=\"0.0.0.0:${port}\" &"
       cn lg bi "FALLBACK (nohup — known to die on bash exit):"
       nohup syncthing serve --gui-address="0.0.0.0:${port}" >/dev/null 2>&1 &
       disown 2>/dev/null

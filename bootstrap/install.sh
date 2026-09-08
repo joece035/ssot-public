@@ -417,13 +417,21 @@ if [[ ! -L "$BIN_DIR/syncctl" ]] && [[ -f "$SSOT/tools/syncctl/syncctl" ]]; then
     ln -sf "$SSOT/tools/syncctl/syncctl" "$BIN_DIR/syncctl"
     chmod +x "$SSOT/tools/syncctl/syncctl"
     ok "Created: $BIN_DIR/syncctl → tools/syncctl/syncctl"
+else
+    ok "$BIN_DIR/syncctl not available (tools/syncctl not found) — skipping"
 fi
 
 # node-status command
-if [[ ! -L "$BIN_DIR/node-status" ]] && [[ -f "$SSOT/tools/node-status.sh" ]]; then
-    ln -sf "$SSOT/tools/node-status.sh" "$BIN_DIR/node-status"
-    chmod +x "$SSOT/tools/node-status.sh"
-    ok "Created: $BIN_DIR/node-status → tools/node-status.sh"
+if [[ ! -L "$BIN_DIR/node-status" ]]; then
+    if [[ -f "$SSOT/bootstrap/nodes/node-status.sh" ]]; then
+        ln -sf "$SSOT/bootstrap/nodes/node-status.sh" "$BIN_DIR/node-status"
+        chmod +x "$SSOT/bootstrap/nodes/node-status.sh"
+        ok "Created: $BIN_DIR/node-status → bootstrap/nodes/node-status.sh"
+    else
+        ok "$BIN_DIR/node-status not available (node-status.sh not found) — skipping"
+    fi
+else
+    ok "$BIN_DIR/node-status already linked"
 fi
 
 # STAGE 6 — SSH Audit & Self-Healing

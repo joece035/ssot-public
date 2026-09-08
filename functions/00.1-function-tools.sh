@@ -633,7 +633,8 @@ agent_md() {
 
 hm() {
     [[ -z "$1" ]] && { echo "Usage: hm <mode> [args...]"; return 1; }
-    [[ -f $SSOT/tools/hermes.sh ]] && source $SSOT/tools/hermes.sh
+    # hermes.sh — uncomment if tools/hermes.sh exists
+    # [[ -f $SSOT/tools/hermes.sh ]] && source $SSOT/tools/hermes.sh
     
    local mode=${1:-}
    shift
@@ -698,7 +699,6 @@ sc() {
       "${SSOT:-}" \
       "$HOME/ssot" \
       "$SSOT" \
-      "/home/usercivenz/ssot" \
       "/data/data/com.termux/files/home/ssot"; do
     [[ -n "$p" && -d "$p" ]] && { _ssot="$p"; break; }
   done
@@ -711,7 +711,7 @@ sc() {
   if [[ -f "$_ssot/tools/syncctl/syncctl" ]]; then
     source "$_ssot/tools/syncctl/syncctl" 2>/dev/null
   else
-    cn 220 bi "syncctl.sh not found in $_ssot/tools/"
+    cn 220 bi "syncctl not available (tools/syncctl/ not found)"
     return 1
   fi
 

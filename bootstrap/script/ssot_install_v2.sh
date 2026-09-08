@@ -140,7 +140,7 @@ if [[ -f "$SSOT_TARGET/core/.env.enc" ]]; then
     echo "🔐 Found SSOT Encrypted Vault ($SSOT_TARGET/core/.env.enc)"
     read -r -t 15 -p "   Unlock secrets now? [Y/n] (default: Y): " _vault_choice < /dev/tty || _vault_choice="Y"
     if [[ "${_vault_choice:-Y}" =~ ^[Yy]?$ ]]; then
-        "$SSOT_TARGET/tools/ssot-vault.sh" unlock || echo "⚠️  Vault unlock skipped/failed."
+        "$SSOT_TARGET/bootstrap/vault/ssot-vault.sh" unlock || echo "⚠️  Vault unlock skipped/failed."
     fi
 fi
 

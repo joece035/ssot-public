@@ -156,7 +156,7 @@ if [[ -f "$SSOT_TARGET/core/.env.enc" ]]; then
     echo "   Would you like to unlock secrets now with your Master Passphrase? [Y/n]"
     read -r -t 15 -p "   Selection (default: Y): " _vault_choice < /dev/tty || _vault_choice="Y"
     if [[ "${_vault_choice:-Y}" =~ ^[Yy]?$ ]]; then
-        "$SSOT_TARGET/tools/ssot-vault.sh" unlock || echo "⚠️  Vault unlock skipped/failed. You can run 'vault unlock' anytime later."
+        "$SSOT_TARGET/bootstrap/vault/ssot-vault.sh" unlock || echo "⚠️  Vault unlock skipped/failed. You can run 'vault unlock' anytime later."
     fi
 fi
 
