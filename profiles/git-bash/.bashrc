@@ -9,8 +9,15 @@ HISTFILESIZE=2000
 shopt -s checkwinsize
 [ -x /usr/bin/lesspipe ] && eval "$(SHELL=/bin/sh lesspipe)"
 
-# ── 2. BASH LINE EDITOR (Disabled on Windows Git Bash for high performance) ──
-# ble.sh causes significant fork/subshell latency on MSYS2. Enable only on Linux/WSL.
+## ── 2. BASH LINE EDITOR (Source only, no attach yet) ──
+
+# ── Fix ble.sh locale (Termux has no locale command) ──
+export LANG="en_US.UTF-8"
+export LC_ALL="en_US.UTF-8"
+export LC_CTYPE="en_US.UTF-8"
+if [[ $- == *i* && -f $HOME/.local/share/blesh/ble.sh ]]; then
+    [[ ${BLE_VERSION-} ]] || source $HOME/.local/share/blesh/ble.sh --attach=none
+fi
 
 # ── 3. LAZY LOAD NVM & NODE (Instant shell startup) ──
 export NVM_DIR="$HOME/.nvm"
@@ -48,6 +55,8 @@ if [ -f "$SSOT/joe.sh" ] && grep -qU $'\r' "$SSOT/joe.sh" 2>/dev/null; then
 fi
 [ -f "$SSOT/joe.sh" ] && . "$SSOT/joe.sh" 2>/dev/null
 
+
+
 # ── 7. FINAL SETTINGS ──
 alias ktmux="tmux kill-server"
 
@@ -60,6 +69,12 @@ export PATH="$HOME/.opencode/bin:$PATH"
 
 # Added by Antigravity CLI installer
 export PATH="$HOME/.local/bin:$PATH"
+
+# ── 8. ATTACH BLE.SH ──
+if [[ $- == *i* && ${BLE_VERSION-} && -z "$BLE_ATTACHED" ]]; then
+    export BLE_ATTACHED=1
+    ble-attach
+fi
 
 # pnpm
 export PNPM_HOME="$HOME/.local/share/pnpm"
