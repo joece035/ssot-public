@@ -233,7 +233,7 @@ _install_pkg() {
     else
         # Native fallback — runs only on first boot before repo is cloned
         case "$JOE_ENV" in
-            TERMUX|MUMU)
+            TERMUX|MUMU|OPPO)
                 local t_pkg="$pkg"
                 [[ "$pkg" == "openssl" ]] && t_pkg="openssl-tool"
                 pkg install -y "$t_pkg" 2>/dev/null || warn "  pkg install $pkg failed"
@@ -253,7 +253,7 @@ _install_pkg() {
 
 # ── Update package index (once, best-effort) ──
 case "$JOE_ENV" in
-    TERMUX|MUMU)
+    TERMUX|MUMU|OPPO)
         pkg update -y 2>/dev/null || warn "pkg update failed (non-fatal)"
         ;;
     WSL|LINUX)
