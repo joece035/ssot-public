@@ -38,33 +38,34 @@ fi
 # ============================================================
 # Usage: shell_setup [ENV_NAME]
 #   ENV_NAME: TERMUX, MUMU, WSL, GIT-BASH, ACODEX, OPPO
-#   If omitted, uses $JOE_ENV
+#   If omitted, uses $MY_DEVICE or $JOE_ENV
 # ============================================================
 shell_setup() {
-    local env_="${1:-${JOE_ENV:-}}"
-    [[ -z "$env_" ]] && { echo "shell_setup: no environment specified"; return 1; }
+    local target_dev="${1:-${MY_DEVICE:-${JOE_ENV:-}}}"
+    local dev_lower="$(echo "$target_dev" | tr '[:upper:]' '[:lower:]')"
+    local env_lower="$(echo "${JOE_ENV:-}" | tr '[:upper:]' '[:lower:]')"
+    local profile_dir=""
 
-    local profile_dir="${SSOT}/profiles/$(echo "$env_" | tr '[:upper:]' '[:lower:]')"
+    # 1. Resolve profile directory with robust fallback
+    if [[ -n "$dev_lower" && -d "${SSOT}/profiles/$dev_lower" ]]; then
+        profile_dir="${SSOT}/profiles/$dev_lower"
+    elif [[ -n "$env_lower" && -d "${SSOT}/profiles/$env_lower" ]]; then
+        profile_dir="${SSOT}/profiles/$env_lower"
+    elif [[ -d "${SSOT}/profiles/wsl" ]]; then
+        profile_dir="${SSOT}/profiles/wsl"
+    else
+        echo "⚠️  shell_setup: No matching profile directory found in ${SSOT}/profiles"
+        return 1
+    fi
 
-    # All environments have BOTH .bashrc and .zshrc
-    # (user switches via sws() helper), except GIT-BASH (bash only)
     local need_bash=true
     local need_zsh=true
-    case "$env_" in
-        GIT-BASH) need_zsh=false ;;
-    esac
+    [[ "${JOE_ENV:-}" == "GIT-BASH" ]] && need_zsh=false
 
-    # Helper: create symlink if source exists
     _link() {
         local target="$1" src="$2"
         [[ ! -f "$src" ]] && { echo "  ⚠️  $src not found — skipping"; return 0; }
         if [[ -L "$target" ]]; then
-            local curr
-            curr="$(readlink "$target" 2>/dev/null)"
-            if [[ "$curr" == "$src" ]]; then
-                echo "  ✅ $target already linked"
-                return 0
-            fi
             rm -f "$target"
         elif [[ -f "$target" ]]; then
             local bak="${target}.bak.$(date +%s)"
@@ -76,7 +77,7 @@ shell_setup() {
         echo "  🔗 $target → $src"
     }
 
-    echo "🔗 Wiring shell profiles for $env_..."
+    echo "🔗 Wiring shell profiles from $profile_dir..."
     [[ "$need_bash" == true ]] && _link "$HOME/.bashrc" "$profile_dir/.bashrc"
     [[ "$need_zsh" == true ]]  && _link "$HOME/.zshrc" "$profile_dir/.zshrc"
 }
@@ -85,7 +86,7 @@ shell_setup() {
 # repo() — Switch between SSOT repositories
 # ============================================================
 # Usage:
-#   repo      — show current repo status
+#   repo      — show ecosystem dashboard & status
 #   repo a    — switch to ~/bashscripts (personal)
 #   repo b    — switch to ~/ssot (shared)
 #   repo list — show available repos
@@ -96,7 +97,7 @@ repo() {
     local rp="${1:-}"
     local repository=""
 
-    # No argument: show status
+    # No argument: show dashboard status
     if [[ -z "$rp" ]]; then
         repo_status
         return $?
@@ -108,15 +109,14 @@ repo() {
         list)   repo_list; return 0 ;;
         status) repo_status; return 0 ;;
         *)
-            # Check if it's a path
             if [[ -d "$rp" ]]; then
                 repository="$rp"
             else
                 echo "Usage: repo [a|b|list|status|/path/to/repo]"
-                echo "  a     → ~/bashscripts (personal)"
-                echo "  b     → ~/ssot (shared)"
-                echo "  list  → show available repos"
-                echo "  (none) → show current status"
+                echo "  a      → ~/bashscripts (personal)"
+                echo "  b      → ~/ssot (shared)"
+                echo "  list   → show available repos"
+                echo "  status → show ecosystem dashboard"
                 return 1
             fi
             ;;
@@ -128,67 +128,207 @@ repo() {
         return 1
     fi
 
-    # Check if joe.sh exists in target
-    if [[ ! -f "$repository/joe.sh" ]]; then
-        echo "⚠️  Warning: $repository/joe.sh not found"
-        echo "   Switching anyway, but joe.sh won't be sourced"
-    fi
+    echo "🔄 Switching SSOT to: $repository"
 
-    # Persist to ~/.env
+    # ── [Stage 1] Clean State ──
+    echo "🧹 Cleaning previous installation state..."
+    local _bin="$HOME/.local/bin"
+    mkdir -p "$_bin"
+
+    # 1. Clean previous tool symlinks in ~/.local/bin/
+    for _tool in joe syncctl node-status; do
+        [[ -L "$_bin/$_tool" || -f "$_bin/$_tool" ]] && rm -f "$_bin/$_tool"
+    done
+
+    # 2. Clean shell profile symlinks safely (only remove symlinks, never regular files)
+    for _rc in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.bash_aliases"; do
+        [[ -L "$_rc" ]] && rm -f "$_rc"
+    done
+
+    # 3. Clean broken symlinks in ~/.local/bin and $HOME
+    for _dir in "$_bin" "$HOME"; do
+        while IFS= read -r -d '' _link_file; do
+            [[ ! -e "$_link_file" ]] && rm -f "$_link_file"
+        done < <(find "$_dir" -maxdepth 1 -type l -print0 2>/dev/null)
+    done
+
+    # ── [Stage 2] Update Environment & SSOT variable ──
     if grep -q "^export SSOT=" "$HOME/.env" 2>/dev/null; then
         sed -i "s|^export SSOT=.*|export SSOT=$repository|" "$HOME/.env"
     else
         echo "export SSOT=$repository" >> "$HOME/.env"
     fi
-
-    # Update current session
     export SSOT="$repository"
 
-    # Re-wire shell profiles
-    if [[ -L "$HOME/.bashrc" || -L "$HOME/.zshrc" ]]; then
-        rm -f "$HOME/.bashrc" "$HOME/.zshrc" 2>/dev/null
-        echo "🗑️  Removed old symlinks"
+    # Ensure $SSOT/.env points to ~/.env
+    if [[ -f "$HOME/.env" ]]; then
+        [[ -f "$repository/.env" && ! -L "$repository/.env" ]] && mv "$repository/.env" "$repository/.env.bak.$(date +%s)"
+        ln -sf "$HOME/.env" "$repository/.env"
+        echo "🔗 $repository/.env → ~/.env"
     fi
+
+    # ── [Stage 3] Wire Shell Profiles ──
     shell_setup "${MY_DEVICE:-${JOE_ENV:-}}"
 
-    # Re-create tool symlinks in ~/.local/bin/
-    local _bin="$HOME/.local/bin"
-    mkdir -p "$_bin"
-    for _tool in joe node-status; do
-        if [[ -f "$repository/joe.sh" && "$_tool" == "joe" ]]; then
-            cp "$repository/joe.sh" "$_bin/$_tool"
-            chmod +x "$_bin/$_tool"
-        elif [[ -f "$repository/bootstrap/nodes/node-status.sh" && "$_tool" == "node-status" ]]; then
-            cp "$repository/bootstrap/nodes/node-status.sh" "$_bin/$_tool"
-            chmod +x "$_bin/$_tool"
-        fi
-    done
-    echo "🔧 Updated ~/.local/bin/ tools from $repository"
+    # ── [Stage 4] Re-create Tool Symlinks (ln -sf) ──
+    # joe
+    if [[ -f "$repository/joe.sh" ]]; then
+        ln -sf "$repository/joe.sh" "$_bin/joe"
+        chmod +x "$repository/joe.sh"
+        echo "🔗 $_bin/joe → $repository/joe.sh"
+    fi
 
-    # Source joe.sh from new repo if it exists
+    # syncctl
+    if [[ -f "$repository/tools/syncctl/syncctl" ]]; then
+        ln -sf "$repository/tools/syncctl/syncctl" "$_bin/syncctl"
+        chmod +x "$repository/tools/syncctl/syncctl"
+        echo "🔗 $_bin/syncctl → $repository/tools/syncctl/syncctl"
+    fi
+
+    # node-status
+    if [[ -f "$repository/bootstrap/nodes/node-status.sh" ]]; then
+        ln -sf "$repository/bootstrap/nodes/node-status.sh" "$_bin/node-status"
+        chmod +x "$repository/bootstrap/nodes/node-status.sh"
+        echo "🔗 $_bin/node-status → $repository/bootstrap/nodes/node-status.sh"
+    fi
+
+    # env manager template update
+    if [[ -f "$repository/bootstrap/templates/env" ]]; then
+        cp "$repository/bootstrap/templates/env" "$_bin/env"
+        chmod +x "$_bin/env"
+    fi
+
+    # ── [Stage 5] Source joe.sh from target repo ──
     if [[ -f "$repository/joe.sh" ]]; then
         source "$repository/joe.sh" 2>/dev/null
         echo "✅ Loaded joe.sh from $repository"
     fi
 
     echo ""
-    echo "═══════════════════════════════════════════"
-    echo "  ✅ Switched to: $repository"
-    echo "═══════════════════════════════════════════"
+    echo "═══════════════════════════════════════════════════════════"
+    echo "  ✅ Successfully switched to: $repository"
+    echo "═══════════════════════════════════════════════════════════"
+
+    # ── [Stage 6] Reload Shell immediately ──
+    local _current_shell="${SHELL:-bash}"
+    echo "🚀 Reloading shell ($_current_shell) — ready to use..."
+    exec "$_current_shell"
 }
 
-# ── repo helpers ──
+# ============================================================
+# repo_status() — Ecosystem Dashboard & Symlink Health Verifier
+# ============================================================
 repo_status() {
-    echo "═══════════════════════════════════════════"
-    echo "  📁 Current SSOT: ${SSOT:-<not set>}"
-    echo "  🌍 Environment:  ${JOE_ENV:-<not set>}"
-    echo "═══════════════════════════════════════════"
+    local bold="" reset="" green="" yellow="" red="" cyan=""
+    if [[ -t 1 ]] && command -v tput >/dev/null 2>&1; then
+        bold="$(tput bold 2>/dev/null || true)"
+        reset="$(tput sgr0 2>/dev/null || true)"
+        green="$(tput setaf 2 2>/dev/null || true)"
+        yellow="$(tput setaf 3 2>/dev/null || true)"
+        red="$(tput setaf 1 2>/dev/null || true)"
+        cyan="$(tput setaf 6 2>/dev/null || true)"
+    fi
+
     echo ""
-    echo "  Available repos:"
-    [[ -d "$HOME/bashscripts" ]] && echo "    a) ~/bashscripts (personal) ✅" || echo "    a) ~/bashscripts (personal) ❌ not found"
-    [[ -d "$HOME/ssot" ]]        && echo "    b) ~/ssot (shared)          ✅" || echo "    b) ~/ssot (shared)          ❌ not found"
+    echo "${bold}${cyan}╔══════════════════════════════════════════════════════════════════╗${reset}"
+    echo "${bold}${cyan}║              🔍 SSOT ECOSYSTEM & REPO DASHBOARD                  ║${reset}"
+    echo "${bold}${cyan}╚══════════════════════════════════════════════════════════════════╝${reset}"
     echo ""
-    echo "  Usage: repo [a|b|list]"
+    echo "${bold}📌 Core Environment:${reset}"
+    echo "   📁 Active SSOT  : ${green}${SSOT:-<not set>}${reset}"
+    echo "   🌍 JOE_ENV      : ${green}${JOE_ENV:-<not set>}${reset}"
+    echo "   📱 MY_DEVICE    : ${green}${MY_DEVICE:-<not set>}${reset}"
+    echo "   🐚 Current Shell : ${SHELL:-$0}"
+    echo ""
+    echo "${bold}📂 Repository Status:${reset}"
+    local bsc_status="❌ not found"
+    local ssot_status="❌ not found"
+    if [[ -d "$HOME/bashscripts" ]]; then
+        if [[ "${SSOT:-}" == "$HOME/bashscripts" ]]; then
+            bsc_status="${green}✅ ACTIVE${reset}"
+        else
+            bsc_status="${yellow}⚪ available${reset}"
+        fi
+    fi
+    if [[ -d "$HOME/ssot" ]]; then
+        if [[ "${SSOT:-}" == "$HOME/ssot" ]]; then
+            ssot_status="${green}✅ ACTIVE${reset}"
+        else
+            ssot_status="${yellow}⚪ available${reset}"
+        fi
+    fi
+    echo "   a) ~/bashscripts (personal) : $bsc_status"
+    echo "   b) ~/ssot        (shared)   : $ssot_status"
+    echo ""
+    echo "${bold}🔗 Symlink Integrity & Health Check:${reset}"
+
+    _check_link() {
+        local name="$1"
+        local path="$2"
+        local expected_prefix="${3:-}"
+
+        if [[ -L "$path" ]]; then
+            local tgt
+            tgt="$(readlink "$path" 2>/dev/null)"
+            if [[ ! -e "$path" ]]; then
+                printf "   ❌ %-18s : ${red}BROKEN LINK${reset} → %s\n" "$name" "$tgt"
+            elif [[ -n "$expected_prefix" && "$tgt" != "$expected_prefix"* ]]; then
+                printf "   ⚠️  %-18s : ${yellow}MISMATCH LINK${reset} → %s (expected: %s*)\n" "$name" "$tgt" "$expected_prefix"
+            else
+                printf "   ✅ %-18s : ${green}OK${reset} → %s\n" "$name" "$tgt"
+            fi
+        elif [[ -e "$path" ]]; then
+            printf "   ⚠️  %-18s : ${yellow}REGULAR FILE (not symlinked)${reset}\n" "$name"
+        else
+            printf "   ❌ %-18s : ${red}MISSING${reset}\n" "$name"
+        fi
+    }
+
+    # Shell Profiles
+    _check_link ".bashrc" "$HOME/.bashrc" "${SSOT:-$HOME/ssot}/profiles"
+    _check_link ".zshrc" "$HOME/.zshrc" "${SSOT:-$HOME/ssot}/profiles"
+
+    # Tool Binaries
+    _check_link "bin/joe" "$HOME/.local/bin/joe" "${SSOT:-$HOME/ssot}"
+    _check_link "bin/syncctl" "$HOME/.local/bin/syncctl" "${SSOT:-$HOME/ssot}"
+    _check_link "bin/node-status" "$HOME/.local/bin/node-status" "${SSOT:-$HOME/ssot}"
+
+    # Global env executable
+    if [[ -x "$HOME/.local/bin/env" ]]; then
+        printf "   ✅ %-18s : ${green}OK (executable)${reset} → %s\n" "bin/env" "$HOME/.local/bin/env"
+    elif [[ -f "$HOME/.local/bin/env" ]]; then
+        printf "   ⚠️  %-18s : ${yellow}EXISTS BUT NOT EXECUTABLE${reset}\n" "bin/env"
+    else
+        printf "   ❌ %-18s : ${red}MISSING${reset}\n" "bin/env"
+    fi
+
+    # Repo .env Link
+    if [[ -n "${SSOT:-}" ]]; then
+        _check_link "SSOT/.env" "${SSOT}/.env" "$HOME/.env"
+    fi
+
+    # Broken symlinks scan in $HOME and $HOME/.local/bin
+    local broken_count=0
+    for _d in "$HOME/.local/bin" "$HOME"; do
+        while IFS= read -r -d '' _lf; do
+            if [[ ! -e "$_lf" ]]; then
+                broken_count=$((broken_count + 1))
+            fi
+        done < <(find "$_d" -maxdepth 1 -type l -print0 2>/dev/null)
+    done
+
+    if [[ $broken_count -gt 0 ]]; then
+        echo ""
+        echo "   ${yellow}⚠️  Found $broken_count broken symlink(s) in ~ or ~/.local/bin (Run 'repo a' or 'repo b' to auto-clean)${reset}"
+    fi
+
+    # ── Integrated Node Status & Mesh Diagnostics ──
+    local node_script="${SSOT:-$HOME/ssot}/bootstrap/nodes/node-status.sh"
+    if [[ -f "$node_script" ]]; then
+        echo ""
+        echo "${bold}🌐 SSOT Mesh & Node Status:${reset}"
+        bash "$node_script"
+    fi
 }
 
 repo_list() {
