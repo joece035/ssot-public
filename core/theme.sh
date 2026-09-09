@@ -33,13 +33,15 @@ _exit_status() {
 }
 
 
-# 4. ประกอบร่างเป็น Dynamic PS1 (Prompt)
-# [ Exit Code ] [ ENV ] [ User@Host ] [ Path ] [ Git ]
-# ──>
-# V4 SSOT: use _c/_b/_r helpers (raw escape emitters from 01-colors.sh).
-# PS1 needs literal escape codes wrapped in \[ \] (bash non-printing marker).
-# c()/cn() output text + escape — use them for plain text segments; use
-# _c/_b/_r directly for PS1 where bash will re-interpret \u, \w, etc.
+draw_() {
+   printf "%*s" "$2" "" | sed "s/ /$1/g"  
+}
+alias d_='draw_'
+
+# 4. ประกอบร่างเป็น Dynamic PS1 (Prompt) — BASH ONLY
+# zsh ใช้ precmd() / PROMPT / p10k แทน PROMPT_COMMAND + PS1
+if [[ -n "${BASH_VERSION:-}" ]]; then
+
 _set_prompt() {
 
     local exit_code=$?
@@ -69,7 +71,7 @@ _set_prompt() {
 
     # -- dynamic border
     local RC_="no"   # yes or no (just for testing)
-    local term_w=$(tput cols)
+    local term_w=$(tput cols 2>/dev/null || echo 80)
     local last_status_len=$(( ${#last_status_raw} ))
     local env_tag_len=$(( ${#JOE_ENV} + 3 + ${#_SHELL} + 4 ))
     local user_host_len=$(( ${#_USER} + 3 + ${#NODE_HOST} ))
@@ -104,14 +106,25 @@ _set_prompt() {
     PS1_+="${last_status} ${env_tag} ${user_host} in ${current_dir}${git_info}\n"
     PS1_+="${borde}\n"
     PS1_+=" ❯-❤️-> "
-    
 
-    export PS1=$PS1_
+    # ห้าม export PS1 เข้า env เพราะจะ leak ไปยัง child shells (เช่น zsh)
+    export -n PS1 2>/dev/null || true
+    PS1="$PS1_"
 
 }
 
-# สั่งให้ Bash รันฟังก์ชันนี้ทุกครั้งก่อนแสดง Prompt
-if [[ -z "${ZSH_VERSION:-}" ]]; then PROMPT_COMMAND=_set_prompt; fi
+# สั่งให้ Bash รันฟังก์ชันนี้ทุกครั้งก่อนแสดง Prompt (bash only)
+export -n PROMPT_COMMAND 2>/dev/null || true
+PROMPT_COMMAND=_set_prompt
+
+elif [[ -n "${ZSH_VERSION:-}" ]]; then
+    # ZSH Guard: เคลียร์ PROMPT_COMMAND และ PS1 ที่อาจ inherit มาจาก parent bash session
+    unset PROMPT_COMMAND
+    export -n PROMPT_COMMAND 2>/dev/null || true
+    if [[ "${PS1:-}" == *"\["* || "${PS1:-}" == *"\w"* || "${PS1:-}" == *"❯-❤️->"* ]]; then
+        unset PS1
+    fi
+fi
 
 # 5. Show Fastfetch (only in interactive WSL shells with logo)
 if [[ $- == *i* ]] && command -v fastfetch >/dev/null 2>&1; then
@@ -121,12 +134,6 @@ if [[ $- == *i* ]] && command -v fastfetch >/dev/null 2>&1; then
     fi
 fi
 
-
-draw_() {
-   
-   printf "%*s" "$2" "" | sed "s/ /$1/g"  
-}
-alias d_='draw_'
 
 
 
