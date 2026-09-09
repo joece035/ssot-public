@@ -294,7 +294,28 @@ fi
 
 # STAGE 2 — Locate or Clone Repository
 # ============================================================
-SSOT="${SSOT:?ไม่เจอSSOT}"
+# Priority: $SSOT env > derive from script location ($0) > default ~/ssot
+# Handles: bash (BASH_SOURCE), zsh (${(%):-%x}), plain sh ($0), curl|bash pipe
+if [[ -z "${SSOT:-}" ]]; then
+    # Resolve script path — zsh vs bash vs plain $0
+    if [[ -n "${ZSH_VERSION:-}" ]]; then
+        _self="${(%):-%x}"          # zsh: expands to current script file
+    elif [[ -n "${BASH_SOURCE[0]:-}" ]]; then
+        _self="${BASH_SOURCE[0]}"   # bash: reliable even when sourced
+    else
+        _self="$0"                  # fallback: plain sh / pipe
+    fi
+    _script_dir="$(cd "$(dirname "$_self")" 2>/dev/null && pwd)"
+    _derived="$(cd "$_script_dir/.." 2>/dev/null && pwd)"
+    if [[ -n "$_derived" && -f "$_derived/joe.sh" ]]; then
+        SSOT="$_derived"
+        ok "SSOT derived from script path: $SSOT"
+    else
+        SSOT="$HOME/ssot"
+        ok "SSOT defaulting to: $SSOT"
+    fi
+fi
+export SSOT
 
 if [[ -f "$SSOT/joe.sh" ]]; then
     ok "SSOT repo found at $SSOT"
