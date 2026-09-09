@@ -22,6 +22,14 @@ esac
 # ── 2. Load private env vars (JOE_ENV, SSOT, secrets) ──
 [ -f ~/.env ] && . ~/.env
 
+# Git Bash Guard: Never let imported ~/.env poison a Windows Git Bash session
+case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*)
+        export JOE_ENV="GIT-BASH"
+        export MY_DEVICE="window"
+        ;;
+esac
+
 # ── 3. SSOT auto-detection (if not set in ~/.env) ──
 # Priority: bashscripts (a/personal) > ssot (b/shared)
 # To override: set SSOT in ~/.env or use 'repo a/b' at runtime
@@ -41,7 +49,17 @@ fi
 #   If omitted, uses $MY_DEVICE or $JOE_ENV
 # ============================================================
 shell_setup() {
-    local target_dev="${1:-${MY_DEVICE:-${JOE_ENV:-}}}"
+    local target_dev="${1:-}"
+    if [[ -z "$target_dev" ]]; then
+        case "$(uname -s)" in
+            MINGW*|MSYS*|CYGWIN*)
+                target_dev="git-bash"
+                ;;
+            *)
+                target_dev="${MY_DEVICE:-${JOE_ENV:-}}"
+                ;;
+        esac
+    fi
     local dev_lower="$(echo "$target_dev" | tr '[:upper:]' '[:lower:]')"
     local env_lower="$(echo "${JOE_ENV:-}" | tr '[:upper:]' '[:lower:]')"
     local profile_dir=""
