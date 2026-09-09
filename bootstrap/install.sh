@@ -294,7 +294,7 @@ fi
 
 # STAGE 2 — Locate or Clone Repository
 # ============================================================
-SSOT="${SSOT:-$HOME/ssot}"
+SSOT="${SSOT:?ไม่เจอSSOT}"
 
 if [[ -f "$SSOT/joe.sh" ]]; then
     ok "SSOT repo found at $SSOT"
@@ -492,6 +492,11 @@ case "$JOE_ENV" in
         SHELL_RC="$HOME/.bashrc"
         BASH_RC="$HOME/.bashrc"
         ;;
+    ACODEX)
+        PROFILE_DIR="$SSOT/profiles/acodex"
+        SHELL_RC="$HOME/.zshrc"
+        BASH_RC="$HOME/.bashrc"
+        ;;
     *)
         PROFILE_DIR="$SSOT/profiles/wsl"
         SHELL_RC="$HOME/.bashrc"
@@ -510,6 +515,7 @@ _link_profile() {
             ok "$target already linked to correct profile"
             return 0
         else
+            rm -f "$target"
             ln -sf "$src" "$target"
             ok "$target re-linked → $src"
             return 0
@@ -518,6 +524,7 @@ _link_profile() {
         local bak="${target}.bak.$(date +%s)"
         cp "$target" "$bak"
         warn "Backed up existing $target → $bak"
+        rm -f "$target"  # MSYS/Git Bash: must remove before ln -sf can replace regular file
     fi
     ln -sf "$src" "$target"
     ok "$target → $src (symlinked)"

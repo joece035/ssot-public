@@ -153,14 +153,21 @@ repo() {
     local _bin="$HOME/.local/bin"
     mkdir -p "$_bin"
 
-    # 1. Clean previous tool symlinks in ~/.local/bin/
+    # Helper: rm -f then ln -sf (handles MSYS Git Bash where ln -sf cannot replace regular files)
+    _safe_link() {
+        local _src="$1" _tgt="$2"
+        rm -f "$_tgt"
+        ln -sf "$_src" "$_tgt"
+    }
+
+    # 1. Clean previous tool symlinks/files in ~/.local/bin/
     for _tool in joe syncctl node-status; do
         [[ -L "$_bin/$_tool" || -f "$_bin/$_tool" ]] && rm -f "$_bin/$_tool"
     done
 
-    # 2. Clean shell profile symlinks safely (only remove symlinks, never regular files)
+    # 2. Clean shell profile symlinks AND regular files (MSYS compat)
     for _rc in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.bash_aliases"; do
-        [[ -L "$_rc" ]] && rm -f "$_rc"
+        [[ -L "$_rc" || -f "$_rc" ]] && rm -f "$_rc"
     done
 
     # 3. Clean broken symlinks in ~/.local/bin and $HOME
@@ -188,24 +195,24 @@ repo() {
     # ── [Stage 3] Wire Shell Profiles ──
     shell_setup "${MY_DEVICE:-${JOE_ENV:-}}"
 
-    # ── [Stage 4] Re-create Tool Symlinks (ln -sf) ──
+    # ── [Stage 4] Re-create Tool Symlinks (use _safe_link: rm -f + ln -sf for MSYS compat) ──
     # joe
     if [[ -f "$repository/joe.sh" ]]; then
-        ln -sf "$repository/joe.sh" "$_bin/joe"
+        _safe_link "$repository/joe.sh" "$_bin/joe"
         chmod +x "$repository/joe.sh"
         echo "🔗 $_bin/joe → $repository/joe.sh"
     fi
 
     # syncctl
     if [[ -f "$repository/tools/syncctl/syncctl" ]]; then
-        ln -sf "$repository/tools/syncctl/syncctl" "$_bin/syncctl"
+        _safe_link "$repository/tools/syncctl/syncctl" "$_bin/syncctl"
         chmod +x "$repository/tools/syncctl/syncctl"
         echo "🔗 $_bin/syncctl → $repository/tools/syncctl/syncctl"
     fi
 
     # node-status
     if [[ -f "$repository/bootstrap/nodes/node-status.sh" ]]; then
-        ln -sf "$repository/bootstrap/nodes/node-status.sh" "$_bin/node-status"
+        _safe_link "$repository/bootstrap/nodes/node-status.sh" "$_bin/node-status"
         chmod +x "$repository/bootstrap/nodes/node-status.sh"
         echo "🔗 $_bin/node-status → $repository/bootstrap/nodes/node-status.sh"
     fi
