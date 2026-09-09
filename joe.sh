@@ -17,6 +17,9 @@ if [[ -z "${JOE_ENV:-}" ]]; then
         else
             export JOE_ENV="TERMUX"
         fi
+    elif command -v apk >/dev/null 2>&1; then
+        # ACODEX: must check before WSL — ACODEX runs on WSL filesystem
+        export JOE_ENV="ACODEX"
     elif grep -qi microsoft /proc/version 2>/dev/null; then
         export JOE_ENV="WSL"
     elif [[ -n "${MSYSTEM:-}" ]] || [[ "$OSTYPE" == "msys" ]]; then

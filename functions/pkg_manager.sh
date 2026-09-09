@@ -83,12 +83,13 @@ pkg_manager() {
     if [[ -z "$env" ]]; then
         if [[ -n "$TERMUX_VERSION" || "$PREFIX" == *"com.termux"* ]]; then
             env="TERMUX"
+        # ACODEX: must check before WSL — ACODEX runs on WSL filesystem
+        elif command -v apk >/dev/null 2>&1; then
+            env="ACODEX"
         elif grep -qi microsoft /proc/version 2>/dev/null; then
             env="WSL"
         elif [[ -n "$MSYSTEM" ]] || [[ "$OSTYPE" == "msys" ]]; then
             env="GIT-BASH"
-        elif command -v apk >/dev/null 2>&1; then
-            env="ACODEX"
         else
             env="LINUX"
         fi

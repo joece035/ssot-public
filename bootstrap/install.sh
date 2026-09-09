@@ -158,12 +158,15 @@ detect_joe_env() {
         else
             echo "TERMUX"  # Physical device or unknown emulator
         fi
+    # ACODEX must be checked BEFORE WSL — ACODEX runs on WSL filesystem so
+    # /proc/version contains "microsoft", causing false WSL detection if order is wrong.
+    # apk is the definitive ACODEX identifier (Alpine package manager).
+    elif command -v apk >/dev/null 2>&1; then
+        echo "ACODEX"
     elif grep -qi microsoft /proc/version 2>/dev/null; then
         echo "WSL"
     elif [[ -n "${MSYSTEM:-}" ]] || [[ "${OSTYPE:-}" == "msys" ]]; then
         echo "GIT-BASH"
-    elif command -v apk 2>/dev/null; then
-        echo "ACODEX"
     else
         echo "UNKNOWN"
     fi

@@ -71,6 +71,10 @@ if [[ -z "$_THIS_NODE" || -z "$_THIS_ENV" ]]; then
     if [[ -d "/data/data/com.termux" ]]; then
         _THIS_NODE="${_THIS_NODE:-termux}"
         _THIS_ENV="${_THIS_ENV:-TERMUX}"
+    # ACODEX: must check before WSL — ACODEX runs on WSL filesystem
+    elif command -v apk >/dev/null 2>&1; then
+        _THIS_NODE="${_THIS_NODE:-acodex}"
+        _THIS_ENV="${_THIS_ENV:-ACODEX}"
     elif grep -qi microsoft /proc/version 2>/dev/null; then
         _THIS_NODE="${_THIS_NODE:-wsl}"
         _THIS_ENV="${_THIS_ENV:-WSL}"

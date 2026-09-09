@@ -238,3 +238,64 @@ cshell() {
     esac
 }
 
+# ============================================================
+# _detect_env() — SSOT Canonical Environment Detector
+# ============================================================
+# Usage:
+#   _detect_env            → echo detected JOE_ENV (stdout)
+#   _detect_env --set      → detect + export JOE_ENV (only if not set)
+#   _detect_env --force    → detect + export JOE_ENV (always overwrite)
+#
+# Detection order (CRITICAL — do NOT reorder):
+#   1. Termux / MuMu  (/data/data/com.termux exists)
+#   2. ACODEX         (apk) ← MUST be before WSL check
+#   3. WSL            (/proc/version contains "microsoft")
+#   4. GIT-BASH       ($MSYSTEM / $OSTYPE=msys)
+#   5. UNKNOWN
+#
+# NOTE: ACODEX runs on WSL filesystem → /proc/version has "microsoft"
+#       → apk check must come first to avoid false WSL detection
+# ============================================================
+_detect_env() {
+    local _mode="${1:-}"   # --set | --force | (empty = just echo)
+    local _result=""
+
+    # Respect existing $JOE_ENV unless --force
+    if [[ "$_mode" != "--force" && -n "${JOE_ENV:-}" ]]; then
+        [[ "$_mode" == "--set" ]] && export JOE_ENV="${JOE_ENV}"
+        echo "$JOE_ENV"
+        return 0
+    fi
+
+    # Auto-detect
+    if [[ -d "/data/data/com.termux" ]]; then
+        local _model _brand _hardware _display
+        _model="$(getprop ro.product.model 2>/dev/null)"
+        _brand="$(getprop ro.product.brand 2>/dev/null)"
+        _hardware="$(getprop ro.hardware 2>/dev/null)"
+        _display="$(getprop ro.build.display.id 2>/dev/null)"
+        if echo "$_model $_brand $_display" | grep -qiE '(MuMu|vphone)'; then
+            _result="MUMU"
+        elif echo "$_hardware" | grep -qiE '(goldfish|ranchu)'; then
+            _result="MUMU"
+        else
+            _result="TERMUX"
+        fi
+    elif command -v apk >/dev/null 2>&1; then
+        _result="ACODEX"
+    elif grep -qi microsoft /proc/version 2>/dev/null; then
+        _result="WSL"
+    elif [[ -n "${MSYSTEM:-}" ]] || [[ "${OSTYPE:-}" == "msys" ]]; then
+        _result="GIT-BASH"
+    else
+        _result="UNKNOWN"
+    fi
+
+    # Export if requested
+    if [[ "$_mode" == "--set" || "$_mode" == "--force" ]]; then
+        export JOE_ENV="$_result"
+    fi
+
+    echo "$_result"
+}
+
