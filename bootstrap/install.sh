@@ -394,8 +394,8 @@ if [[ -f "$VAULT_FILE" ]] && [[ "$_secrets_populated" == "false" ]]; then
     log "Stage 3b: Vault detected — attempting auto-unlock"
     if [[ -f "$VAULT_SCRIPT" ]] && command -v openssl >/dev/null 2>&1; then
         if [[ -n "${SSOT_VAULT_PASS:-}" ]]; then
-            # Non-interactive: passphrase provided via env var
-            if "$VAULT_SCRIPT" unlock 2>/dev/null; then
+            # Non-interactive: passphrase provided via env var (safe to suppress stderr)
+            if bash "$VAULT_SCRIPT" unlock 2>/dev/null; then
                 ok "Vault unlocked (via SSOT_VAULT_PASS)"
             else
                 warn "Vault unlock failed — run 'vault unlock' manually"
@@ -405,7 +405,8 @@ if [[ -f "$VAULT_FILE" ]] && [[ "$_secrets_populated" == "false" ]]; then
             echo "  📦 Vault found: $VAULT_FILE"
             read -r -t 20 -p "   Unlock secrets now? [Y/n] (default: Y): " _vault_choice < /dev/tty || _vault_choice="Y"
             if [[ "${_vault_choice:-Y}" =~ ^[Yy]?$ ]]; then
-                if "$VAULT_SCRIPT" unlock 2>/dev/null; then
+                # Interactive: do NOT suppress stderr — password prompt writes there
+                if bash "$VAULT_SCRIPT" unlock </dev/tty; then
                     ok "Vault unlocked"
                 else
                     warn "Vault unlock failed — run 'vault unlock' later"
