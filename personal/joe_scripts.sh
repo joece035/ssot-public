@@ -55,7 +55,7 @@ reinstall() {
     if [[ "$repo" == "bashscripts" ]]; then
         clone_url="https://github.com/joece035/bashscripts-public.git"
     else
-        clone_url="https://github.com/joece035/ssot.git"
+        clone_url="https://github.com/joece035/ssot-public.git"
     fi
 
     echo "🔄 Cloning $repo → $target_dir"
