@@ -1,4 +1,5 @@
 #!/bin/bash
+fexport(){
 
 # ค่าเริ่มต้น: ค้นหาในโฟลเดอร์ปัจจุบัน (.)
 SEARCH_DIR="."
@@ -46,3 +47,64 @@ done
 
 echo ""
 echo "=========================================="
+}
+# ==========================================
+# Helper Check Shell Type
+# ==========================================
+_is_func_loaded() {
+    local func_name="$1"
+    if [ -n "$ZSH_VERSION" ]; then
+        # สำหรับ Zsh
+        typeset -f "$func_name" >/dev/null 2>&1
+    else
+        # สำหรับ Bash และ POSIX Shell อื่นๆ
+        declare -F "$func_name" >/dev/null 2>&1
+    fi
+}
+
+# ==========================================
+# Main Functions
+# ==========================================
+find_unsource_func() {
+    local func_name="$1"
+    local search_dir="${2:-${SSOT:-$repository}}"
+
+    if [ -z "$func_name" ]; then
+        echo "Usage: find_unsource_func <function_name> [directory]" >&2
+        return 1
+    fi
+
+    echo "🔍 Searching for function '$func_name' in '$search_dir'..." >&2
+
+    # ค้นหาไฟล์สคริปต์ และดึงเฉพาะ Path แรกที่พบ
+    grep -rnlE "^\s*(function\s+${func_name}|${func_name}\s*\(\))" "$search_dir" 2>/dev/null | head -n 1
+}
+alias fusf='find_unsource_func'
+alias ausf='auto_source'
+auto_source() {
+    local func="${1:-}"
+
+    [[ -n "$func" ]] || {
+        echo "Error: Please provide function name" >&2
+        return 1
+    }
+
+    # ตรวจสอบว่าฟังก์ชันถูกโหลดไว้แล้วหรือยัง (รองรับทั้ง Bash/Zsh)
+    _is_func_loaded "$func" && return 0
+
+    local script_path
+    script_path="$(find_unsource_func "$func")" || return 1
+
+    [[ -n "$script_path" ]] || {
+        echo "Error: Function '$func' not found" >&2
+        return 1
+    }
+
+    # สั่ง source ไฟล์สคริปต์ที่เจอ
+    if source "$script_path"; then
+        echo "✅ Sourced ($CURRENT_SHELL): $script_path"
+    else
+        echo "❌ Failed to source: $script_path" >&2
+        return 1
+    fi
+}
