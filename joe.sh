@@ -257,19 +257,26 @@ alias re="pp"
 
  } >/dev/null 2>&1
 
+# เช็คว่า JOE_ENV ไม่ใช่ WSL, OPPO หรือ MUMU
+if [[ "$JOE_ENV" != @(GIT-BASH|WSL|OPPO|MUMU|ACODEX) ]]; then
 
-{
-    if [[ "$JOE_ENV" != "GIT-BASH" && "$JOE_ENV" != "OPPO" ]]; then
-        if ! command -v pgrep >/dev/null 2>&1; then
-            cn 9 b "pgrep not found, skipping syncthing check"
-        elif ! pgrep -f syncthing >/dev/null 2>&1; then
-            cn 202 b "syncthing not running, starting..."
-                ( syncthing_auto > /dev/null 2>&1 ) &
-        else
-            cn 202 b "Syncthing is already running"
-        fi
+    # 1. เช็คก่อนว่ามีคำสั่ง pgrep ในระบบไหม
+    if ! command -v pgrep >/dev/null 2>&1; then
+        cn 9 b "pgrep not found, skipping syncthing check"
+
+    # 2. ถ้ามี pgrep ให้เช็คว่า syncthing รันอยู่ไหม
+    elif ! pgrep -f syncthing >/dev/null 2>&1; then
+        cn 202 b "syncthing not running, starting..."
+        ( syncthing_auto >/dev/null 2>&1 & )
+
+    # 3. ถ้ารันอยู่แล้ว
+    else
+        cn 202 b "Syncthing is already running"
     fi
-} >/dev/null 2>&1
+
+fi
+
+
 
 
 
