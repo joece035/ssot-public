@@ -256,7 +256,7 @@ cshell() {
 # NOTE: ACODEX runs on WSL filesystem → /proc/version has "microsoft"
 #       → apk check must come first to avoid false WSL detection
 # ============================================================
-_detect_env() {
+_check_JOE_ENV() {
     local _mode="${1:-}"   # --set | --force | (empty = just echo)
     local _result=""
 
