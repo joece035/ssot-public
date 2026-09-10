@@ -153,6 +153,14 @@ shell_setup(){
                             echo "not found $pf"
                          fi
                     fi
+                    if [[ ! -f "$HOME/.zshrc" ]]; then
+                         pf="${SSOT}/profiles/wsl/.zshrc"
+                         if [[ -f "$pf" ]]; then
+                            ln -s "$pf" "$HOME/.zshrc" && echo "symlink $pf >>> $HOME/.zshrc done" || echo "FAIL"
+                         else
+                            echo "not found $pf"
+                         fi
+                    fi
                     ;;
                 GIT-BASH )
                     if [[ ! -f "$HOME/.bashrc" ]]; then

@@ -118,12 +118,9 @@ export -n PROMPT_COMMAND 2>/dev/null || true
 PROMPT_COMMAND=_set_prompt
 
 elif [[ -n "${ZSH_VERSION:-}" ]]; then
-    # ZSH Guard: เคลียร์ PROMPT_COMMAND และ PS1 ที่อาจ inherit มาจาก parent bash session
+    # ZSH Guard: PROMPT_COMMAND เป็นของ Bash เท่านั้น ไม่ใช้ใน Zsh
     unset PROMPT_COMMAND
     export -n PROMPT_COMMAND 2>/dev/null || true
-    if [[ "${PS1:-}" == *"\["* || "${PS1:-}" == *"\w"* || "${PS1:-}" == *"❯-❤️->"* ]]; then
-        unset PS1
-    fi
 fi
 
 # 5. Show Fastfetch (only in interactive WSL shells with logo)

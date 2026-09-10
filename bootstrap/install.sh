@@ -500,32 +500,34 @@ case "$JOE_ENV" in
     TERMUX)
         PROFILE_DIR="$SSOT/profiles/termux"
         SHELL_RC="$HOME/.zshrc"    # Termux uses zsh
-        BASH_RC="$HOME/.bashrc"
         ;;
     MUMU)
         PROFILE_DIR="$SSOT/profiles/mumu"
         SHELL_RC="$HOME/.zshrc"
-        BASH_RC="$HOME/.bashrc"
+        ;;
+    OPPO)
+        PROFILE_DIR="$SSOT/profiles/oppo"
+        SHELL_RC="$HOME/.zshrc"
+        ;;
+    PI)
+        PROFILE_DIR="$SSOT/profiles/termux"
+        SHELL_RC="$HOME/.zshrc"
         ;;
     WSL)
         PROFILE_DIR="$SSOT/profiles/wsl"
         SHELL_RC="$HOME/.bashrc"   # WSL default is bash
-        BASH_RC="$HOME/.bashrc"
         ;;
     GIT-BASH)
         PROFILE_DIR="$SSOT/profiles/git-bash"
         SHELL_RC="$HOME/.bashrc"
-        BASH_RC="$HOME/.bashrc"
         ;;
     ACODEX)
         PROFILE_DIR="$SSOT/profiles/acodex"
         SHELL_RC="$HOME/.zshrc"
-        BASH_RC="$HOME/.bashrc"
         ;;
     *)
         PROFILE_DIR="$SSOT/profiles/wsl"
         SHELL_RC="$HOME/.bashrc"
-        BASH_RC="$HOME/.bashrc"
         ;;
 esac
 
@@ -555,12 +557,13 @@ _link_profile() {
     ok "$target → $src (symlinked)"
 }
 
-# Symlink primary shell profile (e.g. .zshrc)
-_link_profile "$SHELL_RC" "$PROFILE_DIR/$(basename "$SHELL_RC")"
+# ── Link shell profiles ──
+# Symlink .bashrc (all environments)
+_link_profile "$HOME/.bashrc" "$PROFILE_DIR/.bashrc"
 
-# Also symlink .bashrc if different from primary (e.g. on Android/Termux where both bash and zsh exist)
-if [[ "$SHELL_RC" != "$BASH_RC" ]]; then
-    _link_profile "$BASH_RC" "$PROFILE_DIR/.bashrc"
+# Symlink .zshrc (all environments except GIT-BASH)
+if [[ "$JOE_ENV" != "GIT-BASH" && -f "$PROFILE_DIR/.zshrc" ]]; then
+    _link_profile "$HOME/.zshrc" "$PROFILE_DIR/.zshrc"
 fi
 
 # ============================================================
