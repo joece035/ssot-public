@@ -239,12 +239,12 @@ cshell() {
 }
 
 # ============================================================
-# _detect_env() — SSOT Canonical Environment Detector
+# _check_JOE_ENV() — SSOT Canonical Environment Detector
 # ============================================================
 # Usage:
-#   _detect_env            → echo detected JOE_ENV (stdout)
-#   _detect_env --set      → detect + export JOE_ENV (only if not set)
-#   _detect_env --force    → detect + export JOE_ENV (always overwrite)
+#   _check_JOE_ENV            → echo detected JOE_ENV (stdout)
+#   _check_JOE_ENV --set      → detect + export JOE_ENV (only if not set)
+#   _check_JOE_ENV --force    → detect + export JOE_ENV (always overwrite)
 #
 # Detection order (CRITICAL — do NOT reorder):
 #   1. Termux / MuMu  (/data/data/com.termux exists)
