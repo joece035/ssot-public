@@ -535,6 +535,10 @@ _link_profile() {
     local target="$1"
     local src="$2"
     [[ ! -f "$src" ]] && return 0
+    # Guard: auto-strip CRLF () from source template if present
+    if grep -q $'\r' "$src" 2>/dev/null; then
+        sed -i 's/\r$//' "$src" 2>/dev/null || true
+    fi
     if [[ -L "$target" ]]; then
         local curr
         curr="$(readlink "$target")"
