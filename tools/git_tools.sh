@@ -334,3 +334,11 @@ copy(){
 alias gremote='git remote set-url origin git@github.com:joece035/ssot-public.git'
 
 
+change_git(){
+  # เปลี่ยน remote เป็น SSH (แทน HTTPS)
+git remote set-url origin git@github.com:$(git remote get-url origin | sed 's/https:\/\/github.com\///' )
+
+# แล้ว push ใหม่
+git push
+
+}

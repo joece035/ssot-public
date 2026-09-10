@@ -23,7 +23,7 @@
   esac
 
 
-alias spy='source $PYTHON_VENV'
+#alias spy='source $PYTHON_VENV'
 
 # Directory shortcuts (using env vars from 00-env.sh)
 
@@ -32,7 +32,6 @@ alias hwsl='cd $HWSL'
 alias hpc='cd $hpc'
 alias hmp='cd $hmp'
 alias bsc='cd $SSOT && pwd'
-alias cdenp='cd $ENGINES_DIR && pwd'
 alias dbp='cd $DASHBOARD_DIR'
 alias sdc='cd $SDCARD_PATH && pwd'
 alias cdboom='cd $boom'
@@ -74,7 +73,9 @@ alias rbdb='rbfe && opdb'
 # ▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬ #
 #                       alias                        #
 # ▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬ #
-alias ssot='cd $SSOT && cdc .'
+alias cdrp="cd $SSOT && cn 45 b "$PWD""
+alias jenv="cn lg b $JOE_ENV"
+alias ssot="cn lg b $SSOT"
 alias envm='bash "$SSOT/tools/env-manager.sh"'
 alias envmgr='bash "$SSOT/tools/env-manager.sh"'
 

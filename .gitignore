@@ -4,6 +4,10 @@
 
 # ── Secrets (NEVER commit) ──
 .env
+.env.*
+!.env.example
+!core/.env.enc
+!*.env.enc
 *.env.local
 *.env.production
 

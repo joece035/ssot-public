@@ -19,13 +19,21 @@
 
 # ============================================================
 # ── 0. LOCAL SECRETS & OVERRIDES (SSOT) ──
-# Loads private credentials from ~/.env or $SSOT/.env if present. Never commit .env to git!
+# Loads private credentials and machine overrides.
+# 1. Machine Config (local only, never in git/vault): ~/.env
 if [[ -f "$HOME/.env" ]]; then
     source "$HOME/.env"
 elif [[ -f "${SSOT:-$HOME/ssot}/.env" ]]; then
     source "${SSOT:-$HOME/ssot}/.env"
 elif [[ -f "${SCRIPTS_PATH:-$HOME/ssot}/.env" ]]; then
     source "${SCRIPTS_PATH:-$HOME/ssot}/.env"
+fi
+
+# 2. Shared Secrets (decrypted from vault): ~/.env.secret
+if [[ -f "$HOME/.env.secret" ]]; then
+    source "$HOME/.env.secret"
+elif [[ -f "${SSOT:-$HOME/ssot}/.env.secret" ]]; then
+    source "${SSOT:-$HOME/ssot}/.env.secret"
 fi
 
 # ============================================================

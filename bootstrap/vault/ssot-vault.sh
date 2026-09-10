@@ -2,10 +2,15 @@
 # ============================================================
 # 🔐 SSOT Secret Vault Manager (AES-256 PBKDF2)
 # ============================================================
-# File: tools/ssot-vault.sh
-# Purpose: Zero-dependency, military-grade credential vault
-#          for syncing secret .env across multi-device SSOT
-# Target: $SSOT/core/.env.enc <---> $HOME/.env ($SSOT/.env)
+# File: bootstrap/vault/ssot-vault.sh
+# Purpose: Zero-dependency credential vault for syncing shared
+#          secrets across multi-device SSOT without polluting
+#          or overwriting machine-specific configurations.
+#
+# Architecture (Separation of Concerns):
+#   - Machine Config: ~/.env (JOE_ENV, MY_DEVICE, local paths - NEVER in vault)
+#   - Shared Secrets: ~/.env.secret (API keys, tokens - ENCRYPTED in vault)
+#   - Vault File:     $SSOT/core/.env.enc (AES-256-CBC PBKDF2)
 #
 # Non-interactive mode: export SSOT_VAULT_PASS="<passphrase>"
 # ============================================================
@@ -13,9 +18,10 @@
 set -eo pipefail 2>/dev/null || true
 
 # ── 1. SSOT Root & Environment Resolution ──
-_SSOT_ROOT="${SSOT:-$HOME/ssot}"
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+_SSOT_ROOT="${SSOT:-$_SCRIPT_DIR}"
 if [[ ! -d "$_SSOT_ROOT" ]]; then
-    _SSOT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+    _SSOT_ROOT="$_SCRIPT_DIR"
 fi
 export SSOT="$_SSOT_ROOT"
 
@@ -40,6 +46,8 @@ fi
 # ── 3. Paths & Configurations ──
 VAULT_FILE="$SSOT/core/.env.enc"
 EXAMPLE_FILE="$SSOT/.env.example"
+LOCAL_SECRET="$HOME/.env.secret"
+SSOT_SECRET="$SSOT/.env.secret"
 LOCAL_ENV="$HOME/.env"
 SSOT_ENV="$SSOT/.env"
 PBKDF2_ITER=100000
@@ -53,8 +61,12 @@ _banner() {
     echo ""
 }
 
-_resolve_active_env() {
-    if [[ -f "$LOCAL_ENV" ]]; then
+_resolve_active_secret() {
+    if [[ -f "$LOCAL_SECRET" ]]; then
+        echo "$LOCAL_SECRET"
+    elif [[ -f "$SSOT_SECRET" ]]; then
+        echo "$SSOT_SECRET"
+    elif [[ -f "$LOCAL_ENV" ]]; then
         echo "$LOCAL_ENV"
     elif [[ -f "$SSOT_ENV" ]]; then
         echo "$SSOT_ENV"
@@ -78,14 +90,25 @@ cmd_lock() {
     _banner
     _ensure_openssl
 
-    local target_env="$(_resolve_active_env)"
-    if [[ -z "$target_env" ]]; then
-        cn 196 b "❌ No .env file found at $LOCAL_ENV or $SSOT_ENV"
-        echo "Create one: cp .env.example ~/.env && edit ~/.env"
+    local target_secret="$(_resolve_active_secret)"
+    if [[ -z "$target_secret" ]]; then
+        cn 196 b "❌ No secret file found at $LOCAL_SECRET or $SSOT_SECRET"
+        echo "Run: vault init to create secrets, or create ~/.env.secret"
         exit 1
     fi
 
-    cn 226 b "🔒 Locking secrets from: $target_env"
+    # Migration: if locking from legacy ~/.env, extract pure secrets to ~/.env.secret
+    if [[ "$target_secret" == "$LOCAL_ENV" || "$target_secret" == "$SSOT_ENV" ]]; then
+        cn 214 b "⚡ Migrating pure secrets from $(basename "$target_secret") → $LOCAL_SECRET..."
+        mkdir -p "$(dirname "$LOCAL_SECRET")"
+        grep -vE '^[[:space:]]*(export[[:space:]]+)?(JOE_ENV|MY_DEVICE|HERMES_DIR|PYTHON_VENV|SDCARD_PATH|NODE_HOST|NODE_BIN|SCRIPTS_PATH|COLOR_PATH)=' "$target_secret" > "$LOCAL_SECRET"
+        chmod 600 "$LOCAL_SECRET"
+        ln -sf "$LOCAL_SECRET" "$SSOT_SECRET" 2>/dev/null || true
+        target_secret="$LOCAL_SECRET"
+        cn 82 b "✅ Extracted pure secrets to $LOCAL_SECRET (machine config kept intact in ~/.env)"
+    fi
+
+    cn 226 b "🔒 Locking secrets from: $target_secret"
     mkdir -p "$(dirname "$VAULT_FILE")"
 
     # Get passphrase (non-interactive via env var, or prompt)
@@ -109,7 +132,7 @@ cmd_lock() {
 
     # Encrypt
     if echo "$pass1" | openssl enc -aes-256-cbc -pbkdf2 -iter "$PBKDF2_ITER" -salt \
-        -in "$target_env" -out "$VAULT_FILE" -pass stdin 2>/dev/null; then
+        -in "$target_secret" -out "$VAULT_FILE" -pass stdin 2>/dev/null; then
         chmod 644 "$VAULT_FILE"
         echo ""
         cn 82 b "✅ Vault locked!"
@@ -130,7 +153,7 @@ cmd_unlock() {
 
     if [[ ! -f "$VAULT_FILE" ]]; then
         cn 196 b "❌ Vault not found: $VAULT_FILE"
-        echo "Clone the repo first, or create .env manually."
+        echo "Clone the repo first, or create ~/.env.secret manually."
         exit 1
     fi
 
@@ -161,14 +184,16 @@ cmd_unlock() {
             exit 1
         fi
 
-        mv "$tmp_out" "$LOCAL_ENV"
-        chmod 600 "$LOCAL_ENV"
-        ln -sf "$LOCAL_ENV" "$SSOT_ENV"
+        # Write to LOCAL_SECRET (~/.env.secret) ONLY. Do NOT overwrite ~/.env!
+        mv "$tmp_out" "$LOCAL_SECRET"
+        chmod 600 "$LOCAL_SECRET"
+        ln -sf "$LOCAL_SECRET" "$SSOT_SECRET" 2>/dev/null || true
 
         echo ""
         cn 82 b "✅ Vault unlocked!"
-        echo "📄 $LOCAL_ENV (chmod 600)"
-        echo "🔗 $SSOT_ENV → $LOCAL_ENV"
+        echo "📄 Secrets decrypted to: $LOCAL_SECRET (chmod 600)"
+        echo "🔗 Symlink: $SSOT_SECRET → $LOCAL_SECRET"
+        echo "🛡️  Machine config ($LOCAL_ENV) preserved untouched!"
         echo ""
     else
         rm -f "$tmp_out"
@@ -192,31 +217,44 @@ cmd_status() {
         echo "   $(c 196 b "NOT FOUND") $VAULT_FILE"
     fi
 
-    # ── Active .env ──
-    local active_env="$(_resolve_active_env)"
+    # ── Shared Secrets file ──
+    local active_secret="$(_resolve_active_secret)"
     echo ""
-    echo "📄 Active .env:"
-    if [[ -n "$active_env" ]]; then
-        local e_size
-        e_size="$(wc -c < "$active_env" | tr -d ' ')"
-        echo "   $(c 82 b "EXISTS") $active_env ($e_size bytes)"
+    echo "🔐 Shared Secrets ($LOCAL_SECRET):"
+    if [[ -f "$LOCAL_SECRET" ]]; then
+        local s_size
+        s_size="$(wc -c < "$LOCAL_SECRET" | tr -d ' ')"
+        echo "   $(c 82 b "EXISTS") $LOCAL_SECRET ($s_size bytes)"
+    elif [[ -n "$active_secret" ]]; then
+        echo "   $(c 226 b "LEGACY") Using $(basename "$active_secret") — run 'vault lock' to migrate"
     else
         echo "   $(c 226 b "NOT FOUND") — Run: vault unlock"
     fi
 
+    # ── Machine Config file ──
+    echo ""
+    echo "💻 Machine Config ($LOCAL_ENV):"
+    if [[ -f "$LOCAL_ENV" ]]; then
+        local e_size
+        e_size="$(wc -c < "$LOCAL_ENV" | tr -d ' ')"
+        echo "   $(c 82 b "EXISTS") $LOCAL_ENV ($e_size bytes) [JOE_ENV=${JOE_ENV:-?}]"
+    else
+        echo "   $(c 246 b "NOT FOUND")"
+    fi
+
     # ── Symlink ──
     echo ""
-    echo "🔗 Symlink:"
-    if [[ -L "$SSOT_ENV" ]]; then
-        echo "   $(c 82 b "HEALTHY") $SSOT_ENV → $(readlink "$SSOT_ENV")"
-    elif [[ -f "$SSOT_ENV" ]]; then
-        echo "   $(c 226 b "REGULAR FILE") — Consider: ln -sf ~/.env $SSOT_ENV"
+    echo "🔗 Secret Symlink:"
+    if [[ -L "$SSOT_SECRET" ]]; then
+        echo "   $(c 82 b "HEALTHY") $SSOT_SECRET → $(readlink "$SSOT_SECRET")"
+    elif [[ -f "$SSOT_SECRET" ]]; then
+        echo "   $(c 226 b "REGULAR FILE") — Consider: ln -sf $LOCAL_SECRET $SSOT_SECRET"
     else
         echo "   $(c 246 b "NONE")"
     fi
 
     # ── Secret Audit ──
-    if [[ -n "$active_env" ]] && [[ -f "$EXAMPLE_FILE" ]]; then
+    if [[ -n "$active_secret" ]] && [[ -f "$EXAMPLE_FILE" ]]; then
         echo ""
         echo "🔍 Secret Audit (template vs actual):"
         local total=0 ok=0 empty=0 missing=0
@@ -227,9 +265,9 @@ cmd_status() {
                 [[ "$var_name" == "JOE_ENV" || "$var_name" == "MY_DEVICE" ]] && continue
                 total=$((total+1))
 
-                if grep -q "^[[:space:]]*\(export[[:space:]]\+\)\?${var_name}=" "$active_env" 2>/dev/null; then
+                if grep -q "^[[:space:]]*\(export[[:space:]]\+\)\?${var_name}=" "$active_secret" 2>/dev/null; then
                     local raw_val
-                    raw_val="$(grep -m 1 "^[[:space:]]*\(export[[:space:]]\+\)\?${var_name}=" "$active_env" | sed -E 's/^[[:space:]]*(export[[:space:]]+)?[A-Za-z_][A-Za-z0-9_]*=//' | tr -d '"' | tr -d "'")"
+                    raw_val="$(grep -m 1 "^[[:space:]]*\(export[[:space:]]\+\)\?${var_name}=" "$active_secret" | sed -E 's/^[[:space:]]*(export[[:space:]]+)?[A-Za-z_][A-Za-z0-9_]*=//' | tr -d '"' | tr -d "'")"
                     if [[ -n "$raw_val" ]]; then
                         ok=$((ok+1))
                         local masked="${raw_val:0:4}..."
@@ -252,7 +290,7 @@ cmd_status() {
         # Exit code for CI/scripting
         if (( missing > 0 || empty > 0 )); then
             echo ""
-            echo "   💡 Fix: edit ~/.env or run vault init"
+            echo "   💡 Fix: edit ~/.env.secret or run vault init"
             return 1
         fi
     fi
@@ -262,22 +300,21 @@ cmd_status() {
 # --- INIT (interactive wizard) ---
 cmd_init() {
     _banner
-    local active_env="$(_resolve_active_env)"
+    local target_secret="$LOCAL_SECRET"
 
-    if [[ -z "$active_env" ]]; then
+    if [[ ! -f "$target_secret" ]]; then
         if [[ -f "$EXAMPLE_FILE" ]]; then
-            cp "$EXAMPLE_FILE" "$LOCAL_ENV"
-            chmod 600 "$LOCAL_ENV"
-            ln -sf "$LOCAL_ENV" "$SSOT_ENV"
-            active_env="$LOCAL_ENV"
-            cn 82 b "📄 Created ~/.env from .env.example"
+            cp "$EXAMPLE_FILE" "$target_secret"
+            chmod 600 "$target_secret"
+            ln -sf "$target_secret" "$SSOT_SECRET" 2>/dev/null || true
+            cn 82 b "📄 Created $target_secret from .env.example"
         else
             cn 196 b "❌ .env.example not found"
             exit 1
         fi
     fi
 
-    echo "🔧 Interactive Setup — $active_env"
+    echo "🔧 Interactive Secret Setup — $target_secret"
     echo "   Press Enter to skip a value."
     echo ""
 
@@ -290,8 +327,8 @@ cmd_init() {
 
             # Check current value
             local current_val=""
-            if grep -q "^[[:space:]]*\(export[[:space:]]\+\)\?${var_name}=" "$active_env" 2>/dev/null; then
-                current_val="$(grep -m 1 "^[[:space:]]*\(export[[:space:]]\+\)\?${var_name}=" "$active_env" | sed -E 's/^[[:space:]]*(export[[:space:]]+)?[A-Za-z_][A-Za-z0-9_]*=//' | tr -d '"' | tr -d "'")"
+            if grep -q "^[[:space:]]*\(export[[:space:]]\+\)\?${var_name}=" "$target_secret" 2>/dev/null; then
+                current_val="$(grep -m 1 "^[[:space:]]*\(export[[:space:]]\+\)\?${var_name}=" "$target_secret" | sed -E 's/^[[:space:]]*(export[[:space:]]+)?[A-Za-z_][A-Za-z0-9_]*=//' | tr -d '"' | tr -d "'")"
             fi
 
             if [[ -n "$current_val" ]]; then
@@ -304,10 +341,10 @@ cmd_init() {
             new_val="${new_val:-}"
 
             if [[ -n "$new_val" ]]; then
-                if grep -q "^[[:space:]]*\(export[[:space:]]\+\)\?${var_name}=" "$active_env" 2>/dev/null; then
-                    sed -i "s|^[[:space:]]*\(export[[:space:]]\+\)\?${var_name}=.*|export ${var_name}=\"${new_val}\"|" "$active_env"
+                if grep -q "^[[:space:]]*\(export[[:space:]]\+\)\?${var_name}=" "$target_secret" 2>/dev/null; then
+                    sed -i "s|^[[:space:]]*\(export[[:space:]]\+\)\?${var_name}=.*|export ${var_name}=\"${new_val}\"|" "$target_secret"
                 else
-                    printf 'export %s="%s"\n' "$var_name" "$new_val" >> "$active_env"
+                    printf 'export %s="%s"\n' "$var_name" "$new_val" >> "$target_secret"
                 fi
                 updated=$((updated+1))
             fi
@@ -323,16 +360,16 @@ cmd_init() {
 # --- EXPORT (backup) ---
 cmd_export() {
     _ensure_openssl
-    local active_env="$(_resolve_active_env)"
+    local target_secret="$(_resolve_active_secret)"
 
-    if [[ -z "$active_env" ]]; then
-        cn 196 b "❌ No .env to export"
+    if [[ -z "$target_secret" ]]; then
+        cn 196 b "❌ No secret file to export"
         exit 1
     fi
 
     local backup_dir="$SSOT/core/backups"
     mkdir -p "$backup_dir"
-    local backup_file="$backup_dir/.env.$(date +%Y%m%d_%H%M%S).enc"
+    local backup_file="$backup_dir/.env.secret.$(date +%Y%m%d_%H%M%S).enc"
 
     cn 226 b "📦 Backing up to: $backup_file"
 
@@ -345,7 +382,7 @@ cmd_export() {
     fi
 
     if echo "$pass" | openssl enc -aes-256-cbc -pbkdf2 -iter "$PBKDF2_ITER" \
-        -salt -in "$active_env" -out "$backup_file" -pass stdin 2>/dev/null; then
+        -salt -in "$target_secret" -out "$backup_file" -pass stdin 2>/dev/null; then
         chmod 600 "$backup_file"
         cn 82 b "✅ Backup created ($(wc -c < "$backup_file" | tr -d ' ') bytes)"
     else
@@ -369,7 +406,6 @@ case "${1:-}" in
     lock_pubkey|unlock_pubkey|pubkey-status)
         _PUBKEY_SCRIPT="$SSOT/bootstrap/nodes/pubkey-manager.sh"
         if [[ -f "$_PUBKEY_SCRIPT" ]]; then
-            # Map vault command names to pubkey-manager names
             _pk_cmd="${1}"
             shift
             case "$_pk_cmd" in
@@ -387,11 +423,11 @@ case "${1:-}" in
         echo "Usage: $(basename "$0") <command>"
         echo ""
         echo "Secret Commands:"
-        echo "  lock    Encrypt ~/.env → core/.env.enc"
-        echo "  unlock  Decrypt core/.env.enc → ~/.env"
+        echo "  lock    Encrypt ~/.env.secret → core/.env.enc"
+        echo "  unlock  Decrypt core/.env.enc → ~/.env.secret"
         echo "  status  Vault health + secret audit (exit 1 if incomplete)"
         echo "  init    Interactive wizard to fill in secrets"
-        echo "  export  Encrypted backup of ~/.env"
+        echo "  export  Encrypted backup of ~/.env.secret"
         echo ""
         echo "Pubkey Commands:"
         echo "  lock_pubkey [--add <key>] [--from <host>]"

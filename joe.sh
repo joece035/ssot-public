@@ -258,7 +258,7 @@ alias re="pp"
  } >/dev/null 2>&1
 
 # เช็คว่า JOE_ENV ไม่ใช่ WSL, OPPO หรือ MUMU
-if [[ "$JOE_ENV" != @(GIT-BASH|WSL|OPPO|MUMU|ACODEX) ]]; then
+if [[ "$JOE_ENV" == @(WSL|TERMUX) ]]; then
 
     # 1. เช็คก่อนว่ามีคำสั่ง pgrep ในระบบไหม
     if ! command -v pgrep >/dev/null 2>&1; then

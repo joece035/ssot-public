@@ -61,6 +61,12 @@ shell_setup() {
         esac
     fi
     local dev_lower="$(echo "$target_dev" | tr '[:upper:]' '[:lower:]')"
+    case "$dev_lower" in
+        window|win|windows|git-bash|gitbash) dev_lower="git-bash" ;;
+    esac
+    case "$(uname -s)" in
+        MINGW*|MSYS*|CYGWIN*) dev_lower="git-bash" ;;
+    esac
     local env_lower="$(echo "${JOE_ENV:-}" | tr '[:upper:]' '[:lower:]')"
     local profile_dir=""
 

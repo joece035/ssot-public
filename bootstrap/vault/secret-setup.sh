@@ -2,28 +2,29 @@
 # ============================================================
 # 🔐 Secret Setup Wizard — Standalone Secret Configuration
 # ============================================================
-# File: bootstrap/secret-setup.sh
+# File: bootstrap/vault/secret-setup.sh
 # Purpose: Interactive wizard for setting up secrets on new machines
 #          or when adding new API keys to the ecosystem.
 #
 # Usage:
-#   bash ~/ssot/bootstrap/secret-setup.sh          # Full wizard
-#   bash ~/ssot/bootstrap/secret-setup.sh --unlock  # Unlock vault first
-#   bash ~/ssot/bootstrap/secret-setup.sh --verify  # Quick check
-#   bash ~/ssot/bootstrap/secret-setup.sh --diff    # Show what's missing
+#   bash ~/ssot/bootstrap/vault/secret-setup.sh          # Full wizard
+#   bash ~/ssot/bootstrap/vault/secret-setup.sh --unlock  # Unlock vault first
+#   bash ~/ssot/bootstrap/vault/secret-setup.sh --verify  # Quick check
+#   bash ~/ssot/bootstrap/vault/secret-setup.sh --diff    # Show what's missing
 #
 # Part of the 3-Layer Secret Architecture:
 #   Layer 1: .env.example     (committed, shows all expected keys)
 #   Layer 2: core/.env.enc    (committed, AES-256 encrypted vault)
-#   Layer 3: ~/.env           (local only, chmod 600, gitignored)
+#   Layer 3: ~/.env.secret    (local only, chmod 600, gitignored)
 # ============================================================
 
 set -euo pipefail 2>/dev/null || true
 
 # ── 1. Resolve SSOT Root ──
-_SSOT_ROOT="${SSOT:-$HOME/ssot}"
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+_SSOT_ROOT="${SSOT:-$_SCRIPT_DIR}"
 if [[ ! -d "$_SSOT_ROOT" ]]; then
-    _SSOT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+    _SSOT_ROOT="$_SCRIPT_DIR"
 fi
 export SSOT="$_SSOT_ROOT"
 
@@ -49,6 +50,8 @@ fi
 VAULT_FILE="$SSOT/core/.env.enc"
 VAULT_SCRIPT="$SSOT/bootstrap/vault/ssot-vault.sh"
 EXAMPLE_FILE="$SSOT/.env.example"
+LOCAL_SECRET="$HOME/.env.secret"
+SSOT_SECRET="$SSOT/.env.secret"
 LOCAL_ENV="$HOME/.env"
 SSOT_ENV="$SSOT/.env"
 
@@ -61,9 +64,13 @@ _banner() {
     echo ""
 }
 
-# ── 5. Helper: Resolve active .env ──
-_resolve_active_env() {
-    if [[ -f "$LOCAL_ENV" ]]; then
+# ── 5. Helper: Resolve active secret ──
+_resolve_active_secret() {
+    if [[ -f "$LOCAL_SECRET" ]]; then
+        echo "$LOCAL_SECRET"
+    elif [[ -f "$SSOT_SECRET" ]]; then
+        echo "$SSOT_SECRET"
+    elif [[ -f "$LOCAL_ENV" ]]; then
         echo "$LOCAL_ENV"
     elif [[ -f "$SSOT_ENV" ]]; then
         echo "$SSOT_ENV"
@@ -74,10 +81,10 @@ _resolve_active_env() {
 
 # ── 6. Helper: Check if secrets are populated ──
 _secrets_populated() {
-    local env_file="${1:-$LOCAL_ENV}"
-    [[ ! -f "$env_file" ]] && return 1
+    local secret_file="${1:-$LOCAL_SECRET}"
+    [[ ! -f "$secret_file" ]] && return 1
     # Check if at least one non-template value exists
-    grep -qE '^[^#]*=[^"'"'"'\s]+[^\s]' "$env_file" 2>/dev/null
+    grep -qE '^[^#]*=[^"'"'"'\s]+[^\s]' "$secret_file" 2>/dev/null
 }
 
 # ── 7. Main Logic ──
@@ -113,7 +120,7 @@ _do_unlock() {
     if [[ ! -f "$VAULT_FILE" ]]; then
         cn 196 b "❌ No vault file found: $VAULT_FILE"
         echo "  The repository may not have an encrypted vault."
-        echo "  Create secrets manually: cp .env.example ~/.env && edit ~/.env"
+        echo "  Create secrets manually: cp .env.example ~/.env.secret && edit ~/.env.secret"
         exit 1
     fi
 
@@ -133,9 +140,9 @@ _do_verify() {
         "$VAULT_SCRIPT" verify
     else
         # Manual verify without vault script
-        local active_env="$(_resolve_active_env)"
-        if [[ -z "$active_env" ]]; then
-            cn 196 b "❌ No .env file found"
+        local active_secret="$(_resolve_active_secret)"
+        if [[ -z "$active_secret" ]]; then
+            cn 196 b "❌ No secret file found"
             exit 1
         fi
 
@@ -146,9 +153,9 @@ _do_verify() {
                 [[ "$var_name" == "JOE_ENV" || "$var_name" == "MY_DEVICE" ]] && continue
                 total=$((total+1))
 
-                if grep -q "^[[:space:]]*\(export[[:space:]]\+\)\?${var_name}=" "$active_env" 2>/dev/null; then
+                if grep -q "^[[:space:]]*\(export[[:space:]]\+\)\?${var_name}=" "$active_secret" 2>/dev/null; then
                     local raw_val
-                    raw_val="$(grep -m 1 "^[[:space:]]*\(export[[:space:]]\+\)\?${var_name}=" "$active_env" | sed -E 's/^[[:space:]]*(export[[:space:]]+)?[A-Za-z_][A-Za-z0-9_]*=//' | tr -d '"' | tr -d "'")"
+                    raw_val="$(grep -m 1 "^[[:space:]]*\(export[[:space:]]\+\)\?${var_name}=" "$active_secret" | sed -E 's/^[[:space:]]*(export[[:space:]]+)?[A-Za-z_][A-Za-z0-9_]*=//' | tr -d '"' | tr -d "'")"
                     [[ -z "$raw_val" ]] && empty=$((empty+1))
                 else
                     missing=$((missing+1))
@@ -172,9 +179,9 @@ _do_diff() {
     if [[ -f "$VAULT_SCRIPT" ]]; then
         "$VAULT_SCRIPT" diff
     else
-        local active_env="$(_resolve_active_env)"
-        if [[ -z "$active_env" ]]; then
-            cn 196 b "❌ No .env file found"
+        local active_secret="$(_resolve_active_secret)"
+        if [[ -z "$active_secret" ]]; then
+            cn 196 b "❌ No secret file found"
             exit 1
         fi
 
@@ -184,7 +191,7 @@ _do_diff() {
                 local var_name="${BASH_REMATCH[2]}"
                 [[ "$var_name" == "JOE_ENV" || "$var_name" == "MY_DEVICE" ]] && continue
 
-                if ! grep -q "^[[:space:]]*\(export[[:space:]]\+\)\?${var_name}=" "$active_env" 2>/dev/null; then
+                if ! grep -q "^[[:space:]]*\(export[[:space:]]\+\)\?${var_name}=" "$active_secret" 2>/dev/null; then
                     cn 196 b "  MISSING: $var_name"
                 fi
             fi
@@ -211,9 +218,9 @@ _do_full_wizard() {
     # Step 1: Check vault
     if [[ -f "$VAULT_FILE" ]]; then
         cn 226 b "📦 Found encrypted vault: $VAULT_FILE"
-        local active_env="$(_resolve_active_env)"
+        local active_secret="$(_resolve_active_secret)"
 
-        if [[ -z "$active_env" ]] || ! _secrets_populated "$active_env"; then
+        if [[ -z "$active_secret" ]] || ! _secrets_populated "$active_secret"; then
             echo ""
             echo "  🔐 Secrets are not yet loaded."
             read -r -t 15 -p "   Unlock vault now? [Y/n] (default: Y): " _choice < /dev/tty || _choice="Y"
@@ -233,8 +240,8 @@ _do_full_wizard() {
     echo ""
 
     # Step 2: Check completeness
-    local active_env="$(_resolve_active_env)"
-    if [[ -n "$active_env" ]]; then
+    local active_secret="$(_resolve_active_secret)"
+    if [[ -n "$active_secret" ]]; then
         cn 226 b "🔍 Checking secret completeness..."
         echo ""
 
@@ -244,11 +251,11 @@ _do_full_wizard() {
                 local var_name="${BASH_REMATCH[2]}"
                 [[ "$var_name" == "JOE_ENV" || "$var_name" == "MY_DEVICE" ]] && continue
 
-                if ! grep -q "^[[:space:]]*\(export[[:space:]]\+\)\?${var_name}=" "$active_env" 2>/dev/null; then
+                if ! grep -q "^[[:space:]]*\(export[[:space:]]\+\)\?${var_name}=" "$active_secret" 2>/dev/null; then
                     missing_list+=("$var_name")
                 else
                     local raw_val
-                    raw_val="$(grep -m 1 "^[[:space:]]*\(export[[:space:]]\+\)\?${var_name}=" "$active_env" | sed -E 's/^[[:space:]]*(export[[:space:]]+)?[A-Za-z_][A-Za-z0-9_]*=//' | tr -d '"' | tr -d "'")"
+                    raw_val="$(grep -m 1 "^[[:space:]]*\(export[[:space:]]\+\)\?${var_name}=" "$active_secret" | sed -E 's/^[[:space:]]*(export[[:space:]]+)?[A-Za-z_][A-Za-z0-9_]*=//' | tr -d '"' | tr -d "'")"
                     [[ -z "$raw_val" ]] && empty_list+=("$var_name")
                 fi
             fi
@@ -262,22 +269,22 @@ _do_full_wizard() {
                 if [[ -f "$VAULT_SCRIPT" ]]; then
                     "$VAULT_SCRIPT" init
                 else
-                    _interactive_setup "$active_env"
+                    _interactive_setup "$active_secret"
                 fi
             fi
         else
             cn 82 b "  ✅ All secrets are set — nothing to do!"
         fi
     else
-        echo "  ℹ️  No .env file found."
+        echo "  ℹ️  No secret file found."
         echo "  Creating from template..."
         if [[ -f "$EXAMPLE_FILE" ]]; then
-            cp "$EXAMPLE_FILE" "$LOCAL_ENV"
-            chmod 600 "$LOCAL_ENV"
-            ln -sf "$LOCAL_ENV" "$SSOT_ENV"
-            cn 82 b "📄 Created ~/.env from .env.example"
+            cp "$EXAMPLE_FILE" "$LOCAL_SECRET"
+            chmod 600 "$LOCAL_SECRET"
+            ln -sf "$LOCAL_SECRET" "$SSOT_SECRET" 2>/dev/null || true
+            cn 82 b "📄 Created $LOCAL_SECRET from .env.example"
             echo ""
-            _interactive_setup "$LOCAL_ENV"
+            _interactive_setup "$LOCAL_SECRET"
         else
             cn 196 b "❌ .env.example not found"
             exit 1
@@ -301,11 +308,11 @@ _do_full_wizard() {
 
 # ── 13. Interactive setup (fallback when vault script unavailable) ──
 _interactive_setup() {
-    local env_file="${1:-$LOCAL_ENV}"
+    local secret_file="${1:-$LOCAL_SECRET}"
 
     echo ""
     echo "🔧 Interactive Secret Setup"
-    echo "   File: $env_file"
+    echo "   File: $secret_file"
     echo "   Press Enter to skip a value."
     echo ""
 
@@ -317,8 +324,8 @@ _interactive_setup() {
             [[ "$var_name" == "JOE_ENV" || "$var_name" == "MY_DEVICE" ]] && continue
 
             local current_val=""
-            if grep -q "^[[:space:]]*\(export[[:space:]]\+\)\?${var_name}=" "$env_file" 2>/dev/null; then
-                current_val="$(grep -m 1 "^[[:space:]]*\(export[[:space:]]\+\)\?${var_name}=" "$env_file" | sed -E 's/^[[:space:]]*(export[[:space:]]+)?[A-Za-z_][A-Za-z0-9_]*=//' | tr -d '"' | tr -d "'")"
+            if grep -q "^[[:space:]]*\(export[[:space:]]\+\)\?${var_name}=" "$secret_file" 2>/dev/null; then
+                current_val="$(grep -m 1 "^[[:space:]]*\(export[[:space:]]\+\)\?${var_name}=" "$secret_file" | sed -E 's/^[[:space:]]*(export[[:space:]]+)?[A-Za-z_][A-Za-z0-9_]*=//' | tr -d '"' | tr -d "'")"
             fi
 
             if [[ -n "$current_val" ]]; then
@@ -332,10 +339,10 @@ _interactive_setup() {
             new_val="${new_val:-}"
 
             if [[ -n "$new_val" ]]; then
-                if grep -q "^[[:space:]]*\(export[[:space:]]\+\)\?${var_name}=" "$env_file" 2>/dev/null; then
-                    sed -i "s|^[[:space:]]*\(export[[:space:]]\+\)\?${var_name}=.*|export ${var_name}=\"${new_val}\"|" "$env_file"
+                if grep -q "^[[:space:]]*\(export[[:space:]]\+\)\?${var_name}=" "$secret_file" 2>/dev/null; then
+                    sed -i "s|^[[:space:]]*\(export[[:space:]]\+\)\?${var_name}=.*|export ${var_name}=\"${new_val}\"|" "$secret_file"
                 else
-                    printf 'export %s="%s"\n' "$var_name" "$new_val" >> "$env_file"
+                    printf 'export %s="%s"\n' "$var_name" "$new_val" >> "$secret_file"
                 fi
                 updated=$((updated+1))
             fi
@@ -362,18 +369,18 @@ _show_help() {
     echo "Architecture:"
     echo "  Layer 1: .env.example     (committed, shows all expected keys)"
     echo "  Layer 2: core/.env.enc    (committed, AES-256 encrypted vault)"
-    echo "  Layer 3: ~/.env           (local only, chmod 600, gitignored)"
+    echo "  Layer 3: ~/.env.secret    (local only, chmod 600, gitignored)"
     echo ""
     echo "New Machine Workflow:"
     echo "  1. git clone <repo> ~/ssot"
     echo "  2. bash ~/ssot/bootstrap/install.sh"
     echo "     └─ Detects vault → prompts to unlock"
-    echo "  3. bash ~/ssot/bootstrap/secret-setup.sh"
+    echo "  3. bash ~/ssot/bootstrap/vault/secret-setup.sh"
     echo "     └─ Verifies all secrets are populated"
     echo ""
     echo "Adding New Secrets:"
     echo "  1. Add key to .env.example (with empty value)"
-    echo "  2. Add value to ~/.env"
+    echo "  2. Add value to ~/.env.secret"
     echo "  3. vault lock  (re-encrypt vault)"
     echo "  4. git commit + push"
     echo ""
