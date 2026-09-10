@@ -98,7 +98,7 @@ pkg_manager() {
     echo "[pkg_manager] Environment: $env | กำลังติดตั้ง '$pkg' ..."
 
     case "$env" in
-        TERMUX|MUMU)
+        TERMUX|MUMU|OPPO)
             local termux_pkg="$pkg"
             [[ "$pkg" == "openssl" ]] && termux_pkg="openssl-tool"
             pkg install -y "$termux_pkg"

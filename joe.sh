@@ -250,7 +250,7 @@ alias re="pp"
     ssot_load ${LOAD_LIST:-}
     pf ${AI_PROFILE:-mom}
     case "$JOE_ENV" in 
-        TERMUX|MUMU) rc_delete ;;
+        TERMUX|MUMU|OPPO) rc_delete ;;
     esac
     unset LOAD_LIST
     unset AI_PROFILE
@@ -259,7 +259,7 @@ alias re="pp"
 
 
 {
-    if [[ "$JOE_ENV" != "GIT-BASH" ]]; then
+    if [[ "$JOE_ENV" != "GIT-BASH" && "$JOE_ENV" != "OPPO" ]]; then
         if ! command -v pgrep >/dev/null 2>&1; then
             cn 9 b "pgrep not found, skipping syncthing check"
         elif ! pgrep -f syncthing >/dev/null 2>&1; then
