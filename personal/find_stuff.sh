@@ -158,7 +158,7 @@ alias ausf='auto_source'
 #   _guard_func "fm_cp" && fm_cp "$src" "$dst"
 #   _guard_func "my_func" || exit 1
 # ==========================================
-_guard_func() {
+_check_func() {
     local func="$1"
     local context="${2:-${SSOT:-$repository}}"
 
