@@ -65,6 +65,10 @@ _is_func_loaded() {
 # ==========================================
 # Main Functions
 # ==========================================
+
+# find_unsource_func — ค้นหาไฟล์ที่มี function นั้น
+# รองรับ: single result (return path) / multi result (interactive picker)
+# Usage: find_unsource_func <func_name> [search_dir]
 find_unsource_func() {
     local func_name="$1"
     local search_dir="${2:-${SSOT:-$repository}}"
@@ -76,11 +80,47 @@ find_unsource_func() {
 
     echo "🔍 Searching for function '$func_name' in '$search_dir'..." >&2
 
-    # ค้นหาไฟล์สคริปต์ และดึงเฉพาะ Path แรกที่พบ
-    grep -rnlE "^\s*(function\s+${func_name}|${func_name}\s*\(\))" "$search_dir" 2>/dev/null | head -n 1
+    # รวบรวมทุก match
+    local -a matches
+    mapfile -t matches < <(
+        grep -rnlE "^\s*(function\s+${func_name}|${func_name}\s*\(\))" "$search_dir" 2>/dev/null
+    )
+
+    case "${#matches[@]}" in
+        0)
+            echo "❌ Function '$func_name' not found in '$search_dir'" >&2
+            return 1
+            ;;
+        1)
+            # พบแค่ 1 ไฟล์ → return ทันที (behavior เดิม)
+            echo "${matches[0]}"
+            ;;
+        *)
+            # พบหลายไฟล์ → ให้ user เลือก
+            echo "⚠️  Found ${#matches[@]} files containing '$func_name':" >&2
+            if command -v fzf >/dev/null 2>&1; then
+                # fzf interactive picker (ถ้ามี)
+                local selected
+                selected=$(printf '%s\n' "${matches[@]}" | \
+                    fzf --prompt="Source which file? > " \
+                        --height=40% \
+                        --border \
+                        --preview="grep -n '${func_name}' {}" \
+                        --preview-window=down:5)
+                [[ -n "$selected" ]] && echo "$selected" || return 1
+            else
+                # Fallback: numbered select (built-in, zero dependency)
+                local choice
+                select choice in "${matches[@]}" "Cancel"; do
+                    [[ "$choice" == "Cancel" || -z "$choice" ]] && return 1
+                    echo "$choice"
+                    return 0
+                done
+            fi
+            ;;
+    esac
 }
 alias fusf='find_unsource_func'
-alias ausf='auto_source'
 auto_source() {
     local func="${1:-}"
 
@@ -93,7 +133,7 @@ auto_source() {
     _is_func_loaded "$func" && return 0
 
     local script_path
-    script_path="$(find_unsource_func "$func")" || return 1
+    script_path="$(find_unsource_func "$func" "${2:-${SSOT:-$repository}}")" || return 1
 
     [[ -n "$script_path" ]] || {
         echo "Error: Function '$func' not found" >&2
@@ -107,4 +147,33 @@ auto_source() {
         echo "❌ Failed to source: $script_path" >&2
         return 1
     fi
+}
+alias ausf='auto_source'
+
+# ==========================================
+# _guard_func — Error guard สำหรับใช้ใน scripts
+# ตรวจสอบว่า function พร้อมใช้ก่อนเรียก — ถ้ายังไม่โหลดให้ auto-load
+# Usage: _guard_func <func_name> [search_dir] && <func_name> "$@"
+# Examples:
+#   _guard_func "fm_cp" && fm_cp "$src" "$dst"
+#   _guard_func "my_func" || exit 1
+# ==========================================
+_guard_func() {
+    local func="$1"
+    local context="${2:-${SSOT:-$repository}}"
+
+    if [[ -z "$func" ]]; then
+        echo "❌ _guard_func: No function name provided" >&2
+        return 1
+    fi
+
+    if _is_func_loaded "$func"; then
+        return 0
+    fi
+
+    echo "⚠️  '$func' not loaded — attempting auto_source..." >&2
+    auto_source "$func" "$context" || {
+        echo "❌ Cannot proceed: '$func' unavailable" >&2
+        return 1
+    }
 }
