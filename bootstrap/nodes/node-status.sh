@@ -79,8 +79,8 @@ if [[ -z "$_THIS_NODE" || -z "$_THIS_ENV" ]]; then
         _THIS_NODE="${_THIS_NODE:-wsl}"
         _THIS_ENV="${_THIS_ENV:-WSL}"
     elif [[ -n "${MSYSTEM:-}" ]]; then
-        _THIS_NODE="${_THIS_NODE:-window}"
-        _THIS_ENV="${_THIS_ENV:-WINDOW}"
+        _THIS_NODE="${_THIS_NODE:-git-bash}"
+        _THIS_ENV="${_THIS_ENV:-GIT-BASH}"
     else
         _THIS_NODE="${_THIS_NODE:-$(hostname 2>/dev/null | tr '[:upper:]' '[:lower:]' || echo 'unknown')}"
         _THIS_ENV="${_THIS_ENV:-UNKNOWN}"

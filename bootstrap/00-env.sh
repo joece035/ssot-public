@@ -92,7 +92,7 @@ export storage="/storage/emulated/0/" # sdcrd
 export ais_fiber="880-563-6522"
 export ais_phone="0814764210"
 export space="\u2003\u2003\u2003\u2003"
-export bin="$HOME/.local/bin/"
+export bin="$HOME/.local/bin"
 
 if [[ -n "${ZSH_VERSION:-}" ]]; then
     export _SHELL="zsh"

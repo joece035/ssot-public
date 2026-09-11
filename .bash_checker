@@ -82,9 +82,22 @@ _check_func_safe() {
         return $?
     fi
     # non-interactive: single-match auto-source only, multi-match = fail (no picker)
+    # pure-bash: no grep/find — uses globstar (bash 4+) + [[ =~ ]] builtin regex
     if [[ -n "$context" && -d "$context" ]]; then
         local -a _m=()
-        while IFS= read -r _f; do _m+=("$_f"); done < <(grep -rlnE "^[[:space:]]*(function[[:space:]]+${func}|${func}[[:space:]]*\(\))" "$context" 2>/dev/null)
+        local _f _line _og_null _og_glob
+        _og_null=$(shopt -p nullglob 2>/dev/null)
+        _og_glob=$(shopt -p globstar 2>/dev/null)
+        shopt -s nullglob globstar 2>/dev/null
+        local _pat="^[[:space:]]*(function[[:space:]]+${func}([[:space:(]|$)|${func}[[:space:]]*\(\))"
+        for _f in "$context"/**/*.sh "$context"/**/*.bash "$context"/**/*.zsh; do
+            [[ -f "$_f" ]] || continue
+            while IFS= read -r _line; do
+                if [[ "$_line" =~ $_pat ]]; then _m+=("$_f"); break; fi
+            done < "$_f"
+        done
+        eval "$_og_null" 2>/dev/null
+        eval "$_og_glob" 2>/dev/null
         if [[ ${#_m[@]} -eq 1 ]]; then
             # shellcheck disable=SC1090
             source "${_m[0]}" 2>/dev/null && _is_func_loaded "$func" && return 0
@@ -104,15 +117,15 @@ _check_func_safe() {
 }
 
 _check_usage() {
-    cat >&2 <<'EOF'
-usage: _check_ <mode> [args...]
-  -o|--object  -f <path> [cmd...]   test object then run cmd (default: source)
-  -s|--shell   [bash|zsh]           guard shell (no arg prints current shell)
-  -j|--JENV    [--set|--force]      ensure JOE_ENV
-  -f|--FUNCTION <func> [search_dir] ensure function loaded
-  -p|--PKG     [-c] <pkg> [bin] ... ensure package installed
-  -h|--help                         this help
-EOF
+    # printf is a bash builtin — zero external dependency
+    printf >&2 '%s\n' \
+        'usage: _check_ <mode> [args...]' \
+        '  -o|--object  -f <path> [cmd...]   test object then run cmd (default: source)' \
+        '  -s|--shell   [bash|zsh]           guard shell (no arg prints current shell)' \
+        '  -j|--JENV    [--set|--force]      ensure JOE_ENV' \
+        '  -f|--FUNCTION <func> [search_dir] ensure function loaded (bash 4+ required for auto-search)' \
+        '  -p|--PKG     [-c] <pkg> [bin] ... ensure package installed' \
+        '  -h|--help                         this help'
 }
 
 _check_(){

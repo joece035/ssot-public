@@ -22,11 +22,10 @@ esac
 # ── 2. Load private env vars (JOE_ENV, SSOT, secrets) ──
 [ -f ~/.env ] && . ~/.env
 
-# Git Bash Guard: Never let imported ~/.env poison a Windows Git Bash session
+# Git Bash Guard: Force JOE_ENV only — MY_DEVICE stays as set in ~/.env
 case "$(uname -s)" in
     MINGW*|MSYS*|CYGWIN*)
         export JOE_ENV="GIT-BASH"
-        export MY_DEVICE="window"
         ;;
 esac
 
@@ -48,65 +47,160 @@ fi
 #   ENV_NAME: TERMUX, MUMU, WSL, GIT-BASH, ACODEX, OPPO
 #   If omitted, uses $MY_DEVICE or $JOE_ENV
 # ============================================================
-shell_setup() {
-    local target_dev="${1:-}"
-    if [[ -z "$target_dev" ]]; then
-        case "$(uname -s)" in
-            MINGW*|MSYS*|CYGWIN*)
-                target_dev="git-bash"
-                ;;
-            *)
-                target_dev="${MY_DEVICE:-${JOE_ENV:-}}"
-                ;;
-        esac
-    fi
-    local dev_lower="$(echo "$target_dev" | tr '[:upper:]' '[:lower:]')"
-    case "$dev_lower" in
-        window|win|windows|git-bash|gitbash) dev_lower="git-bash" ;;
-    esac
-    case "$(uname -s)" in
-        MINGW*|MSYS*|CYGWIN*) dev_lower="git-bash" ;;
-    esac
-    local env_lower="$(echo "${JOE_ENV:-}" | tr '[:upper:]' '[:lower:]')"
-    local profile_dir=""
 
-    # 1. Resolve profile directory with robust fallback
-    if [[ -n "$dev_lower" && -d "${SSOT}/profiles/$dev_lower" ]]; then
-        profile_dir="${SSOT}/profiles/$dev_lower"
-    elif [[ -n "$env_lower" && -d "${SSOT}/profiles/$env_lower" ]]; then
-        profile_dir="${SSOT}/profiles/$env_lower"
-    elif [[ -d "${SSOT}/profiles/wsl" ]]; then
-        profile_dir="${SSOT}/profiles/wsl"
-    else
-        echo "⚠️  shell_setup: No matching profile directory found in ${SSOT}/profiles"
-        return 1
-    fi
+shell_setup(){
+    
+    local env_=${1:-$JOE_ENV}
+    local pf=""
 
-    local need_bash=true
-    local need_zsh=true
-    [[ "${JOE_ENV:-}" == "GIT-BASH" ]] && need_zsh=false
-
-    _link() {
-        local target="$1" src="$2"
-        [[ ! -f "$src" ]] && { echo "  ⚠️  $src not found — skipping"; return 0; }
-        if grep -q $'\r' "$src" 2>/dev/null; then
-            sed -i 's/\r$//' "$src" 2>/dev/null || true
-        fi
-        if [[ -L "$target" ]]; then
-            rm -f "$target"
-        elif [[ -f "$target" ]]; then
-            local bak="${target}.bak.$(date +%s)"
-            cp "$target" "$bak"
-            echo "  📦 Backed up $target → $bak"
-            rm -f "$target"
-        fi
-        ln -sf "$src" "$target"
-        echo "  🔗 $target → $src"
-    }
-
-    echo "🔗 Wiring shell profiles from $profile_dir..."
-    [[ "$need_bash" == true ]] && _link "$HOME/.bashrc" "$profile_dir/.bashrc"
-    [[ "$need_zsh" == true ]]  && _link "$HOME/.zshrc" "$profile_dir/.zshrc"
+        case "$env_" in
+                TERMUX)
+                    if [[ ! -f "$HOME/.bashrc" ]]; then
+                         pf="${SSOT}/profiles/termux/.bashrc"
+                        if [[ -f "$pf" ]]; then
+                            ln -s "$pf" "$HOME/.bashrc" && echo "symlink $pf >>> $HOME/.bashrc done" || echo "FAIL"
+                        else
+                            echo "not found $pf"    
+                        fi
+                    else 
+                        rm -rf $HOME/.bashrc &&
+                        pf="${SSOT}/profiles/termux/.bashrc"    
+                        ln -sf "$pf" "$HOME/.bashrc" && echo "ลบและสร้าง symlink $pf >>> $HOME/.bashrc done" || echo "FAIL"    
+                    fi     
+                    if [[ ! -f "$HOME/.zshrc" ]]; then
+                         pf="${SSOT}/profiles/termux/.zshrc"
+                         if [[ -f "$pf" ]]; then
+                             ln -s "$pf" "$HOME/.zshrc" && echo "symlink $pf >>> $HOME/.zshrc done" || echo "FAIL"
+                         else
+                             echo "not found $pf"
+                         fi
+                    else 
+                        rm -rf $HOME/.zshrc &&
+                        pf="${SSOT}/profiles/termux/.zshrc"    
+                        ln -sf "$pf" "$HOME/.zshrc" && echo "ลบและสร้าง symlink $pf >>> $HOME/.zshrc done" || echo "FAIL"    
+                    fi
+                    ;;
+                MUMU) 
+                    if [[ ! -f "$HOME/.bashrc" ]]; then
+                         pf="${SSOT}/profiles/mumu/.bashrc"
+                         if [[ -f "$pf" ]]; then
+                            ln -s "$pf" "$HOME/.bashrc" && echo "symlink $pf >>> $HOME/.bashrc done" || echo "FAIL"
+                         else
+                            echo "not found $pf"
+                         fi
+                    else 
+                        rm -rf $HOME/.bashrc &&
+                        pf="${SSOT}/profiles/mumu/.bashrc"    
+                        ln -sf "$pf" "$HOME/.bashrc" && echo "ลบและสร้าง symlink $pf >>> $HOME/.bashrc done" || echo "FAIL"    
+                    fi
+                    if [[ ! -f "$HOME/.zshrc" ]]; then
+                         pf="${SSOT}/profiles/mumu/.zshrc"
+                         if [[ -f "$pf" ]]; then
+                             ln -s "$pf" "$HOME/.zshrc" && echo "symlink $pf >>> $HOME/.zshrc done" || echo "FAIL"
+                         else
+                             echo "not found $pf"
+                         fi
+                    else 
+                        rm -rf $HOME/.zshrc &&
+                        pf="${SSOT}/profiles/mumu/.zshrc"    
+                        ln -sf "$pf" "$HOME/.zshrc" && echo "ลบและสร้าง symlink $pf >>> $HOME/.zshrc done" || echo "FAIL"    
+                    fi
+                    ;;
+                WSL)
+                    if [[ ! -f "$HOME/.bashrc" ]]; then
+                         pf="${SSOT}/profiles/wsl/.bashrc"
+                         if [[ -f "$pf" ]]; then
+                            ln -s "$pf" "$HOME/.bashrc" && echo "symlink $pf >>> $HOME/.bashrc done" || echo "FAIL"
+                         else
+                            echo "not found $pf"
+                         fi
+                    else 
+                        rm -rf $HOME/.bashrc &&
+                        pf="${SSOT}/profiles/wsl/.bashrc"    
+                        ln -sf "$pf" "$HOME/.bashrc" && echo "ลบและสร้าง symlink $pf >>> $HOME/.bashrc done" || echo "FAIL"    
+                    fi
+                    if [[ ! -f "$HOME/.zshrc" ]]; then
+                         pf="${SSOT}/profiles/wsl/.zshrc"
+                         if [[ -f "$pf" ]]; then
+                            ln -s "$pf" "$HOME/.zshrc" && echo "symlink $pf >>> $HOME/.zshrc done" || echo "FAIL"
+                         else
+                            echo "not found $pf"
+                         fi
+                    else 
+                        rm -rf $HOME/.zshrc &&
+                        pf="${SSOT}/profiles/wsl/.zshrc"    
+                        ln -sf "$pf" "$HOME/.zshrc" && echo "ลบและสร้าง symlink $pf >>> $HOME/.zshrc done" || echo "FAIL"    
+                    fi
+                    ;;
+                GIT-BASH )
+                    if [[ ! -f "$HOME/.bashrc" ]]; then
+                         pf="${SSOT}/profiles/git-bash/.bashrc"
+                         if [[ -f "$pf" ]]; then
+                            ln -sf "$pf" "$HOME/.bashrc" && echo "symlink $pf >>> $HOME/.bashrc done" || echo "FAIL"
+                         else
+                         
+                            echo "not found $pf"
+                         fi
+                    else 
+                        rm -rf $HOME/.bashrc &&
+                        ln -sf "$pf" "$HOME/.bashrc" && echo "ลบและสร้าง symlink $pf >>> $HOME/.bashrc done" || echo "FAIL"
+                        
+                    fi
+                    ;;
+                OPPO)
+                    if [[ ! -f "$HOME/.bashrc" ]]; then
+                         pf="${SSOT}/profiles/oppo/.bashrc"
+                        if [[ -f "$pf" ]]; then
+                            ln -s "$pf" "$HOME/.bashrc" && echo "symlink $pf >>> $HOME/.bashrc done" || echo "FAIL"
+                        else
+                            echo "not found $pf"    
+                        fi
+                    else 
+                        rm -rf $HOME/.bashrc &&
+                        pf="${SSOT}/profiles/oppo/.bashrc"    
+                        ln -sf "$pf" "$HOME/.bashrc" && echo "symlink $pf >>> $HOME/.bashrc done" || echo "FAIL"    
+                    fi     
+                    if [[ ! -f "$HOME/.zshrc" ]]; then
+                         pf="${SSOT}/profiles/oppo/.zshrc"
+                         if [[ -f "$pf" ]]; then
+                             ln -s "$pf" "$HOME/.zshrc" && echo "symlink $pf >>> $HOME/.zshrc done" || echo "FAIL"
+                         else
+                             echo "not found $pf"
+                         fi
+                    else 
+                        rm -rf $HOME/.zshrc &&
+                        pf="${SSOT}/profiles/oppo/.zshrc"    
+                        ln -sf "$pf" "$HOME/.zshrc" && echo "symlink $pf >>> $HOME/.zshrc done" || echo "FAIL"    
+                    fi
+                    ;;
+                ACODEX)
+                    if [[ ! -f "$HOME/.bashrc" ]]; then
+                         pf="${SSOT}/profiles/acodex/.bashrc"
+                        if [[ -f "$pf" ]]; then
+                            ln -s "$pf" "$HOME/.bashrc" && echo "symlink $pf >>> $HOME/.bashrc done" || echo "FAIL"
+                        else
+                            echo "not found $pf"    
+                        fi
+                    else 
+                        rm -rf $HOME/.bashrc &&
+                        pf="${SSOT}/profiles/acodex/.bashrc"    
+                        ln -sf "$pf" "$HOME/.bashrc" && echo "symlink $pf >>> $HOME/.bashrc done" || echo "FAIL"    
+                    fi     
+                    if [[ ! -f "$HOME/.zshrc" ]]; then
+                         pf="${SSOT}/profiles/acodex/.zshrc"
+                         if [[ -f "$pf" ]]; then
+                             ln -sf "$pf" "$HOME/.zshrc" && echo "symlink $pf >>> $HOME/.zshrc done" || echo "FAIL"
+                         else
+                             echo "not found $pf"
+                         fi
+                    else 
+                        rm -rf $HOME/.zshrc &&
+                        pf="${SSOT}/profiles/acodex/.zshrc"    
+                        ln -sf "$pf" "$HOME/.zshrc" && echo "symlink $pf >>> $HOME/.zshrc done" || echo "FAIL"    
+                    fi
+                    ;;    
+                *) echo unknow check $JOE_ENV then re setup again" ;;    
+         esac               
 }
 
 # ============================================================

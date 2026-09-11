@@ -448,7 +448,7 @@ else
     if [[ -z "${MY_DEVICE:-}" ]]; then
         _def_device="$(echo "$JOE_ENV" | tr '[:upper:]' '[:lower:]')"
         case "$JOE_ENV" in
-            GIT-BASH) _def_device="window" ;;
+            GIT-BASH) _def_device="git-bash" ;;
         esac
         if grep -q "^export MY_DEVICE=" "$ENV_FILE" 2>/dev/null; then
             sed -i "s/^export MY_DEVICE=.*/export MY_DEVICE=\"$_def_device\"/" "$ENV_FILE"

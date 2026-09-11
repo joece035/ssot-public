@@ -116,6 +116,10 @@ shell_setup(){
                         else
                             echo "not found $pf"    
                         fi
+                    else 
+                        rm -rf $HOME/.bashrc &&
+                        pf="${SSOT}/profiles/termux/.bashrc"    
+                        ln -sf "$pf" "$HOME/.bashrc" && echo "symlink $pf >>> $HOME/.bashrc done" || echo "FAIL"    
                     fi     
                     if [[ ! -f "$HOME/.zshrc" ]]; then
                          pf="${SSOT}/profiles/termux/.zshrc"
@@ -124,6 +128,10 @@ shell_setup(){
                          else
                              echo "not found $pf"
                          fi
+                    else 
+                        rm -rf $HOME/.zshrc &&
+                        pf="${SSOT}/profiles/termux/.zshrc"    
+                        ln -sf "$pf" "$HOME/.zshrc" && echo "symlink $pf >>> $HOME/.zshrc done" || echo "FAIL"    
                     fi
                     ;;
                 MUMU) 
@@ -134,6 +142,10 @@ shell_setup(){
                          else
                             echo "not found $pf"
                          fi
+                    else 
+                        rm -rf $HOME/.bashrc &&
+                        pf="${SSOT}/profiles/mumu/.bashrc"    
+                        ln -sf "$pf" "$HOME/.bashrc" && echo "symlink $pf >>> $HOME/.bashrc done" || echo "FAIL"    
                     fi
                     if [[ ! -f "$HOME/.zshrc" ]]; then
                          pf="${SSOT}/profiles/mumu/.zshrc"
@@ -142,6 +154,10 @@ shell_setup(){
                          else
                              echo "not found $pf"
                          fi
+                    else 
+                        rm -rf $HOME/.zshrc &&
+                        pf="${SSOT}/profiles/mumu/.zshrc"    
+                        ln -sf "$pf" "$HOME/.zshrc" && echo "symlink $pf >>> $HOME/.zshrc done" || echo "FAIL"    
                     fi
                     ;;
                 WSL)
@@ -152,6 +168,10 @@ shell_setup(){
                          else
                             echo "not found $pf"
                          fi
+                    else 
+                        rm -rf $HOME/.bashrc &&
+                        pf="${SSOT}/profiles/wsl/.bashrc"    
+                        ln -sf "$pf" "$HOME/.bashrc" && echo "symlink $pf >>> $HOME/.bashrc done" || echo "FAIL"    
                     fi
                     if [[ ! -f "$HOME/.zshrc" ]]; then
                          pf="${SSOT}/profiles/wsl/.zshrc"
@@ -160,16 +180,25 @@ shell_setup(){
                          else
                             echo "not found $pf"
                          fi
+                    else 
+                        rm -rf $HOME/.zshrc &&
+                        pf="${SSOT}/profiles/wsl/.zshrc"    
+                        ln -sf "$pf" "$HOME/.zshrc" && echo "symlink $pf >>> $HOME/.zshrc done" || echo "FAIL"    
                     fi
                     ;;
                 GIT-BASH )
                     if [[ ! -f "$HOME/.bashrc" ]]; then
                          pf="${SSOT}/profiles/git-bash/.bashrc"
                          if [[ -f "$pf" ]]; then
-                            ln -s "$pf" "$HOME/.bashrc" && echo "symlink $pf >>> $HOME/.bashrc done" || echo "FAIL"
+                            ln -sf "$pf" "$HOME/.bashrc" && echo "symlink $pf >>> $HOME/.bashrc done" || echo "FAIL"
                          else
+                         
                             echo "not found $pf"
                          fi
+                    else 
+                        rm -rf $HOME/.bashrc &&
+                        ln -sf "$pf" "$HOME/.bashrc" && echo "symlink $pf >>> $HOME/.bashrc done" || echo "FAIL"
+                        
                     fi
                     ;;
                 OPPO)
@@ -180,6 +209,10 @@ shell_setup(){
                         else
                             echo "not found $pf"    
                         fi
+                    else 
+                        rm -rf $HOME/.bashrc &&
+                        pf="${SSOT}/profiles/oppo/.bashrc"    
+                        ln -sf "$pf" "$HOME/.bashrc" && echo "symlink $pf >>> $HOME/.bashrc done" || echo "FAIL"    
                     fi     
                     if [[ ! -f "$HOME/.zshrc" ]]; then
                          pf="${SSOT}/profiles/oppo/.zshrc"
@@ -188,6 +221,10 @@ shell_setup(){
                          else
                              echo "not found $pf"
                          fi
+                    else 
+                        rm -rf $HOME/.zshrc &&
+                        pf="${SSOT}/profiles/oppo/.zshrc"    
+                        ln -sf "$pf" "$HOME/.zshrc" && echo "symlink $pf >>> $HOME/.zshrc done" || echo "FAIL"    
                     fi
                     ;;
                 ACODEX)
@@ -198,6 +235,10 @@ shell_setup(){
                         else
                             echo "not found $pf"    
                         fi
+                    else 
+                        rm -rf $HOME/.bashrc &&
+                        pf="${SSOT}/profiles/acodex/.bashrc"    
+                        ln -sf "$pf" "$HOME/.bashrc" && echo "symlink $pf >>> $HOME/.bashrc done" || echo "FAIL"    
                     fi     
                     if [[ ! -f "$HOME/.zshrc" ]]; then
                          pf="${SSOT}/profiles/acodex/.zshrc"
@@ -206,6 +247,10 @@ shell_setup(){
                          else
                              echo "not found $pf"
                          fi
+                    else 
+                        rm -rf $HOME/.zshrc &&
+                        pf="${SSOT}/profiles/acodex/.zshrc"    
+                        ln -sf "$pf" "$HOME/.zshrc" && echo "symlink $pf >>> $HOME/.zshrc done" || echo "FAIL"    
                     fi
                     ;;    
                 *) echo unknow ;;    

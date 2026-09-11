@@ -9,8 +9,14 @@
 # ── Step 0: JOE_ENV detection (fallback — ปกติ set จาก ~/.env หรือ .bashrc) ──
 # ค่าที่ใช้ได้: TERMUX | WSL | GIT-BASH | MUMU
 
-[[ -n "${MY_DEVICE:-}" ]] && export JOE_ENV=${MY_DEVICE:-$JOE_ENV}
-if [[ -z "${JOE_ENV:-}" ]]; then
+# Git Bash Guard: Windows OS inherits JOE_ENV="WINDOWS" into child processes — force GIT-BASH in Git Bash
+case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*)
+        export JOE_ENV="GIT-BASH"
+        ;;
+esac
+
+if [[ -z "${JOE_ENV:-}" || "${JOE_ENV:-}" == "WINDOWS" || "${JOE_ENV:-}" == "window" ]]; then
     if [[ -d "/data/data/com.termux" ]]; then
         if [[ -n "${MUMU_DEVICE:-}" ]] || [[ "$(getprop ro.product.model 2>/dev/null)" =~ (MuMu|vphone) ]]; then
             export JOE_ENV="MUMU"
@@ -22,9 +28,14 @@ if [[ -z "${JOE_ENV:-}" ]]; then
         export JOE_ENV="ACODEX"
     elif grep -qi microsoft /proc/version 2>/dev/null; then
         export JOE_ENV="WSL"
-    elif [[ -n "${MSYSTEM:-}" ]] || [[ "$OSTYPE" == "msys" ]]; then
+    elif [[ -n "${MSYSTEM:-}" ]] || [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]]; then
         export JOE_ENV="GIT-BASH"
     fi
+fi
+
+# Normalize MY_DEVICE to match profiles/ (never let 'window' poison shell profile)
+if [[ "${MY_DEVICE:-}" == "window" || -z "${MY_DEVICE:-}" ]]; then
+    export MY_DEVICE="$(echo "${JOE_ENV:-git-bash}" | tr '[:upper:]' '[:lower:]')"
 fi
 
 
