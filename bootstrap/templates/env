@@ -199,7 +199,7 @@ shell_setup(){
                         ln -sf "$pf" "$HOME/.zshrc" && echo "symlink $pf >>> $HOME/.zshrc done" || echo "FAIL"    
                     fi
                     ;;    
-                *) echo unknow check $JOE_ENV then re setup again" ;;    
+                *) echo "unknown: check $JOE_ENV then run setup again" ;;    
          esac               
 }
 

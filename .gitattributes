@@ -1,0 +1,13 @@
+# Git line-ending policy — SSOT (บังคับ LF ทุกแพลตฟอร์ม)
+# ป้องกัน CRLF เวลา sync ข้าม Windows ↔ WSL ↔ Termux
+* text=auto eol=lf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.zip binary
+*.gz binary
+*.enc binary

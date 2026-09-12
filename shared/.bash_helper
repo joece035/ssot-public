@@ -418,3 +418,4 @@ if [[ -f "${SSOT:-$HOME/ssot}/shared/.bash_checker" ]]; then
     _check -f "${SSOT:-$HOME/ssot}/shared/.bash_checker"
 elif [[ -f "${SSOT:-$HOME/ssot}/.bash_checker" ]]; then
     _check -f "${SSOT:-$HOME/ssot}/.bash_checker"
+fi
