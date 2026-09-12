@@ -15,9 +15,13 @@ reinstall() {
 
     # ── Validate repo argument ──
     case "$repo" in
-        bsc|bashscripts) repo="bashscripts" ;;
-        ssot)            ;;
-        all|both)
+        bsc|bashscripts) 
+            repo="bashscripts" 
+            ;;
+        ssot) 
+            repo="ssot" 
+            ;;
+        all|both)   
             reinstall bashscripts "$device"
             reinstall ssot "$device"
             return $?
@@ -41,6 +45,15 @@ reinstall() {
         target_dir="$ssot_dir"
         target_name="ssot"
     fi
+    local link_list=("~/.bashrc" "~/.zshrc" "~/.local/bin/joe.sh" "~/.local/bin/env ")
+
+    # ── Remove existing symlinks ──
+    for link in "${link_list[@]}"; do
+        if [[ -L "$link" ]]; then
+            rm -f "$link"
+        fi
+    done
+
 
     # ── Backup if exists ──
     if [[ -d "$target_dir" ]]; then
@@ -236,23 +249,67 @@ shell_setup(){
 }
 
 link_bin() {
-    [[ $# -ne 1 ]] && echo "Usage: link_bin <src>" && return 1
-    local src="${1:?}"
-    local src_name="$(basename "$src")"
-    if [[ -d "$src_name" ]]; then
-        echo "$src_name is a directory" && return 1
-    fi
-    local target_dir="$bin"
-    local target="$target_dir/$src_name"
-    if [[ ! -d "$target_dir" ]]; then
-        mkdir -p "$target_dir" && echo "Created directory $target_dir" || { echo "Failed to create directory $target_dir" ; return 1 ; }
-    fi
-    ln -sf "$src" "$target" && 
-    if find "$target_dir" -maxdepth 1 -name "$src_name" -type l > /dev/null 2>&1; then
-        echo "Symlinked $src >>> $target done" 
-    else
-        echo "FAIL"
-    fi    
+    case "$1" in
+        -c|--check)
+            shift
+            local check_dirs=("$@")
+            if [[ ${#check_dirs[@]} -eq 0 ]]; then
+                check_dirs=("${bin:-$HOME/.local/bin}" "$HOME")
+            fi
+
+            for dir in "${check_dirs[@]}"; do
+                dir="${dir/#\~/$HOME}"
+                if [[ ! -d "$dir" ]]; then
+                    echo "⚠️  Directory not found: $dir"
+                    continue
+                fi
+
+                echo "📁 Symlinks in: $dir"
+                local found=0
+                while IFS= read -r link; do
+                    [[ -z "$link" ]] && continue
+                    found=1
+                    local base_name target_path status
+                    base_name="${link##*/}"
+                    target_path="$(readlink "$link" 2>/dev/null)"
+
+                    if [[ -e "$link" ]]; then
+                        status="[OK]"
+                    else
+                        status="[BROKEN]"
+                    fi
+
+                    printf "  %-25s → %-45s %s\n" "$base_name" "$target_path" "$status"
+                done < <(find "$dir" -maxdepth 1 -type l 2>/dev/null | sort)
+
+                if [[ $found -eq 0 ]]; then
+                    echo "  (No symlinks found)"
+                fi
+                echo ""
+            done
+            return 0
+            ;;
+
+        *)
+            [[ $# -ne 1 ]] && echo "Usage: link_bin <src> | link_bin -c [dir...]" && return 1
+            local src="${1:?}"
+            if [[ -d "$src" ]]; then
+                echo "$src is a directory" && return 1
+            fi
+            local src_name="$(basename "$src")"
+            local target_dir="${bin:-$HOME/.local/bin}"
+            local target="$target_dir/$src_name"
+            if [[ ! -d "$target_dir" ]]; then
+                mkdir -p "$target_dir" && echo "Created directory $target_dir" || { echo "Failed to create directory $target_dir" ; return 1 ; }
+            fi
+            ln -sf "$src" "$target" && 
+            if find "$target_dir" -maxdepth 1 -name "$src_name" -type l > /dev/null 2>&1; then
+                echo "Symlinked $src >>> $target done" 
+            else
+                echo "FAIL"
+            fi
+            ;;
+    esac
 }
 
 # ============================================================

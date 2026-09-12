@@ -27,7 +27,7 @@ g() {
  
 }
 
-_g(){
+repository_remote_url(){
     case $1 in
            url)
             git config --get remote.origin.url
