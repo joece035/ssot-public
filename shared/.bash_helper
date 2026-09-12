@@ -357,7 +357,7 @@ find_unsource_func() {
             ;;
     esac
 }
-alias fusf='find_unsource_func'
+alias fus='find_unsource_func'
 auto_source() {
     local func="${1:-}"
 

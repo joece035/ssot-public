@@ -331,5 +331,5 @@ sync_shared() {
         return 1
     fi
 }
-alias sync-shared='sync_shared'
+alias sshare='sync_shared'
 alias ssync='sync_shared'

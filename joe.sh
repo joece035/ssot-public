@@ -188,15 +188,41 @@ ssot_load(){
 
     local SHOW_LOAD="${1:-""}"
     local source_files=(
-        "$SSOT/bootstrap/00-env.sh"
+        "$SSOT/shared/00-env.sh"
         "$SSOT/core/ssh-config.sh"
         "$SSOT/core/3worlds.sh"
         "$SSOT/core/aliases.sh"
         "$SSOT/core/profiles.sh"
         "$SSOT/core/theme.sh"
-        "$SSOT/functions"/*.sh
-        "$SSOT/personal"/*.sh
     )
+
+    # 1. shared/functions (priority core tools & loader)
+    if [[ -d "$SSOT/shared/functions" ]]; then
+        local _f_sh=""
+        while IFS= read -r _f_sh; do
+            [[ -f "$_f_sh" ]] && source_files+=("$_f_sh")
+        done < <(find "$SSOT/shared/functions" -type f -name "*.sh" ! -name ".*" | LC_ALL=C sort)
+    fi
+
+    # 2. shared/personal (personal helper functions)
+    if [[ -d "$SSOT/shared/personal" ]]; then
+        local _p_sh=""
+        while IFS= read -r _p_sh; do
+            [[ -f "$_p_sh" ]] && source_files+=("$_p_sh")
+        done < <(find "$SSOT/shared/personal" -type f -name "*.sh" ! -name ".*" | LC_ALL=C sort)
+    fi
+
+    # 3. Dynamic loader: Any additional subdirectories or nested folders inside shared/
+    if [[ -d "$SSOT/shared" ]]; then
+        local _extra_sh=""
+        while IFS= read -r _extra_sh; do
+            [[ -f "$_extra_sh" ]] && source_files+=("$_extra_sh")
+        done < <(find "$SSOT/shared" -mindepth 2 -type f -name "*.sh" \
+            ! -path "$SSOT/shared/functions/*" \
+            ! -path "$SSOT/shared/personal/*" \
+            ! -name ".*" | LC_ALL=C sort)
+    fi
+
     #-- run main cmd
     _check -f "source_files" "source" 2>/dev/null
     #-- เรียกดูไฟล์ท่ถูก source ตามลำดับ
