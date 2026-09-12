@@ -13,7 +13,7 @@ _check() {
     local tar_input="${2:-}"
     local cmd="${3:-source}"
     local item=""
-    shift 3
+    [ $# -ge 3 ] && shift 3 || shift $#
 
     if [ -n "$ZSH_VERSION" ]; then
         if [[ "${(tP)tar_input}" == *array* || "${(tP)tar_input}" == *association* ]]; then
