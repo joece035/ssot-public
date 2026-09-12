@@ -178,8 +178,12 @@ auto_start_ssh(){
 
 ssot_load(){
     # -- Load all scripts in SSOT folders with priority order --
-    if ! typeset -f _check &>/dev/null && [ -f "$SSOT/.bash_helper" ]; then
-        source "$SSOT/.bash_helper"
+    if ! typeset -f _check &>/dev/null; then
+        if [ -f "$SSOT/shared/.bash_helper" ]; then
+            source "$SSOT/shared/.bash_helper"
+        elif [ -f "$SSOT/.bash_helper" ]; then
+            source "$SSOT/.bash_helper"
+        fi
     fi
 
     local SHOW_LOAD="${1:-""}"

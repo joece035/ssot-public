@@ -254,3 +254,25 @@ link_bin() {
         echo "FAIL"
     fi    
 }
+
+# ============================================================
+# sync-shared — SSOT ↔ Bashscripts Shared Files CLI
+# ============================================================
+sync_shared() {
+    local script="${SSOT:-$HOME/ssot}/tools/sync_shared.sh"
+    if [[ ! -f "$script" ]]; then
+        script="${HOME}/ssot/tools/sync_shared.sh"
+    fi
+    if [[ ! -f "$script" ]]; then
+        script="${HOME}/bashscripts/tools/sync_shared.sh"
+    fi
+
+    if [[ -f "$script" ]]; then
+        bash "$script" "$@"
+    else
+        echo "❌ sync_shared.sh not found in tools/" >&2
+        return 1
+    fi
+}
+alias sync-shared='sync_shared'
+alias ssync='sync_shared'

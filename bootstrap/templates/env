@@ -337,6 +337,12 @@ repo() {
     echo "  ✅ Successfully switched to: $repository"
     echo "═══════════════════════════════════════════════════════════"
 
+    # ── [Stage 5.5] Shared Files Drift Check ──
+    local _sync_tool="$repository/tools/sync_shared.sh"
+    if [[ -f "$_sync_tool" && -d "$HOME/bashscripts" && -d "$HOME/ssot" ]]; then
+        bash "$_sync_tool" check 2>/dev/null || true
+    fi
+
     # ── [Stage 6] Reload Shell immediately ──
     local _current_shell="${SHELL:-bash}"
     echo "🚀 Reloading shell ($_current_shell) — ready to use..."
@@ -448,6 +454,18 @@ repo_status() {
     if [[ $broken_count -gt 0 ]]; then
         echo ""
         echo "   ${yellow}⚠️  Found $broken_count broken symlink(s) in ~ or ~/.local/bin (Run 'repo a' or 'repo b' to auto-clean)${reset}"
+    fi
+
+    # ── Shared Files Sync Check ──
+    local sync_script="${SSOT:-$HOME/ssot}/tools/sync_shared.sh"
+    if [[ -f "$sync_script" && -d "$HOME/bashscripts" && -d "$HOME/ssot" ]]; then
+        echo ""
+        echo "${bold}🔄 Shared Files Sync Status (SSOT ↔ Bashscripts):${reset}"
+        if bash "$sync_script" check 2>/dev/null; then
+            echo "   ${green}✅ All shared files in sync (.bash_helper, .bash_checker, .zsh-bash-compat.sh)${reset}"
+        else
+            echo "   ${yellow}⚠️  Shared files out of sync! (Run 'sync-shared' to inspect or sync)${reset}"
+        fi
     fi
 
     # ── Integrated Node Status & Mesh Diagnostics ──
