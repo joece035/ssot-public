@@ -485,7 +485,7 @@ perm(){
     chmod +x "$target" && c 10 bi "ให้สิทธิ์รันไฟล์  ";c 45 b "$(basename "$target")  ";cn 10 bi "เรียบร้อย" 
 }
 pu(){
-		bsc &&
+		cdbsc &&
     git add -A &&
 	if [[ -z "$1" ]]; then
     git commit -m "$(date)" 
