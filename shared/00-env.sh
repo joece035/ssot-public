@@ -65,18 +65,24 @@ case "$JOE_ENV" in
          export PYTHON_VENV="$HOME/.venv/bin/activate"
          export NODE_HOST="wsl"
          export WIN_PATH="/mnt/"
+         export HWSL="$HOME"
+         export HWSL2="unseen"
          ;;
     WSL2)
          export HERMES_DIR="$HOME/.hermes"
          export PYTHON_VENV="$HOME/.venv/bin/activate"
          export NODE_HOST="wsl2"
          export WIN_PATH="/mnt/"
+         export HWSL="unseen"
+         export HWSL2="$HOME"
          ;;
     GIT-BASH)
          export HERMES_DIR="/mnt/c/Users/User/AppData/Local/hermes"
          export PYTHON_VENV="$HWSL/.venv/bin/activate"
          export NODE_HOST="window"
          export WIN_PATH='/'
+         export HWSL="//wsl.localhost/Ubuntu/home/usercivenz"
+         export HWSL2="//wsl.localhost/Ubuntu-22.04/home/joez"
 
          ;;
     *)
@@ -88,6 +94,8 @@ esac
 # ============================================================
 # 2. GLOBAL VARIABLE
 # ============================================================
+export hwsl=${HWSL}
+export hwsl2=${HWSL2}
 export bsc="$HOME/bashscripts"
 export ssot="$HOME/ssot"
 export profile=mom

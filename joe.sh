@@ -89,7 +89,6 @@ case "$JOE_ENV" in
         ;;
     WSL)
 	    export hpc="/mnt/c/Users/User"
-        export hwsl="${hwsl:-$HOME}"
         export DASHBOARD_DIR="$HOME/dashboard"
         export PYTHON_VENV="${PYTHON_VENV:-$HOME/.venv/bin/activate}"
         export OBSIDIAN_VAULT="$hpc/DESKTOP/obsidian/alphadev_vaults"
@@ -101,7 +100,6 @@ case "$JOE_ENV" in
         ;;
     WSL2)
 	    export hpc="/mnt/c/Users/User"
-        export hwsl="${hwsl:-$HOME}"
         export DASHBOARD_DIR="$HOME/dashboard"
         export PYTHON_VENV="${PYTHON_VENV:-$HOME/.venv/bin/activate}"
         export OBSIDIAN_VAULT="$hpc/DESKTOP/obsidian/alphadev_vaults"
@@ -128,10 +126,8 @@ case "$JOE_ENV" in
         ;;
     GIT-BASH)
         export hpc="$HOME"
-        export hwsl="${hwsl:-//wsl.localhost/Ubuntu/home/usercivenz}"
         export DASHBOARD_DIR="$HWSL/dashboard"
         export OBSIDIAN_VAULT="$hpc/DESKTOP/obsidian/alphadev_vaults"
-        export home="$HWSL"
         export nexus_vault="$hpc/DESKTOP/nexus_vault"
         export MAIN_SYNC_DIR="$HOME/DESKTOP/main_sync"
         export SSH_PORT=2222
