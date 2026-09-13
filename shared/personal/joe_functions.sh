@@ -36,10 +36,10 @@ repository_remote_url(){
             git status
             ;;
         bsc)  
-            cd ~/bashscripts && git remote set-url origin git@github.com:joece035/bashscripts-public.git
+            cd ~/bashscripts && git remote set-url origin https://github.com/joece035/bashscripts-public.git
             ;;
         ssot)
-            cd ~/ssot && git remote set-url origin git@github.com:joece035/ssot-public.git
+            cd ~/ssot && git remote set-url origin https://github.com/joece035/ssot-public.git
             ;;
         *)
             git remote -v
