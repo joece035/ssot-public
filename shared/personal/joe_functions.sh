@@ -47,7 +47,7 @@ repository_remote_url(){
             ;;
     esac
 }
-
+alias gremote='repository_remote_url'
 
 
 
