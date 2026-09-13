@@ -636,7 +636,12 @@ ENVEOF
     chmod +x "$ENV_TARGET"
     ok "Created: $ENV_TARGET (minimal)"
 fi
+
+log "Stage 4.6: auto detect and install ble"
+
+
  if [[ ! -f "~/.local/share/blesh/ble.sh" ]]; then
+ 		cd $HOME &&
  		git clone --recursive --depth 1 --shallow-submodules https://github.com/akinomyoga/ble.sh.git
 		make -C ble.sh install PREFIX=~/.local
  fi		
