@@ -18,6 +18,6 @@ pgb(){
     cp -r "$hwsl/ssot/" "$hpc" && cn 45 b "done copy ssot from wsl to hpc" 
 }
 
-alias ssh_ad="ssot/bootstrap/script/ssh_audit.sh"
+alias ssh_ad="$SSOT/bootstrap/script/ssh_audit.sh"
 
 
