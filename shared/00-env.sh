@@ -276,8 +276,8 @@ export URL_MUMU="${NODE_MUMU_ST_URL}/"
 
 # ACODEX compat
 export ACODEX_IP="${NODE_ACODEX_HOST:-$NODE_ACODEX_IP}"
-export ACODEX_USER="$NODE_ACODEX_USER"
-export ACODEX_PORT="$NODE_ACODEX_PORT"
+export ACODEX_USER="$NODE_ACODEX_USER"root
+export ACODEX_PORT="$NODE_ACODEX_PORT"8024
 
 # ============================================================
 # EXPORTS COMPLETE — Ready for use in aliases and functions
