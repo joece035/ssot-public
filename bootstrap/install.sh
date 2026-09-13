@@ -275,6 +275,8 @@ _install_pkg openssh  ssh
 _install_pkg openssl  openssl  "apk=openssl"
 _install_pkg curl     curl
 _install_pkg jq       jq      "winget=jqlang.jq"
+_install_pkg make 	  make
+_install_pkg gawk			gawk
 
 # rsync: optional on Git Bash (not available via winget, skip gracefully)
 if [[ "$JOE_ENV" == "GIT-BASH" ]]; then
