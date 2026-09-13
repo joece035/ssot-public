@@ -9,7 +9,8 @@
 _() {
     # ให้ render.sh รันก่อน
     if ! command -v bn_2 &> /dev/null && ! command -v bn_3 &> /dev/null; then
-        _check -f "$HOME/bashscripts/lessons/auto_table/render.sh" "source" || return 1
+        _check -f "$SSOT/deprecated/plugins/auto_table/render.sh
+" "source" || return 1
     fi
     local base_c="${WIN_PATH}c/Users/User/Documents/mumusharedfolder"
     local base_z="${WIN_PATH}z/MuMuSharedFolder"
