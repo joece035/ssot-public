@@ -106,7 +106,7 @@ shell_setup(){
                         ln -sf "$pf" "$HOME/.zshrc" && echo "ลบและสร้าง symlink $pf >>> $HOME/.zshrc done" || echo "FAIL"    
                     fi
                     ;;
-                WSL|WSL2)
+                WSL)
                     if [[ ! -f "$HOME/.bashrc" ]]; then
                          pf="${SSOT}/profiles/wsl/.bashrc"
                          if [[ -f "$pf" ]]; then
@@ -132,6 +132,32 @@ shell_setup(){
                         ln -sf "$pf" "$HOME/.zshrc" && echo "ลบและสร้าง symlink $pf >>> $HOME/.zshrc done" || echo "FAIL"    
                     fi
                     ;;
+                WSL2)
+                    if [[ ! -f "$HOME/.bashrc" ]]; then
+                         pf="${SSOT}/profiles/wsl2/.bashrc"
+                         if [[ -f "$pf" ]]; then
+                            ln -s "$pf" "$HOME/.bashrc" && echo "symlink $pf >>> $HOME/.bashrc done" || echo "FAIL"
+                         else
+                            echo "not found $pf"
+                         fi
+                    else 
+                        rm -rf $HOME/.bashrc &&
+                        pf="${SSOT}/profiles/wsl2/.bashrc"    
+                        ln -sf "$pf" "$HOME/.bashrc" && echo "ลบและสร้าง symlink $pf >>> $HOME/.bashrc done" || echo "FAIL"    
+                    fi
+                    if [[ ! -f "$HOME/.zshrc" ]]; then
+                         pf="${SSOT}/profiles/wsl2/.zshrc"
+                         if [[ -f "$pf" ]]; then
+                            ln -s "$pf" "$HOME/.zshrc" && echo "symlink $pf >>> $HOME/.zshrc done" || echo "FAIL"
+                         else
+                            echo "not found $pf"
+                         fi
+                    else 
+                        rm -rf $HOME/.zshrc &&
+                        pf="${SSOT}/profiles/wsl2/.zshrc"    
+                        ln -sf "$pf" "$HOME/.zshrc" && echo "ลบและสร้าง symlink $pf >>> $HOME/.zshrc done" || echo "FAIL"    
+                    fi
+                    ;;    
                 GIT-BASH )
                     if [[ ! -f "$HOME/.bashrc" ]]; then
                          pf="${SSOT}/profiles/git-bash/.bashrc"

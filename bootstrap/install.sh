@@ -242,7 +242,7 @@ _install_pkg() {
                 [[ "$pkg" == "openssl" ]] && t_pkg="openssl-tool"
                 pkg install -y "$t_pkg" 2>/dev/null || warn "  pkg install $pkg failed"
                 ;;
-            WSL|LINUX)
+            WSL|WSL2)
                 sudo apt-get install -y "$pkg" 2>/dev/null || warn "  apt install $pkg failed"
                 ;;
             ACODEX)
@@ -260,7 +260,7 @@ case "$JOE_ENV" in
     TERMUX|MUMU|OPPO)
         pkg update -y 2>/dev/null || warn "pkg update failed (non-fatal)"
         ;;
-    WSL|LINUX)
+    WSL|WSL2)
         sudo apt-get update -qq 2>/dev/null || warn "apt update failed (non-fatal)"
         ;;
     ACODEX)
@@ -521,6 +521,10 @@ case "$JOE_ENV" in
         PROFILE_DIR="$SSOT/profiles/wsl"
         SHELL_RC="$HOME/.bashrc"   # WSL default is bash
         ;;
+    WSL2)
+        PROFILE_DIR="$SSOT/profiles/wsl2"
+        SHELL_RC="$HOME/.bashrc"   # WSL default is bash
+        ;;    
     GIT-BASH)
         PROFILE_DIR="$SSOT/profiles/git-bash"
         SHELL_RC="$HOME/.bashrc"
