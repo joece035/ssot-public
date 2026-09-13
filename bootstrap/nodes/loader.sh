@@ -7,11 +7,12 @@
 #          No hardcoding of node names required!
 # ============================================================
 
-_SSOT_NODES_DIR="${SSOT:-$HOME/ssot}/nodes"
+_SSOT_NODES_DIR="${SSOT:-$HOME/ssot}/bootstrap/nodes"
 SSOT_REGISTERED_NODES=()
 
 if [[ -d "$_SSOT_NODES_DIR" ]]; then
     for _node_file in "$_SSOT_NODES_DIR"/*.node.env; do
+        [[ -e "$_node_file" ]] || continue
         if [[ -f "$_node_file" ]]; then
             source "$_node_file"
             _node_basename="${_node_file##*/}"

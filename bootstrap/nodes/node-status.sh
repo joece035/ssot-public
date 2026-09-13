@@ -18,7 +18,7 @@ set -o pipefail 2>/dev/null || true
 
 # ── 1. Resolve SSOT Root ──
 _SSOT="${SSOT:-$HOME/ssot}"
-[[ ! -d "$_SSOT" ]] && _SSOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+[[ ! -d "$_SSOT" ]] && _SSOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 export SSOT="$_SSOT"
 NODES_DIR="$SSOT/bootstrap/nodes"
 
@@ -76,8 +76,13 @@ if [[ -z "$_THIS_NODE" || -z "$_THIS_ENV" ]]; then
         _THIS_NODE="${_THIS_NODE:-acodex}"
         _THIS_ENV="${_THIS_ENV:-ACODEX}"
     elif grep -qi microsoft /proc/version 2>/dev/null; then
-        _THIS_NODE="${_THIS_NODE:-wsl}"
-        _THIS_ENV="${_THIS_ENV:-WSL}"
+        if [[ "$(id -un 2>/dev/null)" == "joez" ]]; then
+            _THIS_NODE="${_THIS_NODE:-wsl2}"
+            _THIS_ENV="${_THIS_ENV:-WSL2}"
+        else
+            _THIS_NODE="${_THIS_NODE:-wsl}"
+            _THIS_ENV="${_THIS_ENV:-WSL}"
+        fi
     elif [[ -n "${MSYSTEM:-}" ]]; then
         _THIS_NODE="${_THIS_NODE:-git-bash}"
         _THIS_ENV="${_THIS_ENV:-GIT-BASH}"
@@ -91,6 +96,13 @@ fi
 
 # ── 5. Load ~/.env safely ──
 [[ -f "$HOME/.env" ]] && source "$HOME/.env" 2>/dev/null || true
+
+# Normalize identity case AFTER ~/.env load (JOE_ENV=UPPER, MY_DEVICE=lower)
+# Fixes: profiles/wsl2/.bashrc exports MY_DEVICE=WSL2 (upper) but node files are lowercase
+_THIS_NODE="$(echo "${_THIS_NODE:-${MY_DEVICE:-}}" | tr '[:upper:]' '[:lower:]')"
+_THIS_ENV="$(echo "${_THIS_ENV:-${JOE_ENV:-UNKNOWN}}" | tr '[:lower:]' '[:upper:]')"
+export JOE_ENV="$_THIS_ENV"
+export MY_DEVICE="$_THIS_NODE"
 
 # ── 6. SSH connectivity test ──
 _ssh_check() {
@@ -193,6 +205,7 @@ _print_node() {
     local icon
     case "$name" in
         wsl)    icon="🖥️ " ;;
+        wsl2)   icon="🖥️ " ;;
         termux) icon="📱" ;;
         mumu)   icon="🤖" ;;
         window) icon="🪟" ;;

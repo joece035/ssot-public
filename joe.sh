@@ -27,7 +27,11 @@ if [[ -z "${JOE_ENV:-}" || "${JOE_ENV:-}" == "WINDOWS" || "${JOE_ENV:-}" == "win
         # ACODEX: must check before WSL — ACODEX runs on WSL filesystem
         export JOE_ENV="ACODEX"
     elif grep -qi microsoft /proc/version 2>/dev/null; then
-        export JOE_ENV="WSL"
+        if [[ "$(id -un 2>/dev/null)" == "joez" ]]; then
+            export JOE_ENV="WSL2"
+        else
+            export JOE_ENV="WSL"
+        fi
     elif [[ -n "${MSYSTEM:-}" ]] || [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]]; then
         export JOE_ENV="GIT-BASH"
     fi
@@ -93,7 +97,34 @@ case "$JOE_ENV" in
         export nexus_vault="$HOME/nexus_vault"
         export MAIN_SYNC_DIR="$HOME/main_sync"
         export SSH_PORT=22
-        
+
+        ;;
+    WSL2)
+	    export hpc="/mnt/c/Users/User"
+        export hwsl="${hwsl:-$HOME}"
+        export DASHBOARD_DIR="$HOME/dashboard"
+        export PYTHON_VENV="${PYTHON_VENV:-$HOME/.venv/bin/activate}"
+        export OBSIDIAN_VAULT="$hpc/DESKTOP/obsidian/alphadev_vaults"
+        export home="$HOME"
+        export nexus_vault="$HOME/nexus_vault"
+        export MAIN_SYNC_DIR="$HOME/main_sync"
+        export SSH_PORT=22
+
+        ;;
+    OPPO)
+        export DASHBOARD_DIR="$HOME/dashboard"
+        export OBSIDIAN_VAULT="/storage/emulated/0/syncthing/hermes_vault"
+        export home="$HOME"
+        export nexus_vault="$HOME/nexus_vault"
+        export MAIN_SYNC_DIR="$HOME/main_sync"
+        export SSH_PORT=8023
+        ;;
+    ACODEX)
+        export DASHBOARD_DIR="$HOME/dashboard"
+        export home="$HOME"
+        export nexus_vault="$HOME/nexus_vault"
+        export MAIN_SYNC_DIR="$HOME/main_sync"
+        export SSH_PORT=8021
         ;;
     GIT-BASH)
         export hpc="$HOME"
@@ -117,6 +148,7 @@ esac
         export SSH_MUMU_PORT=8020
         export SSH_TERMUX_PORT=8022
         export SSH_WSL_PORT=22
+        export SSH_WSL2_PORT=22
         export SSH_WIN_PORT=22
 
 
@@ -155,7 +187,7 @@ crlf(){
 
 auto_start_ssh(){
   # Auto-start sshd guarded by JOE_ENV
- if [[ "$JOE_ENV" == "WSL" ]]; then
+ if [[ "$JOE_ENV" == "WSL" || "$JOE_ENV" == "WSL2" ]]; then
     # WSL: ใช้ service ssh
     if ! service ssh status >/dev/null 2>&1; then
         sudo service ssh start >/dev/null 2>&1 && { command -v cn &>/dev/null && cn 10 b "SSH Service (WSL) started successfully." >&2; } || { command -v cn &>/dev/null && cn 9 b "Failed to start SSH Service." >&2; }

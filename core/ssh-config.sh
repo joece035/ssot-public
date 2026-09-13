@@ -89,7 +89,8 @@ ssh_() {
         w|tw|window|win|WINDOW)     ssh window    "$@" ;;
         gb|gitbash|GITBASH|g)       ssh window    "& '${WIN_GIT_BASH}' --login -i" "$@" ;;
         mm|mumu|MUMU|m)             ssh mumu      "$@" ;;
-        wsl|WSL|WSL2)               ssh wsl       "$@" ;;
+        wsl|WSL)                    ssh wsl       "$@" ;;
+        wsl2|WSL2)                  ssh wsl2      "$@" ;;
         op|oppo|OPPO|o)             ssh oppo      "$@" ;;
         ax|a|ACODEX|A)              ssh -p 8021 root@termux "bash" "$@" ;;
         *) cn r b "usage ssh_ <host>"; return 1 ;;
@@ -121,19 +122,29 @@ node_resolve() {
             TARGET_PORT="${NODE_MUMU_PORT:-8022}"
             TARGET_USER="$NODE_MUMU_USER"
             ;;
-        wsl|WSL|WSL2)
+        wsl|WSL)
             TARGET_HOST="$NODE_WSL_HOST"
             TARGET_PORT="${NODE_WSL_PORT:-22}"
             TARGET_USER="$NODE_WSL_USER"
+            ;;
+        wsl2|WSL2)
+            TARGET_HOST="$NODE_WSL2_HOST"
+            TARGET_PORT="${NODE_WSL2_PORT:-22}"
+            TARGET_USER="$NODE_WSL2_USER"
             ;;
         o|op|oppo|OPPO)
             TARGET_HOST="$NODE_OPPO_HOST"
             TARGET_PORT="${NODE_OPPO_PORT:-8023}"
             TARGET_USER="$NODE_OPPO_USER"
             ;;
+        ax|a|acodex|ACODEX)
+            TARGET_HOST="$NODE_ACODEX_HOST"
+            TARGET_PORT="${NODE_ACODEX_PORT:-8021}"
+            TARGET_USER="$NODE_ACODEX_USER"
+            ;;
         *)
             cn r b "Error: Unknown node '$target'"
-            echo "Usage: <termux|window|mumu|wsl> (or alias: t, w, m, wsl)" >&2
+            echo "Usage: <termux|window|mumu|wsl|wsl2|oppo|acodex> (or alias: t, w, m, wsl)" >&2
             return 1
             ;;
     esac
@@ -234,8 +245,14 @@ _rsync () {
         w|win|window|W|WINDOW)
                     HOST_=window
                     ;;
-        wsl|WSL|WSL2)
+        wsl|WSL)
                     HOST_=wsl
+                    ;;
+        wsl2|WSL2)
+                    HOST_=wsl2
+                    ;;
+        op|oppo|OPPO|o)
+                    HOST_=oppo
                     ;;
         *)          cn 198 b "UNNKOWN DEVICE"           
      esac                                   

@@ -37,9 +37,12 @@ fi
 _detect_world() {
   case "${JOE_ENV}" in
     TERMUX)   printf 'termux' ;;
+    MUMU)     printf 'mumu' ;;
+    OPPO)     printf 'oppo' ;;
     WSL)      printf 'wsl' ;;
+    WSL2)     printf 'wsl2' ;;
+    ACODEX)   printf 'acodex' ;;
     GIT-BASH) printf 'git-bash' ;;
-    MUMU)     printf 'MUMU' ;;
     *)        printf 'unknown' ;;
   esac
 }
@@ -136,6 +139,12 @@ wsl() {
   local -a ssh_opts=(-o ConnectTimeout=5 -o BatchMode=yes)
   [[ -f "${KEY_NODE}" ]] && ssh_opts+=(-i "${KEY_NODE}")
   _ssh_node "${NODE_WSL_USER}" "${NODE_WSL_HOST}" "${NODE_WSL_PORT}" "${ssh_opts[@]}" -- "$@"
+}
+
+wsl2() {
+  local -a ssh_opts=(-o ConnectTimeout=5 -o BatchMode=yes)
+  [[ -f "${KEY_NODE}" ]] && ssh_opts+=(-i "${KEY_NODE}")
+  _ssh_node "${NODE_WSL2_USER}" "${NODE_WSL2_HOST}" "${NODE_WSL2_PORT:-22}" "${ssh_opts[@]}" -- "$@"
 }
 
 
@@ -405,9 +414,11 @@ alias t2w="cpt2w"
 whichworld() {
   cn 226 b "🌏 Current world: ${_MY_WORLD}  (JOE_ENV: $JOE_ENV)"
   cn lb    "  WSL:        ${NODE_WSL_USER}@${NODE_WSL_HOST}"
+  cn lb    "  WSL2:       ${NODE_WSL2_USER}@${NODE_WSL2_HOST}"
   cn lg    "  Termux:     ${NODE_TERMUX_USER}@${NODE_TERMUX_HOST}"
   cn lm    "  Windows:    ${NODE_WIN_USER}@${NODE_WIN_HOST}"
   cn m     "  MUMUPlayer: ${NODE_MUMU_USER}@${NODE_MUMU_HOST} (key: id_ed25519_mumu)"
+  cn y     "  OPPO:       ${NODE_OPPO_USER}@${NODE_OPPO_HOST}"
 }
 
 # ============================================================
@@ -456,8 +467,10 @@ syncthing_check_all(){
   local ROWS=(
     "🔄|TERMUX|$(_st_fetch_status "TERMUX" "${NODE_TERMUX_ST_URL}" "${NODE_TERMUX_ST_KEY}")|"
     "🔄|WSL|$(_st_fetch_status "WSL"    "${NODE_WSL_ST_URL}"    "${NODE_WSL_ST_KEY}"   )|"
+    "🔄|WSL2|$(_st_fetch_status "WSL2"   "${NODE_WSL2_ST_URL}"   "${NODE_WSL2_ST_KEY}"  )|"
     "🔄|WIN|$(_st_fetch_status "WIN"    "${NODE_WIN_ST_URL}"    "${NODE_WIN_ST_KEY}"   )|"
     "🔄|MUMU|$(_st_fetch_status "MUMU"   "${NODE_MUMU_ST_URL}"  "${NODE_MUMU_ST_KEY}"  )|"
+    "🔄|OPPO|$(_st_fetch_status "OPPO"   "${NODE_OPPO_ST_URL}"  "${NODE_OPPO_ST_KEY}"  )|"
   )
   dashboard_array "${ROWS[@]}"
 }
@@ -540,8 +553,10 @@ syncthing_auto() {
   case "$JOE_ENV" in
     TERMUX)   _st_autostart "TERMUX"   "${NODE_TERMUX_ST_URL}" "${NODE_TERMUX_ST_KEY}" "${NODE_TERMUX_ST_PORT}" ;;
     WSL)      _st_autostart "WSL"      "${NODE_WSL_ST_URL}"    "${NODE_WSL_ST_KEY}"    "${NODE_WSL_ST_PORT}"    ;;
+    WSL2)     _st_autostart "WSL2"     "${NODE_WSL2_ST_URL}"   "${NODE_WSL2_ST_KEY}"   "${NODE_WSL2_ST_PORT}"   ;;
     GIT-BASH) _st_autostart "GIT-BASH" "${NODE_WIN_ST_URL}"    "${NODE_WIN_ST_KEY}"    "${NODE_WIN_ST_PORT}"    ;;
     MUMU)     _st_autostart "MUMU"     "${NODE_MUMU_ST_URL}"   "${NODE_MUMU_ST_KEY}"   "${NODE_MUMU_ST_PORT}"   ;;
+    OPPO)     _st_autostart "OPPO"     "${NODE_OPPO_ST_URL}"   "${NODE_OPPO_ST_KEY}"   "${NODE_OPPO_ST_PORT}"   ;;
   esac
 }
 
@@ -551,8 +566,10 @@ syncthing_status_() {
   case "$JOE_ENV" in
     TERMUX)   label="ST TERMUX"; target_url="${NODE_TERMUX_ST_URL}"; api_key="${NODE_TERMUX_ST_KEY}" ;;
     WSL)      label="ST WSL";    target_url="${NODE_WSL_ST_URL}";    api_key="${NODE_WSL_ST_KEY}"    ;;
+    WSL2)     label="ST WSL2";   target_url="${NODE_WSL2_ST_URL}";   api_key="${NODE_WSL2_ST_KEY}"   ;;
     GIT-BASH) label="ST WIN";    target_url="${NODE_WIN_ST_URL}";    api_key="${NODE_WIN_ST_KEY}"    ;;
     MUMU)     label="ST MUMU";   target_url="${NODE_MUMU_ST_URL}";   api_key="${NODE_MUMU_ST_KEY}"   ;;
+    OPPO)     label="ST OPPO";   target_url="${NODE_OPPO_ST_URL}";   api_key="${NODE_OPPO_ST_KEY}"   ;;
     *)        echo "🔄 SYNCTHING : ❓ N/A"; return ;;
   esac
 
@@ -586,10 +603,12 @@ check_syncthing() {
 
   _st_fetch "TERMUX"  "${NODE_TERMUX_ST_URL}" "${NODE_TERMUX_ST_KEY}"
   _st_fetch "WSL    " "${NODE_WSL_ST_URL}"    "${NODE_WSL_ST_KEY}"
+  _st_fetch "WSL2   " "${NODE_WSL2_ST_URL}"   "${NODE_WSL2_ST_KEY}"
   _st_fetch "WIN"     "${NODE_WIN_ST_URL}"    "${NODE_WIN_ST_KEY}"
   _st_fetch "MUMU"    "${NODE_MUMU_ST_URL}"   "${NODE_MUMU_ST_KEY}"
+  _st_fetch "OPPO"    "${NODE_OPPO_ST_URL}"   "${NODE_OPPO_ST_KEY}"
 
-  
+
 }
 
 alias stck='check_syncthing'
@@ -601,8 +620,10 @@ _get_syncthing_raw() {
   case "$JOE_ENV" in
     TERMUX)   target_url="${NODE_TERMUX_ST_URL}"; api_key="${NODE_TERMUX_ST_KEY}" ;;
     WSL)      target_url="${NODE_WSL_ST_URL}";    api_key="${NODE_WSL_ST_KEY}"    ;;
+    WSL2)     target_url="${NODE_WSL2_ST_URL}";   api_key="${NODE_WSL2_ST_KEY}"   ;;
     GIT-BASH) target_url="${NODE_WIN_ST_URL}";    api_key="${NODE_WIN_ST_KEY}"    ;;
     MUMU)     target_url="${NODE_MUMU_ST_URL}";   api_key="${NODE_MUMU_ST_KEY}"   ;;
+    OPPO)     target_url="${NODE_OPPO_ST_URL}";   api_key="${NODE_OPPO_ST_KEY}"   ;;
     *)        echo "OFFLINE|🔴"; return ;;
   esac
 
@@ -647,8 +668,10 @@ _st_api() {
   case "$JOE_ENV" in
     TERMUX)   _ST_API_URL="${NODE_TERMUX_ST_URL}"; _ST_API_KEY="${NODE_TERMUX_ST_KEY}" ;;
     WSL)      _ST_API_URL="${NODE_WSL_ST_URL}";    _ST_API_KEY="${NODE_WSL_ST_KEY}"    ;;
+    WSL2)     _ST_API_URL="${NODE_WSL2_ST_URL}";   _ST_API_KEY="${NODE_WSL2_ST_KEY}"   ;;
     GIT-BASH) _ST_API_URL="${NODE_WIN_ST_URL}";    _ST_API_KEY="${NODE_WIN_ST_KEY}"    ;;
     MUMU)     _ST_API_URL="${NODE_MUMU_ST_URL}";   _ST_API_KEY="${NODE_MUMU_ST_KEY}"   ;;
+    OPPO)     _ST_API_URL="${NODE_OPPO_ST_URL}";   _ST_API_KEY="${NODE_OPPO_ST_KEY}"   ;;
     *)        _ST_API_URL=""; _ST_API_KEY="" ;;
   esac
 }
@@ -754,19 +777,21 @@ st_register_all() {
   # device map: ชื่อ → (id, url, key) — อ่านจาก SSOT
   local -A NODES=(
     [wsl]="$NODE_WSL_ST_ID|$NODE_WSL_ST_URL|$NODE_WSL_ST_KEY"
+    [wsl2]="$NODE_WSL2_ST_ID|$NODE_WSL2_ST_URL|$NODE_WSL2_ST_KEY"
     [WIN]="$NODE_WIN_ST_ID|$NODE_WIN_ST_URL|$NODE_WIN_ST_KEY"
     [TERMUX]="$NODE_TERMUX_ST_ID|$NODE_TERMUX_ST_URL|$NODE_TERMUX_ST_KEY"
     [MUMU]="$NODE_MUMU_ST_ID|$NODE_MUMU_ST_URL|$NODE_MUMU_ST_KEY"
+    [OPPO]="$NODE_OPPO_ST_ID|$NODE_OPPO_ST_URL|$NODE_OPPO_ST_KEY"
   )
 
   # canonical device map: <id>:<name> (SSOT)
   local canonical=""
-  for n in wsl WIN TERMUX MUMU; do
+  for n in wsl wsl2 WIN TERMUX MUMU OPPO; do
     canonical="$canonical ${NODES[$n]%%|*}:$n"
   done
 
   # วนไปทุกเครื่องที่ online
-  for n in wsl WIN TERMUX MUMU; do
+  for n in wsl wsl2 WIN TERMUX MUMU OPPO; do
     local entry="${NODES[$n]}"
     local url="${entry#*|}"; url="${url%%|*}"
     local key="${entry##*|}"

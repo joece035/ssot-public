@@ -3,7 +3,7 @@
 # tools/env-manager.sh — SSOT Environment Variable Manager (TUI)
 # ============================================================
 # Interactive & CLI tool to manage environment variables in SSOT
-# Target default: $SSOT/bootstrap/00-env.sh (Customizable)
+# Target default: $SSOT/shared/00-env.sh (Customizable)
 #
 # Features:
 #   - Add / Edit / Delete variables safely (with auto-backup)
@@ -40,7 +40,7 @@ if ! declare -f cn >/dev/null 2>&1; then
 fi
 
 # --- Target File Resolution ---
-DEFAULT_TARGET="$_SSOT_ROOT/bootstrap/00-env.sh"
+DEFAULT_TARGET="$_SSOT_ROOT/shared/00-env.sh"
 TARGET_FILE="${ENV_TARGET_FILE:-$DEFAULT_TARGET}"
 BACKUP_DIR="${BACKUP_DIR:-$HOME/backups}"
 
@@ -733,7 +733,7 @@ cmd_change_target() {
     local idx=1
     
     local candidates=(
-        "$_SSOT_ROOT/bootstrap/00-env.sh"
+        "$_SSOT_ROOT/shared/00-env.sh"
         "$_SSOT_ROOT/core/01-colors.sh"
         "$_SSOT_ROOT/core/aliases.sh"
         "$_SSOT_ROOT/core/profiles.sh"

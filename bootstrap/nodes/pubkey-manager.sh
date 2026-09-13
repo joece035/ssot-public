@@ -210,8 +210,8 @@ cmd_lock_pubkey() {
     # Also scan all known nodes for their pubkey files
     echo ""
     cn 226 b "🔍 Scanning known nodes..."
-    if [[ -d "$SSOT/nodes" ]]; then
-        for node_file in "$SSOT/nodes"/*.node.env; do
+    if [[ -d "$SSOT/bootstrap/nodes" ]]; then
+        for node_file in "$SSOT/bootstrap/nodes"/*.node.env; do
             [[ -f "$node_file" ]] || continue
             local node_name="${node_file##*/}"
             node_name="${node_name%.node.env}"

@@ -32,9 +32,9 @@ if ! command -v c >/dev/null 2>&1; then
   unset _colors_file
 fi
 
-# Source env vars from SSOT (bootstrap/00-env.sh) if not already loaded
+# Source env vars from SSOT (shared/00-env.sh) if not already loaded
 if [[ -z "$TERMUX_IP" ]]; then
-  _env_file="$SCRIPTS_PATH/bootstrap/00-env.sh"
+  _env_file="$SCRIPTS_PATH/shared/00-env.sh"
   [[ -f "$_env_file" ]] && source "$_env_file"
   unset _env_file
 fi

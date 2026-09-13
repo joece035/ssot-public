@@ -2,11 +2,11 @@
 # ============================================================
 # tools/files_manage.sh — Cross-Device File Management Helper
 # ============================================================
-# SSOT: All node vars come from bootstrap/00-env.sh (NODE_*)
+# SSOT: All node vars come from shared/00-env.sh (NODE_*)
 # Transport: uses _rsync_to / _rsync_from / _rsync_to_delete
 #            (defined in core/3worlds.sh)
 #
-# Nodes supported: termux | wsl | win | mumu | OPPO
+# Nodes supported: termux | wsl | wsl2 | win | mumu | oppo
 #
 # Public API (frozen signatures):
 #   fm_send  <node> <local_src>   [remote_dst]  - push  local -> remote
@@ -83,6 +83,13 @@ _fm_node_vars() {
       _FM_PROTO="$_proto"
       _FM_TAG="WSL"
       ;;
+    w2|wsl2|WSL2)
+      _FM_USER="${NODE_WSL2_USER}"
+      _FM_HOST="${NODE_WSL2_HOST}"
+      _FM_PORT="${NODE_WSL2_PORT:-22}"
+      _FM_PROTO="$_proto"
+      _FM_TAG="WSL2"
+      ;;
     win|window|windows|WIN)
       _FM_USER="${NODE_WIN_USER}"
       _FM_HOST="${NODE_WIN_HOST}"
@@ -106,7 +113,7 @@ _fm_node_vars() {
       ;;
     *)
       cn 196 b "fm: unknown node '${node}'"
-      cn 252   "  nodes: termux | wsl | win | mumu | oppo"
+      cn 252   "  nodes: termux | wsl | wsl2 | win | mumu | oppo"
       return 1
       ;;
   esac
@@ -279,7 +286,7 @@ fm_check() {
 
   if [[ "$node" == "all" ]]; then
     cn 226 b "-- Connectivity Check --"
-    for n in termux wsl win mumu oppo; do
+    for n in termux wsl wsl2 win mumu oppo; do
       _fm_ping_one "$n"
     done
   else
@@ -296,11 +303,12 @@ fm_info() {
   printf "  %.0s-" {1..60}; echo
   printf "  %-8s %-20s %-20s %-6s %s\n" "TERMUX" "${NODE_TERMUX_HOST:-?}" "${NODE_TERMUX_USER:-?}" "${NODE_TERMUX_PORT:-?}" "rsync"
   printf "  %-8s %-20s %-20s %-6s %s\n" "WSL"    "${NODE_WSL_HOST:-?}"    "${NODE_WSL_USER:-?}"    "${NODE_WSL_PORT:-?}"    "rsync"
+  printf "  %-8s %-20s %-20s %-6s %s\n" "WSL2"   "${NODE_WSL2_HOST:-?}"   "${NODE_WSL2_USER:-?}"   "${NODE_WSL2_PORT:-?}"   "rsync"
   printf "  %-8s %-20s %-20s %-6s %s\n" "WIN"    "${NODE_WIN_HOST:-?}"    "${NODE_WIN_USER:-?}"    "${NODE_WIN_PORT:-22}"   "scp"
   printf "  %-8s %-20s %-20s %-6s %s\n" "MUMU"   "${NODE_MUMU_HOST:-?}"   "${NODE_MUMU_USER:-?}"   "${NODE_MUMU_PORT:-?}"   "scp"
   printf "  %-8s %-20s %-20s %-6s %s\n" "OPPO" "${NODE_OPPO_HOST:-?}" "${NODE_OPPO_USER:-?}" "${NODE_OPPO_PORT:-?}" "rsync"
   printf "  %.0s-" {1..60}; echo
-  cn 252 "  Source: \$SSOT/bootstrap/00-env.sh"
+  cn 252 "  Source: \$SSOT/shared/00-env.sh"
 }
 
 # ============================================================
@@ -370,9 +378,10 @@ _fm_help() {
   cn 75  "  NODES"
   printf "    %-14s %s\n"  "termux | t | tm"   "\$NODE_TERMUX_*  (rsync)"
   printf "    %-14s %s\n"  "wsl    | w"        "\$NODE_WSL_*    (rsync)"
+  printf "    %-14s %s\n"  "wsl2   | w2"       "\$NODE_WSL2_*   (rsync)"
   printf "    %-14s %s\n"  "win    | window"   "\$NODE_WIN_*    (scp)"
   printf "    %-14s %s\n"  "mumu   | mm | m"   "\$NODE_MUMU_*   (scp)"
   printf "    %-14s %s\n"  "oppo | op | o"  "\$NODE_OPPO_* (rsync)"
   echo ""
-  cn 245  "  Vars sourced from: \$SSOT/bootstrap/00-env.sh"
+  cn 245  "  Vars sourced from: \$SSOT/shared/00-env.sh"
 }

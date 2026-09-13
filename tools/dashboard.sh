@@ -75,9 +75,17 @@ if [[ -z "$_THIS_NODE" || -z "$_THIS_ENV" ]]; then
     if [[ -d "/data/data/com.termux" ]]; then
         _THIS_NODE="${_THIS_NODE:-termux}"
         _THIS_ENV="${_THIS_ENV:-TERMUX}"
+    elif command -v apk >/dev/null 2>&1; then
+        _THIS_NODE="${_THIS_NODE:-acodex}"
+        _THIS_ENV="${_THIS_ENV:-ACODEX}"
     elif grep -qi microsoft /proc/version 2>/dev/null; then
-        _THIS_NODE="${_THIS_NODE:-wsl}"
-        _THIS_ENV="${_THIS_ENV:-WSL}"
+        if [[ "$(id -un 2>/dev/null)" == "joez" ]]; then
+            _THIS_NODE="${_THIS_NODE:-wsl2}"
+            _THIS_ENV="${_THIS_ENV:-WSL2}"
+        else
+            _THIS_NODE="${_THIS_NODE:-wsl}"
+            _THIS_ENV="${_THIS_ENV:-WSL}"
+        fi
     elif [[ -n "${MSYSTEM:-}" ]]; then
         _THIS_NODE="${_THIS_NODE:-git-bash}"
         _THIS_ENV="${_THIS_ENV:-GIT-BASH}"
@@ -91,6 +99,12 @@ fi
 
 # ── 5. Load ~/.env safely ──
 [[ -f "$HOME/.env" ]] && source "$HOME/.env" 2>/dev/null || true
+
+# Normalize identity case AFTER ~/.env load (JOE_ENV=UPPER, MY_DEVICE=lower)
+_THIS_NODE="$(echo "${_THIS_NODE:-${MY_DEVICE:-}}" | tr '[:upper:]' '[:lower:]')"
+_THIS_ENV="$(echo "${_THIS_ENV:-${JOE_ENV:-UNKNOWN}}" | tr '[:lower:]' '[:upper:]')"
+export JOE_ENV="$_THIS_ENV"
+export MY_DEVICE="$_THIS_NODE"
 
 # ── 6. Source env manager for repo/shell functions ──
 [[ -f "$HOME/.local/bin/env" ]] && source "$HOME/.local/bin/env" 2>/dev/null || true
@@ -479,6 +493,7 @@ _render_nodes() {
         local node_icon
         case "$name" in
             wsl)    node_icon="🖥️ " ;;
+            wsl2)   node_icon="🖥️ " ;;
             termux) node_icon="📱" ;;
             mumu)   node_icon="🤖" ;;
             window) node_icon="🪟" ;;

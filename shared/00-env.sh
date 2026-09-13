@@ -67,10 +67,10 @@ case "$JOE_ENV" in
          export WIN_PATH="/mnt/"
          ;;
     WSL2)
+         export HERMES_DIR="$HOME/.hermes"
          export PYTHON_VENV="$HOME/.venv/bin/activate"
          export NODE_HOST="wsl2"
          export WIN_PATH="/mnt/"
-              
          ;;
     GIT-BASH)
          export HERMES_DIR="/mnt/c/Users/User/AppData/Local/hermes"
@@ -276,8 +276,8 @@ export URL_MUMU="${NODE_MUMU_ST_URL}/"
 
 # ACODEX compat
 export ACODEX_IP="${NODE_ACODEX_HOST:-$NODE_ACODEX_IP}"
-export ACODEX_USER="$NODE_ACODEX_USER"root
-export ACODEX_PORT="$NODE_ACODEX_PORT"8024
+export ACODEX_USER="${NODE_ACODEX_USER:-root}"
+export ACODEX_PORT="${NODE_ACODEX_PORT:-8021}"
 
 # ============================================================
 # EXPORTS COMPLETE — Ready for use in aliases and functions

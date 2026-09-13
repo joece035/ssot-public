@@ -44,13 +44,14 @@ fi
 # shell_setup() — Symlink shell profiles from $SSOT/profiles/
 # ============================================================
 # Usage: shell_setup [ENV_NAME]
-#   ENV_NAME: TERMUX, MUMU, WSL, GIT-BASH, ACODEX, OPPO
+#   ENV_NAME: TERMUX, MUMU, WSL, WSL2, GIT-BASH, ACODEX, OPPO
 #   If omitted, uses $MY_DEVICE or $JOE_ENV
+#   NOTE: matching is case-insensitive — MY_DEVICE=wsl2 and JOE_ENV=WSL2 both work
 # ============================================================
 
 shell_setup(){
     
-    local env_=${1:-$JOE_ENV}
+    local env_="$(echo "${1:-$JOE_ENV}" | tr '[:lower:]' '[:upper:]')"
     local pf=""
 
         case "$env_" in
