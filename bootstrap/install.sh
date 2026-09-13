@@ -636,7 +636,10 @@ ENVEOF
     chmod +x "$ENV_TARGET"
     ok "Created: $ENV_TARGET (minimal)"
 fi
-
+ if [[ ! -f "~/.local/share/blesh/ble.sh" ]]; then
+ 		git clone --recursive --depth 1 --shallow-submodules https://github.com/akinomyoga/ble.sh.git
+		make -C ble.sh install PREFIX=~/.local
+ fi		
 # ============================================================
 # STAGE 4.7 — Broken Symlink Scanner & Cleanup
 # ============================================================
