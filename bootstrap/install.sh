@@ -164,7 +164,11 @@ detect_joe_env() {
     elif command -v apk >/dev/null 2>&1; then
         echo "ACODEX"
     elif grep -qi microsoft /proc/version 2>/dev/null; then
-        echo "WSL"
+        if [[ $(id -un) == "joez" ]]; then
+            echo "WSL2"
+        else    
+            echo "WSL"
+        fi    
     elif [[ -n "${MSYSTEM:-}" ]] || [[ "${OSTYPE:-}" == "msys" ]]; then
         echo "GIT-BASH"
     else
@@ -535,7 +539,8 @@ _link_profile() {
     local target="$1"
     local src="$2"
     [[ ! -f "$src" ]] && return 0
-    # Guard: auto-strip CRLF () from source template if present
+    # Guard: auto-strip CRLF (
+) from source template if present
     if grep -q $'\r' "$src" 2>/dev/null; then
         sed -i 's/\r$//' "$src" 2>/dev/null || true
     fi

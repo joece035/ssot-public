@@ -106,7 +106,7 @@ shell_setup(){
                         ln -sf "$pf" "$HOME/.zshrc" && echo "ลบและสร้าง symlink $pf >>> $HOME/.zshrc done" || echo "FAIL"    
                     fi
                     ;;
-                WSL)
+                WSL|WSL2)
                     if [[ ! -f "$HOME/.bashrc" ]]; then
                          pf="${SSOT}/profiles/wsl/.bashrc"
                          if [[ -f "$pf" ]]; then

@@ -54,13 +54,22 @@ case "$JOE_ENV" in
          export SDCARD_PATH="/storage/emulated/0/"
          export NODE_HOST="mumu"
          ;;
+    OPPO)
+         export HERMES_DIR="/data/data/com.termux/files/home/.hermes"
+         export PYTHON_VENV="$HOME/.dash_venv/bin/activate"
+         export SDCARD_PATH="/storage/emulated/0/"
+         export NODE_HOST="oppo"
+         ;;
     WSL)
          export HERMES_DIR="$HOME/.hermes"
          export PYTHON_VENV="$HOME/.venv/bin/activate"
          export NODE_HOST="wsl"
          export WIN_PATH="/mnt/"
-         
-
+         ;;
+    WSL2)
+         export PYTHON_VENV="$HOME/.venv/bin/activate"
+         export NODE_HOST="wsl2"
+         export WIN_PATH="/mnt/"     
          ;;
     GIT-BASH)
          export HERMES_DIR="/mnt/c/Users/User/AppData/Local/hermes"
@@ -205,6 +214,8 @@ export TAILSCALE_IP_TERMUX=100.110.26.16
 export TAILSCALE_IP_WINDOW=100.69.181.45
 export TAILSCALE_IP_WSL=100.80.195.120
 export TAILSCALE_IP_MUMU=100.100.176.94
+export TAILSCALE_IP_OPPO=100.109.249.216
+export TAILSCALE_IP_WSL2=
 
 # ── Dynamic Node Registry Loader (drop-in profiles from $SSOT/bootstrap/nodes/*.node.env) ──
 if [[ -f "${SSOT:-$HOME/ssot}/bootstrap/nodes/loader.sh" ]]; then
@@ -233,6 +244,14 @@ export WSL_TELSCAIL_IP="$NODE_WSL_HOST"
 export ST_KEY_WSL="$NODE_WSL_ST_KEY"
 export ST_PORT_WSL="$NODE_WSL_ST_PORT"
 export URL_WSL="${NODE_WSL_ST_URL}/"
+
+# WSL2 compat
+export WSL2_IP="${NODE_WSL2_HOST:-$NODE_WSL2_IP}"
+export WSL2_USER="$NODE_WSL2_USER"
+export WSL2_TELSCAIL_IP="$NODE_WSL2_HOST"
+export ST_KEY_WSL2="$NODE_WSL2_ST_KEY"
+export ST_PORT_WSL2="$NODE_WSL2_ST_PORT"
+export URL_WSL2="${NODE_WSL2_ST_URL}/"
 
 # --- Windows compat
 # WIN_GIT_BASH: path ของ Git Bash บน Windows (ใช้โดย tw() ใน 3worlds.sh)
