@@ -78,6 +78,8 @@ esac
 # ============================================================
 # 2. GLOBAL VARIABLE
 # ============================================================
+export bsc="$HOME/bashscripts"
+export ssot="$HOME/ssot"
 export profile=mom
 export oppc="$hpc/openclaw"
 export dpc="$hpc/Desktop"

@@ -202,7 +202,6 @@ shell_setup(){
                 *) echo "unknown: check $JOE_ENV then run setup again" ;;    
          esac               
 }
-
 # ============================================================
 # repo() — Switch between SSOT repositories
 # ============================================================
@@ -296,34 +295,38 @@ repo() {
     fi
 
     # ── [Stage 3] Wire Shell Profiles ──
-    shell_setup "${MY_DEVICE:-${JOE_ENV:-}}"
+    shell_setup "${2:-${JOE_ENV:-$MY_DEVICE}}"
 
     # ── [Stage 4] Re-create Tool Symlinks (use _safe_link: rm -f + ln -sf for MSYS compat) ──
     # joe
     if [[ -f "$repository/joe.sh" ]]; then
         _safe_link "$repository/joe.sh" "$_bin/joe"
-        chmod +x "$repository/joe.sh"
+        chmod +x "$_bin/joe"
         echo "🔗 $_bin/joe → $repository/joe.sh"
     fi
 
     # syncctl
     if [[ -f "$repository/tools/syncctl/syncctl" ]]; then
         _safe_link "$repository/tools/syncctl/syncctl" "$_bin/syncctl"
-        chmod +x "$repository/tools/syncctl/syncctl"
+        chmod +x "$_bin/syncctl"
         echo "🔗 $_bin/syncctl → $repository/tools/syncctl/syncctl"
     fi
 
     # node-status
     if [[ -f "$repository/bootstrap/nodes/node-status.sh" ]]; then
         _safe_link "$repository/bootstrap/nodes/node-status.sh" "$_bin/node-status"
-        chmod +x "$repository/bootstrap/nodes/node-status.sh"
+        chmod +x "$_bin/node-status"
         echo "🔗 $_bin/node-status → $repository/bootstrap/nodes/node-status.sh"
     fi
 
     # env manager template update
     if [[ -f "$repository/bootstrap/templates/env" ]]; then
-        cp "$repository/bootstrap/templates/env" "$_bin/env"
-        chmod +x "$_bin/env"
+        if [[ -L "$_bin/env" || -f "$_bin/env" ]]; then
+            rm -f "$_bin/env" && echo "remove old $_bin/env"
+        fi
+        _safe_link "$repository/bootstrap/templates/env" "$_bin/env"
+        chmod +x "$_bin/env" && echo "create $_bin/env"
+        echo "🔗 $_bin/env → $repository/bootstrap/templates/env"
     fi
 
     # ── [Stage 5] Source joe.sh from target repo ──

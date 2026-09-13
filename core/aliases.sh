@@ -31,7 +31,7 @@ alias htm='cd $htm'
 alias hwsl='cd $HWSL'
 alias hpc='cd $hpc'
 alias hmp='cd $hmp'
-alias bsc='cd $SSOT && pwd'
+alias cdbsc='cd $SSOT && pwd'
 alias dbp='cd $DASHBOARD_DIR'
 alias sdc='cd $SDCARD_PATH && pwd'
 alias cdboom='cd $boom'
@@ -75,7 +75,7 @@ alias rbdb='rbfe && opdb'
 # ▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬ #
 alias cdrp="cd $SSOT && cn 45 b "$PWD""
 alias jenv="cn lg b $JOE_ENV"
-alias ssot="cn lg b $SSOT"
+alias repos="cn lg b $SSOT"
 alias envm='bash "$SSOT/tools/env-manager.sh"'
 alias envmgr='bash "$SSOT/tools/env-manager.sh"'
 
