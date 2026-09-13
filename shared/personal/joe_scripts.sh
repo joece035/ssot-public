@@ -45,11 +45,11 @@ reinstall() {
         target_dir="$ssot_dir"
         target_name="ssot"
     fi
-    local link_list=("~/.bashrc" "~/.zshrc" "~/.local/bin/joe.sh" "~/.local/bin/env ")
+    local link_list=("~/.bashrc" "~/.zshrc" "~/.local/bin/joe" "~/.local/bin/env ")
 
     # ── Remove existing symlinks ──
     for link in "${link_list[@]}"; do
-        if [[ -L "$link" ]]; then
+        if [[ -L "$link" || -f "$link" ]]; then
             rm -f "$link"
         fi
     done
