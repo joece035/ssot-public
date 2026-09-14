@@ -270,13 +270,11 @@ replace_w() {
             ;;
     esac
 }
-<<<<<<< HEAD
->>>>>>> 399b296 (fix vault)
-=======
+
 
 fword() {
     local word="${1:?"Please provide a word to search for"}"
     shift
     grep -rnii "$word" "${@:-.}:?"
 }
->>>>>>> bfc64d4 (last)
+
