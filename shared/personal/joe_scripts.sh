@@ -95,7 +95,7 @@ reinstall() {
 
 shell_setup(){
     
-    local env_=${1:-$JOE_ENV}
+    local env_="$(echo "${1:-$JOE_ENV}" | tr '[:lower:]' '[:upper:]')"
     local pf=""
 
         case "$env_" in
@@ -177,6 +177,32 @@ shell_setup(){
                         ln -sf "$pf" "$HOME/.zshrc" && echo "ลบและสร้าง symlink $pf >>> $HOME/.zshrc done" || echo "FAIL"    
                     fi
                     ;;
+                WSL2)
+                    if [[ ! -f "$HOME/.bashrc" ]]; then
+                         pf="${SSOT}/profiles/wsl2/.bashrc"
+                         if [[ -f "$pf" ]]; then
+                            ln -s "$pf" "$HOME/.bashrc" && echo "symlink $pf >>> $HOME/.bashrc done" || echo "FAIL"
+                         else
+                            echo "not found $pf"
+                         fi
+                    else 
+                        rm -rf $HOME/.bashrc &&
+                        pf="${SSOT}/profiles/wsl2/.bashrc"    
+                        ln -sf "$pf" "$HOME/.bashrc" && echo "ลบและสร้าง symlink $pf >>> $HOME/.bashrc done" || echo "FAIL"    
+                    fi
+                    if [[ ! -f "$HOME/.zshrc" ]]; then
+                         pf="${SSOT}/profiles/wsl2/.zshrc"
+                         if [[ -f "$pf" ]]; then
+                            ln -s "$pf" "$HOME/.zshrc" && echo "symlink $pf >>> $HOME/.zshrc done" || echo "FAIL"
+                         else
+                            echo "not found $pf"
+                         fi
+                    else 
+                        rm -rf $HOME/.zshrc &&
+                        pf="${SSOT}/profiles/wsl2/.zshrc"    
+                        ln -sf "$pf" "$HOME/.zshrc" && echo "ลบและสร้าง symlink $pf >>> $HOME/.zshrc done" || echo "FAIL"    
+                    fi
+                    ;;    
                 GIT-BASH )
                     if [[ ! -f "$HOME/.bashrc" ]]; then
                          pf="${SSOT}/profiles/git-bash/.bashrc"
@@ -244,10 +270,9 @@ shell_setup(){
                         ln -sf "$pf" "$HOME/.zshrc" && echo "symlink $pf >>> $HOME/.zshrc done" || echo "FAIL"    
                     fi
                     ;;    
-                *) echo unknow ;;    
+                *) echo "unknown: check $JOE_ENV then run setup again" ;;    
          esac               
 }
-
 link_bin() {
     case "$1" in
         -c|--check)
