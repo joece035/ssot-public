@@ -60,7 +60,10 @@ case "$JOE_ENV" in
          export SDCARD_PATH="/storage/emulated/0/"
          export NODE_HOST="oppo"
          ;;
-    WSL)
+    ACODEX)
+         export NODE_HOST="acodex"
+         ;;
+		WSL)
          export HERMES_DIR="$HOME/.hermes"
          export PYTHON_VENV="$HOME/.venv/bin/activate"
          export NODE_HOST="wsl"
