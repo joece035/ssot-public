@@ -410,26 +410,66 @@ alias ausf='auto_source'
 #   _guard_func "my_func" || exit 1
 # ==========================================
 _check_func() {
-    local func="$1"
-    local context="${2:-${SSOT:-$repository}}"
+    local -a _funcs=()
+    local context=""
+    local item
 
-    if [[ -z "$func" ]]; then
-        echo "❌ _guard_func: No function name provided" >&2
+    # detect context directory if passed as last argument
+    if [[ $# -ge 2 && -d "${!#}" ]]; then
+        local _last="${!#}"
+        local _is_arr=0
+        if [[ -n "$ZSH_VERSION" ]]; then
+            [[ "${(tP)_last}" == *array* || "${(tP)_last}" == *association* ]] && _is_arr=1
+        else
+            [[ "$(declare -p "$_last" 2>/dev/null)" =~ ^declare\ -[aA] ]] && _is_arr=1
+        fi
+        if [[ $_is_arr -eq 0 ]] && ! _is_func_loaded "$_last"; then
+            context="$_last"
+            set -- "${@:1:$#-1}"
+        fi
+    fi
+    context="${context:-${SSOT:-${repository:-$HOME/ssot}}}"
+
+    for item in "$@"; do
+        [[ -z "$item" ]] && continue
+        if [[ -n "$ZSH_VERSION" ]]; then
+            if [[ "${(tP)item}" == *array* || "${(tP)item}" == *association* ]]; then
+                _funcs+=("${(@P)item}")
+                continue
+            fi
+        else
+            if [[ "$(declare -p "$item" 2>/dev/null)" =~ ^declare\ -[aA] ]]; then
+                local -n _arr_ref="$item"
+                _funcs+=("${_arr_ref[@]}")
+                continue
+            fi
+        fi
+        _funcs+=("$item")
+    done
+
+    if [[ ${#_funcs[@]} -eq 0 ]]; then
+        echo "❌ _check_func: No function name provided" >&2
         return 1
     fi
 
-    if _is_func_loaded "$func"; then
-        return 0
-    fi
-
-    echo "⚠️  '$func' not loaded — attempting auto_source..." >&2
-    auto_source "$func" "$context" || {
-        echo "❌ Cannot proceed: '$func' unavailable" >&2
-        return 1
-    }
+    local f err=0
+    for f in "${_funcs[@]}"; do
+        [[ -z "$f" ]] && continue
+        if _is_func_loaded "$f"; then
+            continue
+        fi
+        echo "⚠️  '$f' not loaded — attempting auto_source..." >&2
+        auto_source "$f" "$context" || {
+            echo "❌ Cannot proceed: '$f' unavailable" >&2
+            err=1
+        }
+    done
+    return $err
 }
 if [[ -f "${SSOT:-$HOME/ssot}/shared/.bash_checker" ]]; then
     _check -f "${SSOT:-$HOME/ssot}/shared/.bash_checker"
 elif [[ -f "${SSOT:-$HOME/ssot}/.bash_checker" ]]; then
     _check -f "${SSOT:-$HOME/ssot}/.bash_checker"
 fi
+
+

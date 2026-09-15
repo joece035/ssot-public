@@ -68,19 +68,18 @@ _check_pkg() {
 }
 
 # -- script-safe function guard: never prompt (no fzf/select in scripts) --
-_check_func_safe() {
+_check_one_func() {
     local func="${1:-}"
     local context="${2:-${SSOT:-${repository:-$HOME/ssot}}}"
-    if [[ -z "$func" ]]; then
-        echo "[_check_ -f] no function name provided" >&2
-        return 1
-    fi
+    if [[ -z "$func" ]]; then return 1; fi
     if _is_func_loaded "$func"; then return 0; fi
+
     # prefer canonical auto-loader when interactive
     if [[ -t 0 ]] && typeset -f auto_source >/dev/null 2>&1; then
         auto_source "$func" "$context"
         return $?
     fi
+
     # non-interactive: single-match auto-source only, multi-match = fail (no picker)
     # pure-bash: no grep/find — uses globstar (bash 4+) + [[ =~ ]] builtin regex
     if [[ -n "$context" && -d "$context" ]]; then
@@ -89,7 +88,7 @@ _check_func_safe() {
         _og_null=$(shopt -p nullglob 2>/dev/null)
         _og_glob=$(shopt -p globstar 2>/dev/null)
         shopt -s nullglob globstar 2>/dev/null
-        local _pat="^[[:space:]]*(function[[:space:]]+${func}([[:space:(]|$)|${func}[[:space:]]*\(\))"
+        local _pat="^[[:space:]]*(function[[:space:]]+${func}([[:space:]\(]|$)|${func}[[:space:]]*\(\))"
         for _f in "$context"/**/*.sh "$context"/**/*.bash "$context"/**/*.zsh; do
             [[ -f "$_f" ]] || continue
             while IFS= read -r _line; do
@@ -107,13 +106,84 @@ _check_func_safe() {
             return 1
         fi
     fi
+
     # last resort: canonical path (may still prompt only when interactive)
     if typeset -f _check_func >/dev/null 2>&1 && [[ -t 0 ]]; then
         _check_func "$func" "$context"
         return $?
     fi
+
     echo "[_check_ -f] '$func' not loaded, cannot auto-source non-interactively" >&2
     return 1
+}
+
+_check_func_safe() {
+    if [[ $# -eq 0 ]]; then
+        echo "[_check_ -f] no function name provided" >&2
+        return 1
+    fi
+
+    local context=""
+    # 1. Parse optional -d / --dir flag
+    if [[ "${1:-}" == "-d" || "${1:-}" == "--dir" ]]; then
+        context="${2:-}"
+        shift 2 || true
+    fi
+
+    # 2. Detect context directory if passed as last argument
+    if [[ -z "$context" && $# -ge 2 && -d "${!#}" ]]; then
+        local _last="${!#}"
+        local _is_arr=0
+        if [[ -n "$ZSH_VERSION" ]]; then
+            [[ "${(tP)_last}" == *array* || "${(tP)_last}" == *association* ]] && _is_arr=1
+        else
+            [[ "$(declare -p "$_last" 2>/dev/null)" =~ ^declare\ -[aA] ]] && _is_arr=1
+        fi
+        if [[ $_is_arr -eq 0 ]] && ! _is_func_loaded "$_last"; then
+            context="$_last"
+            set -- "${@:1:$#-1}"
+        fi
+    fi
+    context="${context:-${SSOT:-${repository:-$HOME/ssot}}}"
+
+    # 3. Collect target functions (support array variable name by reference or multiple positional args)
+    local -a _target_funcs=()
+    local item
+    for item in "$@"; do
+        [[ -z "$item" ]] && continue
+        if [[ -n "$ZSH_VERSION" ]]; then
+            if [[ "${(tP)item}" == *array* || "${(tP)item}" == *association* ]]; then
+                _target_funcs+=("${(@P)item}")
+                continue
+            fi
+        else
+            if [[ "$(declare -p "$item" 2>/dev/null)" =~ ^declare\ -[aA] ]]; then
+                local -n _arr_ref="$item"
+                _target_funcs+=("${_arr_ref[@]}")
+                continue
+            fi
+        fi
+        _target_funcs+=("$item")
+    done
+
+    if [[ ${#_target_funcs[@]} -eq 0 ]]; then
+        echo "[_check_ -f] no function name provided" >&2
+        return 1
+    fi
+
+    local func
+    local overall_rc=0
+    for func in "${_target_funcs[@]}"; do
+        [[ -z "$func" ]] && continue
+        if _is_func_loaded "$func"; then
+            continue
+        fi
+        if ! _check_one_func "$func" "$context"; then
+            overall_rc=1
+        fi
+    done
+
+    return $overall_rc
 }
 
 _check_usage() {
@@ -123,7 +193,7 @@ _check_usage() {
         '  -o|--object  -f <path> [cmd...]   test object then run cmd (default: source)' \
         '  -s|--shell   [bash|zsh]           guard shell (no arg prints current shell)' \
         '  -j|--JENV    [--set|--force]      ensure JOE_ENV' \
-        '  -f|--FUNCTION <func> [search_dir] ensure function loaded (bash 4+ required for auto-search)' \
+        '  -f|--FUNCTION <func|array>... [-d dir] ensure function(s) loaded' \
         '  -p|--PKG     [-c] <pkg> [bin] ... ensure package installed' \
         '  -h|--help                         this help'
 }

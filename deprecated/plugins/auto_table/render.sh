@@ -35,10 +35,8 @@ n_(){
 # bn_3: Dynamic Auto-Width Table (ความกว้างพอดีตามเนื้อหา)
 bn_2() {
     # --- 0. Config & Defaults ---
-    if ! command -v config_rc &> /dev/null; then
-        _check -f "$SSOT/lessons/auto_table/config.sh" "source" || return 1
-    fi
-    config_rc
+
+    _check_ -f _config_rc
 
     local title="${BN_TITLE:-Shortcuts folders}"
     local title_c="${BN_TITLE_COLOR:-208}"
@@ -119,10 +117,8 @@ bn_2() {
 # bn_2: Fixed Width Table (ความกว้างมาตรฐาน 80 ตัวอักษร)
 bn_3() {
     # --- 0. Config & Defaults ---
-    if ! command -v config_def &> /dev/null; then
-        _check -f "$SSOT/lessons/auto_table/config.sh" "source" || return 1
-    fi
-    config_def
+
+    _check_ -f _config_def
 
     local title="${BN_TITLE:-Shortcuts folders}"
     local title_c="${BN_TITLE_COLOR:-208}"
