@@ -57,6 +57,13 @@ g() {
         git_ push
         return $?
     else
+		  	case "$1" in
+				-pu|--pull--rebase)
+						git add -A &&
+						git commit -m "$(date)" &&
+				    git_ "pl"
+						;;
+			  esac			
     # มี args → ส่งต่อไป git_ (ซึ่งรู้จัก s/c/a/all/push/pull ฯลฯ)
          git_ "$@"       
     fi
