@@ -59,8 +59,8 @@ g() {
     else
 		  	case "$1" in
 					-pu|--pull--rebase)
-							git add -A &&
-							git commit -m "$(date)" &&
+							git add -A 
+							git commit -m "$(date)" 
 					    git_ "pl"
 							;;
 			  	*)		
