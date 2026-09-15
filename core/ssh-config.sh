@@ -124,12 +124,12 @@ node_resolve() {
             ;;
         wsl|WSL)
             TARGET_HOST="$NODE_WSL_HOST"
-            TARGET_PORT="${NODE_WSL_PORT:-22}"
+            TARGET_PORT="${NODE_WSL_PORT:-2222}"
             TARGET_USER="$NODE_WSL_USER"
             ;;
         wsl2|WSL2)
             TARGET_HOST="$NODE_WSL2_HOST"
-            TARGET_PORT="${NODE_WSL2_PORT:-22}"
+            TARGET_PORT="${NODE_WSL2_PORT:-2223}"
             TARGET_USER="$NODE_WSL2_USER"
             ;;
         o|op|oppo|OPPO)

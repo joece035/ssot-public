@@ -223,7 +223,7 @@ export TAILSCALE_IP_TERMUX=100.110.26.16
 export TAILSCALE_IP_WINDOW=100.69.181.45
 export TAILSCALE_IP_WSL=100.80.195.120
 export TAILSCALE_IP_MUMU=100.100.176.94
-export TAILSCALE_IP_OPPO=100.109.249.216
+export TAILSCALE_IP_OPPO=100.82.29.18
 export TAILSCALE_IP_WSL2=100.93.45.16
 
 # ── Dynamic Node Registry Loader (drop-in profiles from $SSOT/bootstrap/nodes/*.node.env) ──

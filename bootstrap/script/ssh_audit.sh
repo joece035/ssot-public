@@ -59,8 +59,8 @@ case "$JOE_ENV" in
         export MAIN_SYNC_DIR="$HOME/main_sync"
         export SSH_MUMU_PORT=8020
         export SSH_TERMUX_PORT=8022
-        export SSH_WSL_PORT=22
-        export SSH_WSL2_PORT=22
+        export SSH_WSL_PORT=2222
+        export SSH_WSL2_PORT=2223
         export SSH_WIN_PORT=22
         export SSH_PORT=8022
         ;;
@@ -72,8 +72,8 @@ case "$JOE_ENV" in
         export MAIN_SYNC_DIR="${MAIN_SYNC_DIR:-$HOME/main_sync}"
         export SSH_MUMU_PORT=8020
         export SSH_TERMUX_PORT=8022
-        export SSH_WSL_PORT=22
-        export SSH_WSL2_PORT=22
+        export SSH_WSL_PORT=2222
+        export SSH_WSL2_PORT=2223
         export SSH_WIN_PORT=22
         export SSH_PORT=22
         ;;
@@ -85,7 +85,8 @@ case "$JOE_ENV" in
         export MAIN_SYNC_DIR="${MAIN_SYNC_DIR:-$HOME/DESKTOP/main_sync}"
         export SSH_MUMU_PORT=8020
         export SSH_TERMUX_PORT=8022
-        export SSH_WSL_PORT=22
+        export SSH_WSL_PORT=2222
+        export SSH_WSL2_PORT=2223
         export SSH_WIN_PORT=22
         export SSH_PORT=22
         ;;
@@ -95,7 +96,8 @@ case "$JOE_ENV" in
         export MAIN_SYNC_DIR="${MAIN_SYNC_DIR:-$HOME/main_sync}"
         export SSH_MUMU_PORT=8020
         export SSH_TERMUX_PORT=8022
-        export SSH_WSL_PORT=22
+        export SSH_WSL_PORT=2222
+        export SSH_WSL2_PORT=2223
         export SSH_WIN_PORT=22
         export SSH_PORT=22
         ;;
@@ -159,11 +161,11 @@ AUTH_KEYS="${SSH_DIR}/authorized_keys"
 # กำหนดตัวแปร Node Registry จาก SSOT (00-env.sh) พร้อม Fallback ป้องกันค่าว่าง
 NODE_WSL_HOST="${NODE_WSL_HOST:-wsl}"
 NODE_WSL_USER="${NODE_WSL_USER:-usercivenz}"
-NODE_WSL_PORT="${NODE_WSL_PORT:-22}"
+NODE_WSL_PORT="${NODE_WSL_PORT:-2222}"
 
 NODE_WSL2_HOST="${NODE_WSL2_HOST:-wsl2}"
 NODE_WSL2_USER="${NODE_WSL2_USER:-joez}"
-NODE_WSL2_PORT="${NODE_WSL2_PORT:-22}"
+NODE_WSL2_PORT="${NODE_WSL2_PORT:-2223}"
 
 NODE_OPPO_HOST="${NODE_OPPO_HOST:-oppo}"
 NODE_OPPO_USER="${NODE_OPPO_USER:-u0_a88}"

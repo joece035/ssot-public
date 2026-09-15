@@ -95,7 +95,7 @@ case "$JOE_ENV" in
         export home="$HOME"
         export nexus_vault="$HOME/nexus_vault"
         export MAIN_SYNC_DIR="$HOME/main_sync"
-        export SSH_PORT=22
+        export SSH_PORT=2222
 
         ;;
     WSL2)
@@ -106,7 +106,7 @@ case "$JOE_ENV" in
         export home="$HOME"
         export nexus_vault="$HOME/nexus_vault"
         export MAIN_SYNC_DIR="$HOME/main_sync"
-        export SSH_PORT=23
+        export SSH_PORT=2223
 
         ;;
     OPPO)
@@ -143,8 +143,8 @@ esac
         export OP_DIR="${HOME}"
         export SSH_MUMU_PORT=8020
         export SSH_TERMUX_PORT=8022
-        export SSH_WSL_PORT=22
-        export SSH_WSL2_PORT=2
+        export SSH_WSL_PORT=2222
+        export SSH_WSL2_PORT=2223
         export SSH_WIN_PORT=22
 
 

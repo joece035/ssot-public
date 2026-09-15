@@ -101,7 +101,8 @@ _detect_ssh_port() {
     case "$joe_env" in
         TERMUX)   echo "8022" ;;
         MUMU)     echo "8020" ;;
-        WSL)      echo "22" ;;
+        WSL)      echo "2222" ;;
+        WSL2)     echo "2223" ;;
         *)        echo "22" ;;
     esac
 }
