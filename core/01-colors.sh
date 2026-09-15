@@ -86,7 +86,7 @@ color() { _color_render 1 "$@"; }
 #   _b  _d  _i  _u  = bold / dim / italic / underline
 # ตัวอย่าง: echo -e "$(_c 208)$(_b)text$(_r)"
 # ============================================================
-#_c() { printf '\e[38;5;%sm' "$1"; }   # color 256
+_c() { printf '\e[38;5;%sm' "$1"; }   # color 256
 _r() { printf '\e[0m'; }                # reset
 _b() { printf '\e[1m'; }                # bold
 _d() { printf '\e[2m'; }                # dim
