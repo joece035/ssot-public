@@ -12,7 +12,23 @@
 # ============================================================
 # NAVIGATION & SHORTCUTS
 # ============================================================
-alias ls='ls --color=force'
+
+
+alias ls='ls --color=auto'
+alias la='ls -A'
+alias l='ls -CF'
+
+
+
+
+
+alias dir='dir --color=auto'
+alias vdir='vdir --color=auto'
+alias grep='grep --color=auto'
+alias fgrep='fgrep --color=auto'
+alias egrep='egrep --color=auto'
+alias diff='diff --color=auto'
+alias ip='ip --color=auto'
 
 
 
@@ -115,3 +131,6 @@ alias ns='${SSOT:-$HOME/ssot}/bootstrap/nodes/node-status.sh'
 # db                 — shorthand for dashboard
 alias ssotdb='${SSOT:-$HOME/ssot}/tools/dashboard.sh'
 alias db='${SSOT:-$HOME/ssot}/tools/dashboard.sh'
+
+#ssh audit
+alias ssh-audit='bash $SSOT/bootstrap/script/ssh_audit.sh'
