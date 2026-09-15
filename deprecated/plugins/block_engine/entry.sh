@@ -36,18 +36,18 @@ _blk_source_modules() {
     if [[ -n "$_self" ]]; then
         _D="$(cd "$(dirname "$_self")" && pwd)/block"
     else
-        # Last resort: assume plugins/block_engine/block/ relative to JOE_ROOT
-        _D="${JOE_PLUGINS:-$HOME/ssot/plugins}/block_engine/block"
+        _D="${SSOT}/deprecated/plugins/block_engine/block"
     fi
-    # Export _BLOCK_ROOT so theme.sh can use it (avoids BASH_SOURCE issue in zsh)
-    # _BLOCK_ROOT must point to ssot/ root (two levels up from block_engine/)
-    _BLOCK_ROOT="$(cd "${_D}/../../.." && pwd)"   # ssot/ root (block → block_engine → plugins → ssot)
+    _BLOCK_ROOT="$(cd "${_D}/../../.." && pwd)"   # ssot/deprecated root
     export _BLOCK_ROOT
-    [[ -f "${_D}/utils.sh"    ]] && source "${_D}/utils.sh"
-    [[ -f "${_D}/layout.sh"   ]] && source "${_D}/layout.sh"
-    [[ -f "${_D}/theme.sh"    ]] && source "${_D}/theme.sh"
-    [[ -f "${_D}/renderer.sh" ]] && source "${_D}/renderer.sh"
-    [[ -f "${_D}/status.sh"   ]] && source "${_D}/status.sh"
+    local files=(
+        "${_D}/utils.sh"
+        "${_D}/layout.sh"
+        "${_D}/theme.sh"
+        "${_D}/renderer.sh"
+        "${_D}/status.sh"
+    )
+    _check_ -o -f files   # pass array name by ref — _check() unpacks it
 }
 _blk_source_modules
 
