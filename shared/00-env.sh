@@ -435,7 +435,7 @@ zsh_setup(){
 }
 
 
-
+export gh_token=-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-
 
 
 
