@@ -2,6 +2,45 @@
 # ------------------------------------------------------------
 # File: joe_functions.sh
 # ------------------------------------------------------------
+#-- git tools
+#   git_ [cmd]        — git shortcut ใน SSOT repo
+#   Sub-cmds:
+#     s | status      → git status
+#     c | commit <msg> → git commit -m
+#     a | add         → git add -A
+#     p | push        → git push origin main
+#     pl | pull       → git pull --rebase
+#     pln | pulln     → git pull --no-rebase (no rebase)
+#     d | diff        → git diff --stat
+#     l | log         → git log --oneline -10
+#     all <msg>       → add + commit + pull --rebase + push (one-shot)
+#     <other>         → pass through to git
+git_() {
+  local repo=${SSOT:-"$HOME/ssot"}
+  cd $repo &&
+  if [[ -n "$1" ]]; then
+     case "${1:-}" in
+        s|status)  git status ;;
+        c|commit)  [[ -z "${2:-}" ]] && { cn 196 b "✗ need message: git_ commit '<msg>'"; return 1; }; git commit -m "$2" ;;
+        a|add)     git add -A ;;
+        p|push)    git push origin main && cn 10 bi "DONE push" ;;
+        pl|pull)   git pull --rebase || { cn 9 b "PULL FAILED — resolve conflicts"; return 1; } ;;
+        pln|pulln) git pull --no-rebase || { cn 9 b "PULL FAILED — resolve conflicts"; return 1; } ;;
+        d|diff)    git diff --stat ;;
+        l|log)     git log --oneline -10 ;;
+        all)       git add -A && \
+                   git commit -m "${2:-$(date '+%Y-%m-%d %H:%M:%S')}" && \
+                   (git pull --rebase || { cn 9 b "PULL FAILED — resolve conflicts"; return 1; }) && \
+                   git push origin main && \
+                   cn 10 bi "DONE push" ;;
+        *)         git "$@" ;;
+     esac
+  else
+    git status
+  fi
+}
+
+
 g() {
     local repo="${SSOT:-$HOME/bashscripts}"
     [[ -d "$repo" ]] || { cn 196 b "✗ repo not found: $repo"; return 1; }
@@ -17,14 +56,11 @@ g() {
         fi
         git_ push
         return $?
-    elif (( $# == 1 )); then
-        git_ all "$1"
     else
     # มี args → ส่งต่อไป git_ (ซึ่งรู้จัก s/c/a/all/push/pull ฯลฯ)
          git_ "$@"       
     fi
 
- 
 }
 
 repository_remote_url(){
