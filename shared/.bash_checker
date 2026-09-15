@@ -228,3 +228,7 @@ _check_(){
         *) _check_usage; return 1 ;;
     esac
 }
+
+_c(){
+	_check_ "$@"
+}
