@@ -113,5 +113,5 @@ alias ns='${SSOT:-$HOME/ssot}/bootstrap/nodes/node-status.sh'
 # dashboard --compact — minimal view
 # dashboard --json   — JSON output
 # db                 — shorthand for dashboard
-alias dashboard='${SSOT:-$HOME/ssot}/tools/dashboard.sh'
+alias ssotdb='${SSOT:-$HOME/ssot}/tools/dashboard.sh'
 alias db='${SSOT:-$HOME/ssot}/tools/dashboard.sh'
