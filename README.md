@@ -10,9 +10,9 @@ Works on: **Termux** · **MuMu** · **WSL** · **Git Bash** · **AcodeX**
 # One-liner bootstrap
 curl -fsSL https://raw.githubusercontent.com/joece035/ssot-public/main/bootstrap/install.sh | bash
 
-# Or clone first, then install
+# Or clone first, then install with specific device name as $1
 git clone https://github.com/joece035/ssot-public.git ~/ssot
-bash ~/ssot/bootstrap/install.sh
+bash ~/ssot/bootstrap/install.sh 
 ```
 
 The installer will:

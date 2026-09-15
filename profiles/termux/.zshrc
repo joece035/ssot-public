@@ -4,7 +4,7 @@
 # Deployed by: Fresh_termux_fullsetup_SSOT.sh (links to ~/.zshrc)
 # Do NOT edit on Termux -- edit in WSL, Syncthing syncs it.
 # ================================================================
-
+[[ -f "$HOME/ssot/.bash_helper" ]] && source "$HOME/ssot/.bash_helper"
 # -- Terminal type (SSH sessions inherit no TERM -- micro/TUI needs this)
 export TERM="${TERM:-xterm-256color}"
 export COLORTERM="truecolor"

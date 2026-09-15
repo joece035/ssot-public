@@ -12,12 +12,7 @@ export PATH="$HOME/.local/bin:$HOME/.local/lib/openclaw/bin:$HOME/.opencode/bin:
 
 # -- Initialize color engine (must come before any tools that use it) --
 # Check if .bash_helper is executable and source it
-if [[ -x "$HOME/ssot/.bash_helper" ]]; then
-    source "$HOME/ssot/.bash_helper"
-elif [[ -f "$HOME/ssot/.bash_helper" ]]; then
-    chmod +x "$HOME/ssot/.bash_helper"
-    source "$HOME/ssot/.bash_helper"
-fi
+[[ -f "$HOME/ssot/.bash_helper" ]] && source "$HOME/ssot/.bash_helper"
 
 # -- Terminal type (micro/TUI needs this) -----------------------
 export TERM="${TERM:-xterm-256color}"
