@@ -118,7 +118,7 @@ _set_prompt() {
     PS1_+="${borde}\n"
     PS1_+="${last_status} ${env_tag} ${user_host} in ${current_dir}${git_info}\n"
     PS1_+="${borde}\n"
-    PS1_+=" $(_ps_b)$(_ps_c 198)❯$(_ps_c 208)─$(_ps_c 196)♥$(_ps_c 208)─$(_ps_c 198)❯$(_ps_r) "
+    PS1_+="»"
 
     export -n PS1 2>/dev/null || true
     PS1="$PS1_"
