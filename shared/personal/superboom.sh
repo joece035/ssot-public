@@ -94,7 +94,7 @@ bp_(){
 	 fi	
 		  l=$(cn "$_l_c" "b" "$_l")
 		  r=$(cn "$_r_c" "b" "$_r")
-		 blk=$(printf '%s %s %s\n' "$l" "$t" 
+		 blk=$(printf '%s %s %s\n' "$l" "$t") 
 	# -- render
 		local _bp_=""
 		_bp_+="$bd\n"
