@@ -108,7 +108,7 @@ link_(){
                 
                 # ตรวจสอบว่า Target ปลายทางมีอยู่จริงหรือไม่
                 if [[ -e "$f" ]]; then
-                    cn 250 b "$f -> $(cn 100 b "$file_to")"
+                    cn 250 b "$f -> $(cn 45 b "$file_to")"
                 else
                     cn 1 b "$f -> $(cn 1 b "$file_to [BROKEN]")"
                 fi

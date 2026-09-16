@@ -440,14 +440,3 @@ zsh_setup(){
 
 export gh_token=-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-
 
-export ssot_links=(
-                ["$HOME/.bashrc"]="$SSOT/profiles/$NODE_HOST/.bashrc"
-                ["$HOME/.zshrc"]="$SSOT/profiles/$NODE_HOST/.zshrc"
-                ["$HOME/.local/bin/joe"]="$SSOT/joe.sh"
-                ["$HOME/.local/bin/node-status"]="$SSOT/bootstrap/nodes/node-status.sh"
-                ["$HOME/.local/bin/env"]="$SSOT/bootstrap/templates/env"
-                ["$SSOT/.env"]="$HOME/.env"
-            )
-
-
-
