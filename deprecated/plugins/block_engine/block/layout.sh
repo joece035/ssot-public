@@ -33,37 +33,38 @@ _blk_parse_row() {
     # Cross-shell split on '|' via _split_pipe() helper (utils.sh).
     # Keeps the rest of the engine shell-agnostic.
     _split_pipe parts "$row"
-    local n=${#parts[@]}
+    set -- "${parts[@]}"
+    local n=$#
 
     case $n in
         4)
-            _parsed_eml="${parts[0]}"
-            _parsed_label="${parts[1]}"
-            _parsed_value="${parts[2]}"
-            _parsed_emr="${parts[3]}"
+            _parsed_eml="$1"
+            _parsed_label="$2"
+            _parsed_value="$3"
+            _parsed_emr="$4"
             ;;
         3)
-            if [[ -z "${parts[0]}" ]]; then
+            if [[ -z "$1" ]]; then
                 _parsed_eml=""
-                _parsed_label="${parts[1]}"
-                _parsed_value="${parts[2]}"
+                _parsed_label="$2"
+                _parsed_value="$3"
                 _parsed_emr=""
-            elif [[ -z "${parts[2]}" ]]; then
+            elif [[ -z "$3" ]]; then
                 _parsed_eml=""
-                _parsed_label="${parts[0]}"
-                _parsed_value="${parts[1]}"
+                _parsed_label="$1"
+                _parsed_value="$2"
                 _parsed_emr=""
             else
-                _parsed_eml="${parts[0]}"
-                _parsed_label="${parts[1]}"
-                _parsed_value="${parts[2]}"
+                _parsed_eml="$1"
+                _parsed_label="$2"
+                _parsed_value="$3"
                 _parsed_emr=""
             fi
             ;;
         2)
             _parsed_eml=""
-            _parsed_label="${parts[0]}"
-            _parsed_value="${parts[1]}"
+            _parsed_label="$1"
+            _parsed_value="$2"
             _parsed_emr=""
             ;;
         *)

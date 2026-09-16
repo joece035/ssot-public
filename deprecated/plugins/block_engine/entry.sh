@@ -203,7 +203,7 @@ m_animate() {
     fi
 
     local blk_width
-    blk_width=$(printf '%s' "${blk_lines[0]}" | sed 's/\x1b\[[0-9;]*[a-zA-Z]//g' | wc -c)
+    blk_width=$(printf '%s' "${blk_lines[1]:-${blk_lines[0]}}" | sed 's/\x1b\[[0-9;]*[a-zA-Z]//g' | wc -c)
     blk_width=$(( blk_width - 1 ))
 
     local max_pos=$(( term_w - blk_width - 5 ))
