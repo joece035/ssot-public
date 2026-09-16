@@ -54,7 +54,7 @@ cat << 'CHEAT'
 ║  --- Separator ---                                          ║
 ║  mid_sep       = ตัวคั่น label:value (เช่น " : ", " ⋮ ")   ║
 ║                                                         ║
-║  --- Color Specs (format: "colorname style") ---            ║
+║  --- Color Specs (format: "cnname style") ---            ║
 ║  label_c       = สี label (เช่น 'gr ""')                   ║
 ║  value_c       = สี value (เช่น 'w bi')                    ║
 ║  mid_sep_c     = สี separator                               ║
@@ -65,13 +65,13 @@ cat << 'CHEAT'
 ║  mid_frame_c   = สีเฟรม mid                                 ║
 ║                                                         ║
 ║  --- Compiled (pre-rendered) ---                            ║
-║  cc_brc   = colored random border char                      ║
-║  cc_hrc   = colored random frame char                       ║
-║  cc_ml    = colored mid-line char                           ║
-║  cc_row_fl/fr = colored row frame L/R                       ║
-║  cc_mid_fl/fr = colored mid frame L/R                       ║
-║  cc_bt    = colored top border char                         ║
-║  cc_bb    = colored bottom border char                      ║
+║  cc_brc   = cned random border char                      ║
+║  cc_hrc   = cned random frame char                       ║
+║  cc_ml    = cned mid-line char                           ║
+║  cc_row_fl/fr = cned row frame L/R                       ║
+║  cc_mid_fl/fr = cned mid frame L/R                       ║
+║  cc_bt    = cned top border char                         ║
+║  cc_bb    = cned bottom border char                      ║
 ╚══════════════════════════════════════════════════════════════╝
 
 ╔══════════════════════════════════════════════════════════════╗

@@ -3,7 +3,7 @@ _C -f "set_" "draw_"
 # --- 1. Config & Defaults ---
 _config_def() {
   # --- 1. Config & Defaults ---
-  # -- setup color mode
+  # -- setup cn mode
     set_ "COLOR_MODE"                 "yes"          # auto / manual
     set_ "BN_TITLE"                 "SUPERBOOM PATH"
     set_ "BN_TITLE_COLOR"           "11"       # ส้ม

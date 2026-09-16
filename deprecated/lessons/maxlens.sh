@@ -3,7 +3,7 @@
 # รายชื่อไฟล์ที่ต้องการดึงมาแสดง
 load_files=(
     "00-env.sh"
-    "01-colors.sh"
+    "01-cns.sh"
     "ssh-config.sh"
     "00.1-function-tools.sh"
     "09-all_block_status.sh"

@@ -7,7 +7,7 @@
 # Modules sourced from joe-block/block/:
 #   utils.sh    — constants, _blk_init, _blk_repeat_char, _blk_str_width
 #   layout.sh   — _blk_scan, _blk_build_layout  (_LAYOUT[])
-#   theme.sh    — _load_theme, _apply_color_to   (_THEME[])
+#   theme.sh    — _load_theme, _apply_cn_to   (_THEME[])
 #   renderer.sh — render_row, render_mid, render_border_top/bot
 #   status.sh   — status_new, op_profile
 #
@@ -128,7 +128,7 @@ status_board() {
     unset TERM_WIDTH 2>/dev/null
     _blk_init
 
-    # Load theme (sources block_style.sh + 01-colors.sh internally)
+    # Load theme (sources block_style.sh + 01-cns.sh internally)
     _load_theme "$style" "$offset"
 
     # Dispatch data provider — no eval, safe case statement (Priority 1)

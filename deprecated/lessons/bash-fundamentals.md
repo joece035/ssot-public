@@ -233,8 +233,8 @@ echo "name=$name  port=$port  verbose=$verbose"
 # === demo_for.sh ===
 
 # วน string list
-for color in red green blue; do
-    echo "🎨 $color"
+for cn in red green blue; do
+    echo "🎨 $cn"
 done
 
 # วน number range

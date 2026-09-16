@@ -11,15 +11,15 @@ set_(){
 # ============================================================
 _style_default(){
     local random_pick="no"
-    local color_modes_b=("no" "random" "yes")  
+    local cn_modes_b=("no" "random" "yes")  
     # ▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰  #
         set_ _data_ROWS        ""  # -- data ที่จัดเตรียมไว้
     # ▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰  #
 
     if [[ "$random_pick" = "yes" ]]; then
-        set_ BORDER_RANDOM_C    "${color_modes_b[$(( RANDOM % ${#color_modes_b[@]} ))]}"
-        set_ FRAME_RANDOM_C     "${color_modes_b[$(( RANDOM % ${#color_modes_b[@]} ))]}"
-        set_ MID_RANDOM_C       "${color_modes_b[$(( RANDOM % ${#color_modes_b[@]} ))]}"
+        set_ BORDER_RANDOM_C    "${cn_modes_b[$(( RANDOM % ${#cn_modes_b[@]} ))]}"
+        set_ FRAME_RANDOM_C     "${cn_modes_b[$(( RANDOM % ${#cn_modes_b[@]} ))]}"
+        set_ MID_RANDOM_C       "${cn_modes_b[$(( RANDOM % ${#cn_modes_b[@]} ))]}"
     else
         set_ BORDER_RANDOM_C   "random"
         set_ FRAME_RANDOM_C    "no"
@@ -43,7 +43,7 @@ _style_default(){
        set_ BOT_BORDER         "▭▮▭▮"
        set_ MD_SEP_            " : "
     
-    # -- color config (ใช้ format: '<color> <style>' ไม่ต้องมี c นำหน้า)
+    # -- cn config (ใช้ format: '<cn> <style>' ไม่ต้องมี c นำหน้า)
        set_ MID_LINE_C        'gr ""'
        set_ ROW_FRAME_C       'gr ""'
        set_ MID_FRAME_C       'gr ""'
@@ -51,8 +51,8 @@ _style_default(){
        set_ BOT_BORDER_C      'lb b'
     
     # -- label & value
-       set_ LABEL_C           '118 bi'   # -- label color
-       set_ VALUE_C           '202 bi'    # -- value color
+       set_ LABEL_C           '118 bi'   # -- label cn
+       set_ VALUE_C           '202 bi'    # -- value cn
 
     
     
@@ -62,15 +62,15 @@ _style_default(){
 # ============================================================
 _style_a(){
     local random_pick="no"
-    local color_modes_b=("no" "random" "yes")  
+    local cn_modes_b=("no" "random" "yes")  
     # ▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰  #
         set_ _data_ROWS        ""  # -- data ที่จัดเตรียมไว้
     # ▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰  #
 
     if [[ "$random_pick" = "yes" ]]; then
-        set_ BORDER_RANDOM_C    "${color_modes_b[$(( RANDOM % ${#color_modes_b[@]} ))]}"
-        set_ FRAME_RANDOM_C     "${color_modes_b[$(( RANDOM % ${#color_modes_b[@]} ))]}"
-        set_ MID_RANDOM_C       "${color_modes_b[$(( RANDOM % ${#color_modes_b[@]} ))]}"
+        set_ BORDER_RANDOM_C    "${cn_modes_b[$(( RANDOM % ${#cn_modes_b[@]} ))]}"
+        set_ FRAME_RANDOM_C     "${cn_modes_b[$(( RANDOM % ${#cn_modes_b[@]} ))]}"
+        set_ MID_RANDOM_C       "${cn_modes_b[$(( RANDOM % ${#cn_modes_b[@]} ))]}"
     else
         set_ BORDER_RANDOM_C   "yes"
         set_ FRAME_RANDOM_C    "no"
@@ -93,7 +93,7 @@ _style_a(){
     set_ TOP_BORDER         "◙"
     set_ BOT_BORDER         "◙"
     
-    # -- color config (ใช้ format: '<color> <style>' ไม่ต้องมี c นำหน้า)
+    # -- cn config (ใช้ format: '<cn> <style>' ไม่ต้องมี c นำหน้า)
     set_ MID_LINE_C        'gr ""'     # -- --- เส้นคั่นกลาง   
     set_ ROW_FRAME_C       'gr ""'
     set_ MID_FRAME_C       'gr ""'
@@ -101,22 +101,22 @@ _style_a(){
     set_ BOT_BORDER_C      'lg b'
     
     # -- label & value
-    set_ LABEL_C           'gr ""'  # -- label color
-    set_ VALUE_C           'lcr bi'    # -- value color
+    set_ LABEL_C           'gr ""'  # -- label cn
+    set_ VALUE_C           'lcr bi'    # -- value cn
 
    
 }
 _style_b(){
     local random_pick="no"
-    local color_modes_b=("no" "random" "yes")  
+    local cn_modes_b=("no" "random" "yes")  
     # ▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰  #
         set_ _data_ROWS        ""  # -- data ที่จัดเตรียมไว้
     # ▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰  #
 
     if [[ "$random_pick" = "yes" ]]; then
-        set_ BORDER_RANDOM_C    "${color_modes_b[$(( RANDOM % ${#color_modes_b[@]} ))]}"
-        set_ FRAME_RANDOM_C     "${color_modes_b[$(( RANDOM % ${#color_modes_b[@]} ))]}"
-        set_ MID_RANDOM_C       "${color_modes_b[$(( RANDOM % ${#color_modes_b[@]} ))]}"
+        set_ BORDER_RANDOM_C    "${cn_modes_b[$(( RANDOM % ${#cn_modes_b[@]} ))]}"
+        set_ FRAME_RANDOM_C     "${cn_modes_b[$(( RANDOM % ${#cn_modes_b[@]} ))]}"
+        set_ MID_RANDOM_C       "${cn_modes_b[$(( RANDOM % ${#cn_modes_b[@]} ))]}"
     else
         set_ BORDER_RANDOM_C   "random"
         set_ FRAME_RANDOM_C    "no"
@@ -142,7 +142,7 @@ _style_b(){
     set_ BOT_BORDER         "▰"
     set_ MD_SEP_            " - "
     
-    # -- color config (ใช้ format: '<color> <style>' ไม่ต้องมี c นำหน้า)
+    # -- cn config (ใช้ format: '<cn> <style>' ไม่ต้องมี c นำหน้า)
     set_ MID_LINE_C        '240 ""'
     set_ ROW_FRAME_C       '240 ""'
     set_ MID_FRAME_C       '240 ""'
@@ -150,23 +150,23 @@ _style_b(){
     set_ BOT_BORDER_C      'lb b'
     
     # -- label & value
-    set_ LABEL_C           '248 bi '   # -- label color
-    set_ VALUE_C           'lcr bi'    # -- value color
+    set_ LABEL_C           '248 bi '   # -- label cn
+    set_ VALUE_C           'lcr bi'    # -- value cn
 
     
     
 }
 _style_c(){
     local random_pick="no"
-    local color_modes_b=("no" "random" "yes")  
+    local cn_modes_b=("no" "random" "yes")  
     # ▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰  #
         set_ _data_ROWS        "op_profile"  # -- data ที่จัดเตรียมไว้
     # ▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰  #
 
     if [[ "$random_pick" = "yes" ]]; then
-        set_ BORDER_RANDOM_C    "${color_modes_b[$(( RANDOM % ${#color_modes_b[@]} ))]}"
-        set_ FRAME_RANDOM_C     "${color_modes_b[$(( RANDOM % ${#color_modes_b[@]} ))]}"
-        set_ MID_RANDOM_C       "${color_modes_b[$(( RANDOM % ${#color_modes_b[@]} ))]}"
+        set_ BORDER_RANDOM_C    "${cn_modes_b[$(( RANDOM % ${#cn_modes_b[@]} ))]}"
+        set_ FRAME_RANDOM_C     "${cn_modes_b[$(( RANDOM % ${#cn_modes_b[@]} ))]}"
+        set_ MID_RANDOM_C       "${cn_modes_b[$(( RANDOM % ${#cn_modes_b[@]} ))]}"
     else
         set_ BORDER_RANDOM_C   "random"
         set_ FRAME_RANDOM_C    "random"
@@ -192,7 +192,7 @@ _style_c(){
     set_ BOT_BORDER         "▰"
     set_ MD_SEP_            " : "
     
-    # -- color config (ใช้ format: '<color> <style>' ไม่ต้องมี c นำหน้า)
+    # -- cn config (ใช้ format: '<cn> <style>' ไม่ต้องมี c นำหน้า)
     set_ MID_LINE_C        'gr ""'
     set_ ROW_FRAME_C       'gr ""'
     set_ MID_FRAME_C       'gr ""'
@@ -200,8 +200,8 @@ _style_c(){
     set_ BOT_BORDER_C      'gr b'
     
     # -- label & value
-    set_ LABEL_C           'lg ""'   # -- label color
-    set_ VALUE_C           'ora bi'    # -- value color
+    set_ LABEL_C           'lg ""'   # -- label cn
+    set_ VALUE_C           'ora bi'    # -- value cn
 
     
 }
@@ -253,23 +253,23 @@ _style_random() {
     set_ MID_FRAME_R        "$pick_mR"
     set_ MD_SEP_            " : "
 
-    # ── 4. Random color mode (yes=rainbow, no=fixed, random=single random color) ──
-    local color_modes=("yes" "no" "random")
+    # ── 4. Random cn mode (yes=rainbow, no=fixed, random=single random cn) ──
+    local cn_modes=("yes" "no" "random")
     local frame_modes=("no" "random")
-    set_ BORDER_RANDOM_C    "${color_modes[$(( RANDOM % ${#color_modes[@]} ))]}"
+    set_ BORDER_RANDOM_C    "${cn_modes[$(( RANDOM % ${#cn_modes[@]} ))]}"
     set_ FRAME_RANDOM_C     "${frame_modes[$(( RANDOM % ${#frame_modes[@]} ))]}"
     set_ MID_RANDOM_C       "${frame_modes[$(( RANDOM % ${#frame_modes[@]} ))]}"
     set_ BORDER_RANDOM      "$pick_dot"
     set_ FRAME_RANDOM       "$pick_vL"
 
-    # ── 5. สุ่ม color scheme ──
-    local colors=("gr" "lg" "w" "lc" "lb" "lm")
+    # ── 5. สุ่ม cn scheme ──
+    local cns=("gr" "lg" "w" "lc" "lb" "lm")
     local styles_b=("b" "bi" "bl" "bd" "")
     local styles_l=("" "b" "bi" "bl")
 
-    local c_mid="${colors[$(( RANDOM % ${#colors[@]} ))]}"
-    local c_frame="${colors[$(( RANDOM % ${#colors[@]} ))]}"
-    local c_border="${colors[$(( RANDOM % ${#colors[@]} ))]}"
+    local c_mid="${cns[$(( RANDOM % ${#cns[@]} ))]}"
+    local c_frame="${cns[$(( RANDOM % ${#cns[@]} ))]}"
+    local c_border="${cns[$(( RANDOM % ${#cns[@]} ))]}"
     
     local style_b="${styles_b[$(( RANDOM % ${#styles_b[@]} ))]}"
     local style_l="${styles_l[$(( RANDOM % ${#styles_l[@]} ))]}"
@@ -279,7 +279,7 @@ _style_random() {
     set_ MID_FRAME_C       "${c_frame} ''"
     set_ TOP_BORDER_C      "${c_border} ${style_b:-''}"
     set_ BOT_BORDER_C      "${c_border} ${style_b:-''}"
-    set_ LABEL_C           "${colors[$(( RANDOM % ${#colors[@]} ))]} ${style_l:-''}"
+    set_ LABEL_C           "${cns[$(( RANDOM % ${#cns[@]} ))]} ${style_l:-''}"
     set_ VALUE_C           "w ${style_b:-''}"
     set_ MID_SEP_C         "${c_border} ${style_b:-''}"
 }

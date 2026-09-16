@@ -23,49 +23,49 @@
             v) opt_v=1 ;;
             l) opt_l=1
                if ! [[ "$OPTARG" =~ ^[0-9]+$ ]]; then
-                   color r b "❌ -l ต้องตามด้วยตัวเลข เช่น: wtf -g -l 10 pattern"
+                   cn r b "❌ -l ต้องตามด้วยตัวเลข เช่น: wtf -g -l 10 pattern"
                    return 1
                fi
                limit="$OPTARG" ;;
-            :) color r b "❌ -$OPTARG ต้องมีค่าตาม เช่น: -l 10"; return 1 ;;
-            \?) color r b "❌ flag ไม่รู้จัก: -$OPTARG  (ใช้ได้: -g -v -l N)"; return 1 ;;
+            :) cn r b "❌ -$OPTARG ต้องมีค่าตาม เช่น: -l 10"; return 1 ;;
+            \?) cn r b "❌ flag ไม่รู้จัก: -$OPTARG  (ใช้ได้: -g -v -l N)"; return 1 ;;
         esac
     done
     shift $(( OPTIND - 1 ))
 
     # ─────────────────────────────────────────────────────────────
     # MODE 3: Search — wtf -g [-v] [-l N] <pattern>
-    # Colors via `color` from 01-colors.sh (no hardcoded escapes)
+    # Colors via `cn` from 01-cns.sh (no hardcoded escapes)
     # ─────────────────────────────────────────────────────────────
     if (( opt_g )); then
         local pattern="${1:-}"
         if [[ -z "$pattern" ]]; then
-            color r b "❌ ต้องระบุ pattern: wtf -g [-v] [-l N] <pattern>"
+            cn r b "❌ ต้องระบุ pattern: wtf -g [-v] [-l N] <pattern>"
             return 1
         fi
 
         # helper: พิมพ์รายการด้วยสีจาก SSOT พร้อมตัดตาม limit
-        #   $1 = label (หัวข้อหมวด), $2 = color code (r/g/c/m/gr/...), $3.. = items
+        #   $1 = label (หัวข้อหมวด), $2 = cn code (r/g/c/m/gr/...), $3.. = items
         _wtf_limit() {
-            local label="$1"; local item_color="$2"; shift 2
+            local label="$1"; local item_cn="$2"; shift 2
             local -a items=("$@")
             local total=${#items[@]}
             local -a shown=("${items[@]}")
             if (( opt_l && limit > 0 && total > limit )); then
                 shown=("${items[@]:0:$limit}")
                 local remaining=$(( total - limit ))
-                color gr "" "   ...และอีก $remaining รายการ (เพิ่ม -l N เพื่อดูเพิ่ม)"
+                cn gr "" "   ...และอีก $remaining รายการ (เพิ่ม -l N เพื่อดูเพิ่ม)"
             fi
             if (( ${#shown[@]} > 0 )); then
-                color y b "$label"
+                cn y b "$label"
                 local item
                 for item in "${shown[@]}"; do
-                    color "$item_color" "" "   $item"
+                    cn "$item_cn" "" "   $item"
                 done
             fi
         }
 
-        color c "" "▬▬▬▬▬▬▬▬▬▬▬▬ wtf -g '$pattern' ▬▬▬▬▬▬▬▬▬▬▬▬"
+        cn c "" "▬▬▬▬▬▬▬▬▬▬▬▬ wtf -g '$pattern' ▬▬▬▬▬▬▬▬▬▬▬▬"
 
         # ── Functions ──
         local -a fn_results=()
@@ -124,23 +124,23 @@
         fi
         _wtf_limit "📦 Commands" gr "${cmd_results[@]}"
 
-        color c "" "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬"
+        cn c "" "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬"
 
         # ── Learn Mode footer (-v) ──
         if (( opt_v )); then
-            color gr "" "━━━━━━━━━━━━━━ 📖 Learn Mode ━━━━━━━━━━━━━━"
+            cn gr "" "━━━━━━━━━━━━━━ 📖 Learn Mode ━━━━━━━━━━━━━━"
             if [[ "$JOE_ENV" == "TERMUX" ]]; then
-                color gr "" "# Functions : print -l \${(ok)functions} | grep -i '$pattern'"
-                color gr "" "# Aliases   : alias | grep -i '$pattern'"
-                color gr "" "# Variables : env | grep -i '$pattern'"
-                color gr "" "# Commands  : whence -pm '*${pattern}*'"
+                cn gr "" "# Functions : print -l \${(ok)functions} | grep -i '$pattern'"
+                cn gr "" "# Aliases   : alias | grep -i '$pattern'"
+                cn gr "" "# Variables : env | grep -i '$pattern'"
+                cn gr "" "# Commands  : whence -pm '*${pattern}*'"
             else
-                color gr "" "# Functions : compgen -A function | grep -i '$pattern'"
-                color gr "" "# Aliases   : compgen -A alias | grep -i '$pattern'"
-                color gr "" "# Variables : env | grep -i '$pattern'"
-                color gr "" "# Commands  : compgen -c | grep -i '$pattern' | sort -u"
+                cn gr "" "# Functions : compgen -A function | grep -i '$pattern'"
+                cn gr "" "# Aliases   : compgen -A alias | grep -i '$pattern'"
+                cn gr "" "# Variables : env | grep -i '$pattern'"
+                cn gr "" "# Commands  : compgen -c | grep -i '$pattern' | sort -u"
             fi
-            color gr "" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            cn gr "" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         fi
         return 0
     fi
@@ -162,12 +162,12 @@
         fi
 
         if [[ ! "$varname" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
-            color r b "❌ '$varname' ไม่ใช่ชื่อตัวแปรที่ถูกต้อง"
+            cn r b "❌ '$varname' ไม่ใช่ชื่อตัวแปรที่ถูกต้อง"
             return 1
         fi
 
         if [[ ! -v "$varname" ]]; then
-            color r b "❌ ตัวแปร '$varname' ยังไม่ถูก set"
+            cn r b "❌ ตัวแปร '$varname' ยังไม่ถูก set"
             return 1
         fi
 
@@ -180,10 +180,10 @@
         fi
 
         if (( want_len )); then
-            color lg b "\${#$varname} = ${#value}"
+            cn lg b "\${#$varname} = ${#value}"
         else
-            color lg b "$varname = $value"
-            color lg n "length: ${#value}"
+            cn lg b "$varname = $value"
+            cn lg n "length: ${#value}"
         fi
         return 0
     fi
@@ -209,7 +209,7 @@
         fi
     fi
 
-    color lg b "$(declare -f "$target" 2>/dev/null)"
+    cn lg b "$(declare -f "$target" 2>/dev/null)"
 }
 wth   () {
     local target="$1"
@@ -237,7 +237,7 @@ wth   () {
             fi
             ;;
    esac         
-        color lg b "$(declare -f "$target" 2>/dev/null)"
+        cn lg b "$(declare -f "$target" 2>/dev/null)"
 }
 
 

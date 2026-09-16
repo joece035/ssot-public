@@ -52,20 +52,20 @@ functions/joe-block/
 ┌──────────────────────────────────────────────────────────────┐
 │  block/theme.sh — _load_theme()                              │
 │  ┌─────────────────────────────────────────────────────────┐ │
-│  │ 1. source 01-colors.sh (ถ้ายังไม่ loaded)             │ │
+│  │ 1. source 01-cns.sh (ถ้ายังไม่ loaded)             │ │
 │  │ 2. source 00.1-function-tools.sh (bc_(), tp())         │ │
 │  │ 3. source styles/block_style.sh                        │ │
 │  │ 4. เรียก _style_a() → set_() เขียนตัวแปร全局          │ │
 │  │ 5. harvest ตัวแปร全局 → _THEME[] associative array     │ │
-│  │ 6. _compile_theme_colors() → สร้างสีสำเร็จรูป          │ │
+│  │ 6. _compile_theme_cns() → สร้างสีสำเร็จรูป          │ │
 │  └─────────────────────────────────────────────────────────┘ │
 │                                                              │
 │  _THEME[] = {                                                │
 │    border_char, frame_char, mid_line,                        │
 │    row_frame_l/r, mid_frame_l/r,                             │
 │    top_border, bot_border, mid_sep,                          │
-│    label_c, value_c,  ← color specs                          │
-│    cc_bt, cc_bb, cc_ml, cc_row_fl/fr    ← compiled colors   │
+│    label_c, value_c,  ← cn specs                          │
+│    cc_bt, cc_bb, cc_ml, cc_row_fl/fr    ← compiled cns   │
 │  }                                                           │
 └──────────────────────────────┬───────────────────────────────┘
                                │
@@ -130,7 +130,7 @@ flowchart TD
     subgraph THEME["🎨 Theme Engine (block/theme.sh)"]
         LOAD["_load_theme()"]
         HARVEST["harvest globals → _THEME[]"]
-        COMPILE["_compile_theme_colors()"]
+        COMPILE["_compile_theme_cns()"]
     end
 
     subgraph LAYOUT["📐 Layout Engine (block/layout.sh)"]
@@ -151,7 +151,7 @@ flowchart TD
     end
 
     subgraph EXTERNAL["📦 External Dependencies"]
-        COLORS["01-colors.sh — สีทั้งหมด"]
+        COLORS["01-cns.sh — สีทั้งหมด"]
         FT["00.1-function-tools.sh — bc_(), tp()"]
     end
 
@@ -188,7 +188,7 @@ flowchart TD
 
 | ไฟล์ | ความสัมพันธ์ | หมายเหตุ |
 |------|-------------|---------|
-| `01-colors.sh` | 🔴 dependency | ต้อง loaded ก่อน — มี `color()`, `rc()`, `rc1()` |
+| `01-cns.sh` | 🔴 dependency | ต้อง loaded ก่อน — มี `cn()`, `rc()`, `rc1()` |
 | `functions/00.1-function-tools.sh` | 🟡 dependency | มี `bc_()`, `tp()` สำหรับคำนวณ offset |
 | `functions/00-fm-loader.sh` | 🟢 loader | source `block_style.sh` ตอน startup |
 | `tools/ai_block.sh` | 🔵 integration | AI status block ใช้ engine เดียวกัน |
@@ -230,8 +230,8 @@ dashboard_array "🌟|LABEL1|val1|🌟" "⭐|LABEL2|val2|⭐"
 
 | Style | Border | Mid-line | Frame | Data | Offset |
 |-------|--------|----------|-------|------|--------|
-| `default` | ▨ (random color) | = | ⟨⟩ | status_new | center |
-| `a` | ◙ (random color) | ◌ | ⇬ | status_new | tp/4 |
+| `default` | ▨ (random cn) | = | ⟨⟩ | status_new | center |
+| `a` | ◙ (random cn) | ◌ | ⇬ | status_new | tp/4 |
 | `b` | ▰ (white bold) | ▭ | ¦ | status_new | tp/2 |
-| `c` | ▰ (random color) | ▱ | \|▯ | op_profile | left |
+| `c` | ▰ (random cn) | ▱ | \|▯ | op_profile | left |
 | `random` | สุ่ม | สุ่ม | สุ่ม | status_new | สุ่ม |

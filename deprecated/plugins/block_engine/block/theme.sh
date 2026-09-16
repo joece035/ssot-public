@@ -1,10 +1,10 @@
 #!/bin/bash
 # ============================================================
-# block/theme.sh — Theme loader & color compiler
+# block/theme.sh — Theme loader & cn compiler
 # ============================================================
 # Globals written : _THEME[]  (associative array)
 #                   _BLK_STYLE_LOADED (cache flag)
-# Reads from      : block_style.sh  01-colors.sh
+# Reads from      : block_style.sh  01-cns.sh
 # No eval. Styles set globals via set_() then we harvest them.
 # ============================================================
 # _THEME keys:
@@ -20,19 +20,19 @@
 #   top_border    — top border char
 #   bot_border    — bottom border char
 #   mid_sep       — label-value separator
-#   mid_line_c    — mid line color spec
-#   row_frame_c   — row frame color spec
-#   mid_frame_c   — mid frame color spec
-#   top_border_c  — top border color spec
-#   bot_border_c  — bot border color spec
-#   label_c       — label color spec
-#   value_c       — value color spec
-#   mid_sep_c     — mid-separator color spec
-#   --- compiled color strings (ready to print) ---
+#   mid_line_c    — mid line cn spec
+#   row_frame_c   — row frame cn spec
+#   mid_frame_c   — mid frame cn spec
+#   top_border_c  — top border cn spec
+#   bot_border_c  — bot border cn spec
+#   label_c       — label cn spec
+#   value_c       — value cn spec
+#   mid_sep_c     — mid-separator cn spec
+#   --- compiled cn strings (ready to print) ---
 #   cc_ml         — compiled mid line
 #   cc_row_fl/fr  — compiled row frame L/R
 #   cc_mid_fl/fr  — compiled mid frame L/R
-#   cc_bt         — compiled top border (colored char, not repeated)
+#   cc_bt         — compiled top border (cned char, not repeated)
 #   cc_bb         — compiled bottom border
 #   cc_brc        — compiled random border char
 #   cc_hrc        — compiled random frame char
@@ -72,9 +72,9 @@ _load_theme() {
     local style="${1:-default}"
     local offset="${2:-}"
 
-    # -- Source colors first (needed by _apply_color_to)
+    # -- Source cns first (needed by _apply_cn_to)
     if [[ -z "${RESET:-}" ]]; then
-        [[ -f "${JOE_CORE}/01-colors.sh" ]] && source "${JOE_CORE}/01-colors.sh" && shopt -s expand_aliases 2>/dev/null
+        [[ -f "${JOE_CORE}/01-cns.sh" ]] && source "${JOE_CORE}/01-cns.sh" && shopt -s expand_aliases 2>/dev/null
     fi
 
     # -- Source function tools (needed by bc_() and tp() used in _style_* OFFSET calc)
@@ -126,7 +126,7 @@ _load_theme() {
     _THEME[value_c]="${VALUE_C:-w bi}"
     _THEME[mid_sep_c]="${MID_SEP_C:-lg b}"
 
-    # -- Store color palette in _THEME for reliable access in all contexts
+    # -- Store cn palette in _THEME for reliable access in all contexts
     _THEME[_pal_1]="${lr:-}"
     _THEME[_pal_2]="${lb:-}"
     _THEME[_pal_3]="${lg:-}"
@@ -136,22 +136,22 @@ _load_theme() {
     _THEME[_pal_7]="${lc:-}"
     _THEME[_pal_8]="${y:-}"
 
-    # -- Compile colored strings (call _apply_colors)
-    _compile_theme_colors
+    # -- Compile cned strings (call _apply_cns)
+    _compile_theme_cns
 }
 
 # ============================================================
-# _apply_color_to <config> <text>
-#   Safe color helper — no eval.
-#   config format: "<colorname> <style>"  e.g. 'gr ""' or 'w bi'
-#   NOTE (V3 01-colors.sh compat): block_style.sh authors use
+# _apply_cn_to <config> <text>
+#   Safe cn helper — no eval.
+#   config format: "<cnname> <style>"  e.g. 'gr ""' or 'w bi'
+#   NOTE (V3 01-cns.sh compat): block_style.sh authors use
 #     `set_ MID_LINE_C 'gr ""'`  to mean "gray, no style".
 #     The literal 2-char string `""` must be normalized to empty
-#     BEFORE calling color(), otherwise _color_render's
+#     BEFORE calling cn(), otherwise _cn_render's
 #     `[[ "$2" == "" ]]` check fails and the literal `""` gets
 #     rendered as text (extra "" line in output).
 # ============================================================
-_apply_color_to() {
+_apply_cn_to() {
     local config="${1:-gr}"
     local text="$2"
     local clr sty
@@ -161,25 +161,25 @@ _apply_color_to() {
     sty="${sty//\'/}"
     sty="${sty//\"/}"          # <-- V3 fix: strip literal double-quotes
     [[ -z "$sty" ]] && sty=''  # <-- V3 fix: ensure truly empty (0 chars)
-    color "$clr" "$sty" "$text"
+    cn "$clr" "$sty" "$text"
 }
 
 # ============================================================
-# _compile_theme_colors — pre-render colored chars into _THEME
+# _compile_theme_cns — pre-render cned chars into _THEME
 # ============================================================
-_compile_theme_colors() {
+_compile_theme_cns() {
     # Random border / frame
     _THEME[cc_brc]="$(rc b "${_THEME[border_char]}")"
     _THEME[cc_hrc]="$(rc1 "" "${_THEME[frame_char]}")"
 
     # Mid line, row frames, mid frames
-    _THEME[cc_ml]="$(_apply_color_to "${_THEME[mid_line_c]}"   "${_THEME[mid_line]}")"
-    _THEME[cc_row_fl]="$(_apply_color_to "${_THEME[row_frame_c]}" "${_THEME[row_frame_l]}")"
-    _THEME[cc_row_fr]="$(_apply_color_to "${_THEME[row_frame_c]}" "${_THEME[row_frame_r]}")"
-    _THEME[cc_mid_fl]="$(_apply_color_to "${_THEME[mid_frame_c]}" "${_THEME[mid_frame_l]}")"
-    _THEME[cc_mid_fr]="$(_apply_color_to "${_THEME[mid_frame_c]}" "${_THEME[mid_frame_r]}")"
+    _THEME[cc_ml]="$(_apply_cn_to "${_THEME[mid_line_c]}"   "${_THEME[mid_line]}")"
+    _THEME[cc_row_fl]="$(_apply_cn_to "${_THEME[row_frame_c]}" "${_THEME[row_frame_l]}")"
+    _THEME[cc_row_fr]="$(_apply_cn_to "${_THEME[row_frame_c]}" "${_THEME[row_frame_r]}")"
+    _THEME[cc_mid_fl]="$(_apply_cn_to "${_THEME[mid_frame_c]}" "${_THEME[mid_frame_l]}")"
+    _THEME[cc_mid_fr]="$(_apply_cn_to "${_THEME[mid_frame_c]}" "${_THEME[mid_frame_r]}")"
 
     # Border chars (single, will be repeated by renderer)
-    _THEME[cc_bt]="$(_apply_color_to "${_THEME[top_border_c]}" "${_THEME[top_border]}")"
-    _THEME[cc_bb]="$(_apply_color_to "${_THEME[bot_border_c]}" "${_THEME[bot_border]}")"
+    _THEME[cc_bt]="$(_apply_cn_to "${_THEME[top_border_c]}" "${_THEME[top_border]}")"
+    _THEME[cc_bb]="$(_apply_cn_to "${_THEME[bot_border_c]}" "${_THEME[bot_border]}")"
 }

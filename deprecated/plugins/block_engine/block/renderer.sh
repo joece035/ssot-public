@@ -24,7 +24,7 @@ _get_frame_chars() {
         hm_l="${_THEME[cc_hrc]}"
         hm_r="${_THEME[cc_hrc]}"
     elif [[ "${_THEME[frame_random]:-no}" == "random" ]]; then
-        # Pick ONE random color for all frame chars (reuse if already set)
+        # Pick ONE random cn for all frame chars (reuse if already set)
         if [[ -z "${_THEME[cc_rand_frame_l]:-}" ]]; then
             local -a _pal=("${_THEME[_pal_1]}" "${_THEME[_pal_2]}" "${_THEME[_pal_3]}" "${_THEME[_pal_4]}" "${_THEME[_pal_5]}" "${_THEME[_pal_6]}" "${_THEME[_pal_7]}" "${_THEME[_pal_8]}")
             local _rc="${_pal[$(( RANDOM % ${#_pal[@]} ))]}"
@@ -57,7 +57,7 @@ render_border_top() {
     local ch="${_THEME[border_char]}"
 
     if [[ "${_THEME[border_random]:-no}" == "yes" ]]; then
-        # Random color per character (rainbow)
+        # Random cn per character (rainbow)
         local plain_pattern="$(_blk_repeat_pattern "$ch" "$w")"
         local i ch_sub
         for (( i=0; i<w; i++ )); do
@@ -65,16 +65,16 @@ render_border_top() {
             border+="$(rc1 "" "$ch_sub")"
         done
     elif [[ "${_THEME[border_random]:-no}" == "random" ]]; then
-        # Pick ONE random color from palette, use for entire border (same top & bottom)
+        # Pick ONE random cn from palette, use for entire border (same top & bottom)
         local -a _pal=("${_THEME[_pal_1]}" "${_THEME[_pal_2]}" "${_THEME[_pal_3]}" "${_THEME[_pal_4]}" "${_THEME[_pal_5]}" "${_THEME[_pal_6]}" "${_THEME[_pal_7]}" "${_THEME[_pal_8]}")
         local _rc="${_pal[$(( RANDOM % ${#_pal[@]} ))]}"
         local plain; plain="$(_blk_repeat_pattern "$ch" "$w")"
         border="$(_c_apply "$_rc" "$plain")"
-        # Store for bottom border to reuse same color
+        # Store for bottom border to reuse same cn
         _THEME[cc_rand_border]="$border"
     else
         local plain; plain="$(_blk_repeat_pattern "$ch" "$w")"
-        border="$(_apply_color_to "${_THEME[top_border_c]}" "$plain")"
+        border="$(_apply_cn_to "${_THEME[top_border_c]}" "$plain")"
     fi
     echo -e "${pad}${border}"
 }
@@ -89,7 +89,7 @@ render_border_bot() {
     local ch="${_THEME[border_char]}"
 
     if [[ "${_THEME[border_random]:-no}" == "yes" ]]; then
-        # Random color per character (rainbow)
+        # Random cn per character (rainbow)
         local plain_pattern="$(_blk_repeat_pattern "$ch" "$w")"
         local i ch_sub
         for (( i=0; i<w; i++ )); do
@@ -97,7 +97,7 @@ render_border_bot() {
             border+="$(rc1 "" "$ch_sub")"
         done
     elif [[ "${_THEME[border_random]:-no}" == "random" ]]; then
-        # Reuse same random color from top border
+        # Reuse same random cn from top border
         border="${_THEME[cc_rand_border]:-}"
         # If not stored (edge case), generate fresh
         if [[ -z "$border" ]]; then
@@ -108,7 +108,7 @@ render_border_bot() {
         fi
     else
         local plain; plain="$(_blk_repeat_pattern "$ch" "$w")"
-        border="$(_apply_color_to "${_THEME[bot_border_c]}" "$plain")"
+        border="$(_apply_cn_to "${_THEME[bot_border_c]}" "$plain")"
     fi
     echo -e "${pad}${border}"
 }
@@ -126,9 +126,9 @@ render_mid() {
     local hr_l hr_r hm_l hm_r
     _get_frame_chars
 
-    # -- Measure visual width of (possibly colored) mid frame chars.
-    #    _blk_str_width strips both real ESC and literal "\e" color codes,
-    #    so the colored compiled strings measure the same as their plain chars.
+    # -- Measure visual width of (possibly cned) mid frame chars.
+    #    _blk_str_width strips both real ESC and literal "\e" cn codes,
+    #    so the cned compiled strings measure the same as their plain chars.
     local hm_l_w hm_r_w
     hm_l_w="$(_blk_str_width "$hm_l")"
     hm_r_w="$(_blk_str_width "$hm_r")"
@@ -138,13 +138,13 @@ render_mid() {
     local ml_ch="${_THEME[mid_line]:-=}"
     local mid_str; mid_str="$(_blk_repeat_pattern "$ml_ch" "$inner_w")"
 
-    # -- Apply color to mid line (random=single random color from palette)
+    # -- Apply cn to mid line (random=single random cn from palette)
     if [[ "${_THEME[mid_random]:-no}" == "random" ]]; then
         local -a _pal=("${_THEME[_pal_1]}" "${_THEME[_pal_2]}" "${_THEME[_pal_3]}" "${_THEME[_pal_4]}" "${_THEME[_pal_5]}" "${_THEME[_pal_6]}" "${_THEME[_pal_7]}" "${_THEME[_pal_8]}")
         local _rc="${_pal[$(( RANDOM % ${#_pal[@]} ))]}"
         mid_str="$(_c_apply "$_rc" "$mid_str")"
     else
-        mid_str="$(_apply_color_to "${_THEME[mid_line_c]}" "$mid_str")"
+        mid_str="$(_apply_cn_to "${_THEME[mid_line_c]}" "$mid_str")"
     fi
 
     echo -e "${pad}${hm_l}${mid_str}${hm_r}"
@@ -199,10 +199,10 @@ render_row() {
     local value_pad=$(( value_w - value_vw + V2E_GAP ))
     (( value_pad < 0 )) && value_pad=0
 
-    # -- Apply colors
-    local color_label color_value
-    color_label="$(_apply_color_to "${_THEME[label_c]}" "$label")"
-    color_value="$(_apply_color_to "${_THEME[value_c]}" "$value")"
+    # -- Apply cns
+    local cn_label cn_value
+    cn_label="$(_apply_cn_to "${_THEME[label_c]}" "$label")"
+    cn_value="$(_apply_cn_to "${_THEME[value_c]}" "$value")"
 
     # -- Assemble row string incrementally (Priority 4: no long printf)
     local row=""
@@ -211,13 +211,13 @@ render_row() {
     _pvar _tmp '%*s%s%*s' "$left_pad" '' "$eml" "$left_rem" ''
     row+="$_tmp"
 
-    row+="$color_label"
+    row+="$cn_label"
 
     _pvar _tmp '%*s' "$label_pad" ''
     row+="$_tmp"
 
     row+="$sep"
-    row+="$color_value"
+    row+="$cn_value"
 
     _pvar _tmp '%*s%*s%s%*s' "$value_pad" '' "$r_left" '' "$emr" "$r_right" ''
     row+="$_tmp"

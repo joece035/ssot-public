@@ -136,7 +136,7 @@ _blk_str_width() {
 import sys, re, unicodedata
 s = sys.argv[1]
 # strip ANSI CSI escape sequences — both real ESC (\x1b) and literal "\e"
-# (theme color codes are stored as literal \e[...m and resolved by echo -e)
+# (theme cn codes are stored as literal \e[...m and resolved by echo -e)
 s = re.sub(r'(?:\x1b|\\e)\[[0-?]*[ -/]*[@-~]', '', s)
 
 # --- tier 1: wcwidth (most accurate) ---
