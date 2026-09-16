@@ -418,6 +418,24 @@ case "${1:-}" in
         fi
         ;;
 
+    # Pubkey corrector (vault strategy: fingerprint dedup + repair + merge)
+    pubkey-audit|pubkey-fix|pubkey-collect|pubkey-sync)
+        _CORRECTOR_SCRIPT="$SSOT/bootstrap/nodes/pubkey-corrector.sh"
+        if [[ -f "$_CORRECTOR_SCRIPT" ]]; then
+            _pc_cmd="${1}"
+            shift
+            case "$_pc_cmd" in
+                pubkey-audit)   bash "$_CORRECTOR_SCRIPT" audit "$@" ;;
+                pubkey-fix)     bash "$_CORRECTOR_SCRIPT" fix-local "$@" ;;
+                pubkey-collect) bash "$_CORRECTOR_SCRIPT" collect "$@" ;;
+                pubkey-sync)    bash "$_CORRECTOR_SCRIPT" install "$@" ;;
+            esac
+        else
+            cn 196 b "❌ pubkey-corrector.sh not found"
+            exit 1
+        fi
+        ;;
+
     *)
         _banner
         echo "Usage: $(basename "$0") <command>"
@@ -436,6 +454,13 @@ case "${1:-}" in
         echo "              Decrypt → install to ~/.ssh/authorized_keys"
         echo "  pubkey-status"
         echo "              Show vault + key installation status"
+        echo ""
+        echo "Pubkey Corrector (vault strategy — fingerprint dedup + repair):"
+        echo "  pubkey-audit    Read-only check of authorized_keys"
+        echo "  pubkey-fix      Repair this node (backup + join splits + dedup + self key)"
+        echo "  pubkey-collect [--add <key>] [--from <host>] [--scan-mesh]"
+        echo "                  Merge keys into vault (default: local only)"
+        echo "  pubkey-sync     Install vault keys (fingerprint merge)"
         echo ""
         echo "Aliases: verify, check, diff, audit → status"
         echo ""
