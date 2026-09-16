@@ -27,6 +27,27 @@ _color_render() {
     local nl="$1"; shift
     local input_color="${1:-""}"
 
+    # 0. Pre-scan: extract --bg <num> from remaining args (before any shifting)
+    local bg_esc=""
+    local _args_new=()
+    local _skip_next=0
+    for _a in "$@"; do
+        if [[ $_skip_next -eq 1 ]]; then
+            if [[ "$_a" =~ ^[0-9]+$ && "$_a" -ge 0 && "$_a" -le 255 ]]; then
+                bg_esc="$(_bg "$_a")"
+            fi
+            _skip_next=0
+            continue
+        fi
+        if [[ "$_a" == "--bg" ]]; then
+            _skip_next=1
+            continue
+        fi
+        _args_new+=("$_a")
+    done
+    set -- "${_args_new[@]}"
+    input_color="${1:-""}"
+
     # 1. Resolve color
     local color_=""
     case "$input_color" in
@@ -71,10 +92,10 @@ _color_render() {
     for text in "${targets[@]}"; do
         if [[ "$input_color" =~ ^[0-9]+$ ]] && [[ "$input_color" -ge 0 ]] && [[ "$input_color" -le 255 ]]; then
             # 256-color path
-            printf "${style}$(_c "$input_color")%s$(_r)${eol}" "$text"
+            printf "${bg_esc}${style}$(_c "$input_color")%s$(_r)${eol}" "$text"
         else
             # Short-name path (V2 vars)
-            printf "%b" "${color_}${style}${text}$(_r)${eol}"
+            printf "%b" "${bg_esc}${color_}${style}${text}$(_r)${eol}"
         fi
     done
 }
@@ -96,15 +117,14 @@ color() { _color_render 1 "$@"; }
 # ตัวอย่าง: echo -e "$(_c 208)$(_b)text$(_r)"
 # ============================================================
 # foreground 256
-_fg() { printf '\033[38;5;82m' "$1"; }
-
+_fg() { printf '\033[38;5;%sm' "$1"; }
 # background 256
-_bg() { printf '\033[48;5;82m' "$1"; }
-
+_bg() { printf '\033[48;5;%sm' "$1"; }
 # reset
 r_() { printf '\033[0m'; }
 
-_c() { printf '\e[38;5;%sm' "$1"; }   # color 256
+# color 256
+_c() { printf '\e[38;5;%sm' "$1"; }
 _r() { printf '\e[0m'; }                # reset
 _b() { printf '\e[1m'; }                # bold
 _d() { printf '\e[2m'; }                # dim
