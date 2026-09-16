@@ -31,6 +31,7 @@ bk_clean(){
 
 # รายการ Symlink ทั้งหมดภายใต้การจัดการของ SSOT
 ssot_link=(
+
     "$HOME/.bashrc"
     "$HOME/.zshrc"
     "$HOME/.local/bin/joe"
@@ -75,7 +76,7 @@ link_(){
                 ["$HOME/.local/bin/node-status"]="$SSOT/bootstrap/nodes/node-status.sh"
                 ["$HOME/.local/bin/shared"]="$SSOT/tools/sync_shared.sh"
                 ["$HOME/.local/bin/env"]="$SSOT/bootstrap/templates/env"
-                ["$HOME/.env"]="$SSOT/.env"
+                ["$HOME/.env"]="$SSOT/.env.secret"
             )
 
             # 1. Clean State: บังคับลบ Target เก่าทิ้งทั้งหมดแบบ Unconditional (ลบเพื่อทำใหม่ ไม่สนสถานะเดิม)
