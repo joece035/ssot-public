@@ -332,7 +332,7 @@ find_unsource_func() {
 
     # portable: ใช้ command substitution + here-string (bash+zsh compatible)
     local _results
-    _results=$(grep -rlE "$_pat" "$search_dir" 2>/dev/null | sort)
+    _results=$(\grep -RlE "$_pat" "$search_dir" 2>/dev/null | sort)
 
     local -a matches
     matches=()
@@ -348,7 +348,7 @@ find_unsource_func() {
             return 1
             ;;
         1)
-            echo "${matches[0]}"
+            echo "${matches[1]:-${matches[0]}}"
             ;;
         *)
             echo "Found ${#matches[@]} files containing [$func_name]:" >&2

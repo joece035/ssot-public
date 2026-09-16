@@ -99,7 +99,7 @@ _check_one_func() {
         eval "$_og_glob" 2>/dev/null
         if [[ ${#_matches[@]} -eq 1 ]]; then
             # shellcheck disable=SC1090
-            source "${_matches[0]}" 2>/dev/null && _is_func_loaded "$func" && return 0
+            source "${_matches[1]:-${_matches[0]}}" 2>/dev/null && _is_func_loaded "$func" && return 0
         elif [[ ${#_matches[@]} -gt 1 ]]; then
             echo "[_check_ -f] '$func' ambiguous (${#_matches[@]} files, refusing interactive pick in script):" >&2
             printf '  - %s\n' "${_matches[@]}" >&2

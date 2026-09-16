@@ -95,7 +95,7 @@ find_unsource_func() {
             ;;
         1)
             # พบแค่ 1 ไฟล์ → return ทันที (behavior เดิม)
-            echo "${matches[0]}"
+            echo "${matches[1]:-${matches[0]}}"
             ;;
         *)
             # พบหลายไฟล์ → ให้ user เลือก

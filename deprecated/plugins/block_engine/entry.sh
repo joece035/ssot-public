@@ -139,6 +139,8 @@ status_board() {
         *)           status_new ;;
     esac
 }
+m() { status_board "$@"; }
+
 
 # ============================================================
 # m_random — PUBLIC API
