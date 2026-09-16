@@ -185,6 +185,154 @@ _check_func_safe() {
     return $overall_rc
 }
 
+# ============================================================
+# _check_compat — Dual-shell (Bash + Zsh) Compatibility Guard
+# Scans shell scripts for common Bash/Zsh portability antipatterns:
+#   1. Array 0-index: ${var[0]} -> empty in Zsh (use ${var[1]:-${var[0]}})
+#   2. read -ra -> error in Zsh
+#   3. mapfile / readarray -> Bash 4+ only
+#   4. declare -n -> unsupported in Zsh
+# Usage:
+#   _check_ -c [dir|file]
+#   _check_ --compat [dir|file]
+# ============================================================
+_check_compat() {
+    local target="${1:-${SSOT:-${repository:-$HOME/ssot}}}"
+    if [[ ! -e "$target" ]]; then
+        echo "[_check_ -c] Target not found: $target" >&2
+        return 1
+    fi
+
+    if [[ "${1:-}" == "--install-hook" || "${2:-}" == "--install-hook" ]]; then
+        local _git_dir="$target/.git"
+        [[ -f "$target" ]] && _git_dir="$(dirname "$target")/.git"
+        if [[ ! -d "$_git_dir" ]]; then
+            echo "[_check_ -c] Not a git repository: $target" >&2
+            return 1
+        fi
+        mkdir -p "$_git_dir/hooks"
+        cat > "$_git_dir/hooks/pre-commit" <<'HOOKEOF'
+#!/usr/bin/env bash
+repo_root="$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")"
+if ! typeset -f _check_compat >/dev/null 2>&1 && [[ -f "$repo_root/shared/.bash_checker" ]]; then
+    source "$repo_root/shared/.bash_checker" 2>/dev/null
+fi
+if typeset -f _check_compat >/dev/null 2>&1; then
+    _check_compat "$repo_root" || exit 1
+fi
+HOOKEOF
+        chmod +x "$_git_dir/hooks/pre-commit" 2>/dev/null
+        echo "✅ Installed pre-commit hook to: $_git_dir/hooks/pre-commit"
+        return 0
+    fi
+    echo "🔍 Scanning dual-shell (Bash + Zsh) compatibility in: $target" >&2
+
+    local -a _files=()
+    if [[ -f "$target" ]]; then
+        _files+=("$target")
+    else
+        local _raw_files
+        _raw_files=$(find "$target" -type f \( -name "*.sh" -o -name "*.bash" -o -name "*.zsh" -o -name ".*.sh" -o -name ".bash*" \) \
+            ! -path "*/.git/*" ! -path "*/node_modules/*" ! -path "*/.cache/*" 2>/dev/null | sort)
+        if [[ -n "$_raw_files" ]]; then
+            while IFS= read -r _hit; do
+                [[ -n "$_hit" ]] && _files+=("$_hit")
+            done <<< "$_raw_files"
+        fi
+    fi
+
+    local file_count="${#_files[@]}"
+    if (( file_count == 0 )); then
+        echo "✅ No shell script files found to scan."
+        return 0
+    fi
+
+    local issues=0
+    local f _c_matches line_num line_text _entry
+
+    for f in "${_files[@]}"; do
+        [[ -f "$f" ]] || continue
+
+        # 1. Array 0-index: ${var[0]} (excluding BASH_SOURCE, FUNCNAME, test_arr)
+        _c_matches=$(\grep -nE '\$\{([a-zA-Z_][a-zA-Z0-9_]*)\[0\]\}' "$f" 2>/dev/null)
+        if [[ -n "$_c_matches" ]]; then
+            while IFS= read -r _entry; do
+                [[ -z "$_entry" ]] && continue
+                line_num="${_entry%%:*}"
+                line_text="${_entry#*:}"
+                if [[ "$line_text" =~ BASH_SOURCE|FUNCNAME|test_arr ]]; then continue; fi
+                echo "⚠️  [0-INDEX] $f:$line_num"
+                echo "   Line: $line_text"
+                echo "   Risk: Evaluates to EMPTY STRING in Zsh (1-based index)"
+                echo "   Fix : Use '\${var[1]:-\${var[0]}}' or 'set -- \"\${var[@]}\"'"
+                echo ""
+                (( issues++ ))
+            done <<< "$_c_matches"
+        fi
+
+        # 2. read -ra (Bash-only flag)
+        _c_matches=$(\grep -nE '\bread[[:space:]]+-[a-zA-Z]*a[[:space:]]' "$f" 2>/dev/null)
+        if [[ -n "$_c_matches" ]]; then
+            while IFS= read -r _entry; do
+                [[ -z "$_entry" ]] && continue
+                line_num="${_entry%%:*}"
+                line_text="${_entry#*:}"
+                [[ "$line_text" =~ ^[[:space:]]*# ]] && continue
+                echo "⚠️  [READ-RA] $f:$line_num"
+                echo "   Line: $line_text"
+                echo "   Risk: Causes 'bad option: -a' error in Zsh"
+                echo "   Fix : Use 'while IFS= read -r' or '_split_pipe'"
+                echo ""
+                (( issues++ ))
+            done <<< "$_c_matches"
+        fi
+
+        # 3. mapfile / readarray (Bash 4+ only)
+        _c_matches=$(\grep -nE '^[[:space:]]*(mapfile|readarray)[[:space:]]' "$f" 2>/dev/null)
+        if [[ -n "$_c_matches" ]]; then
+            while IFS= read -r _entry; do
+                [[ -z "$_entry" ]] && continue
+                line_num="${_entry%%:*}"
+                line_text="${_entry#*:}"
+                [[ "$line_text" =~ ^[[:space:]]*# ]] && continue
+                [[ "$line_text" =~ mapfile\(\) ]] && continue
+                echo "⚠️  [MAPFILE] $f:$line_num"
+                echo "   Line: $line_text"
+                echo "   Risk: 'mapfile/readarray' is Bash 4+ only (undefined or returns 1-based array in Zsh)"
+                echo "   Fix : Use 'while IFS= read -r _l; do arr+=(\"\$_l\"); done < ...'"
+                echo ""
+                (( issues++ ))
+            done <<< "$_c_matches"
+        fi
+
+        # 4. declare -n (Nameref, Bash 4.3+ only)
+        _c_matches=$(\grep -nE '^[[:space:]]*declare[[:space:]]+-[a-zA-Z]*n[[:space:]]' "$f" 2>/dev/null)
+        if [[ -n "$_c_matches" ]]; then
+            while IFS= read -r _entry; do
+                [[ -z "$_entry" ]] && continue
+                line_num="${_entry%%:*}"
+                line_text="${_entry#*:}"
+                [[ "$line_text" =~ ^[[:space:]]*# ]] && continue
+                echo "⚠️  [NAMEREF] $f:$line_num"
+                echo "   Line: $line_text"
+                echo "   Risk: 'declare -n' (nameref) is unsupported in Zsh"
+                echo "   Fix : Use 'typeset -g', eval, or pass positional arguments"
+                echo ""
+                (( issues++ ))
+            done <<< "$_c_matches"
+        fi
+    done
+
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    if (( issues == 0 )); then
+        echo "✅ Dual-shell compatibility check passed ($file_count files scanned, 0 issues)."
+        return 0
+    else
+        echo "❌ Found $issues dual-shell portability issue(s) across $file_count files."
+        return 1
+    fi
+}
+
 _check_usage() {
     # printf is a bash builtin — zero external dependency
     printf >&2 '%s\n' \
@@ -194,6 +342,7 @@ _check_usage() {
         '  -j|--JENV    [--set|--force]      ensure JOE_ENV' \
         '  -f|--FUNCTION <func|array>... [-d dir] ensure function(s) loaded' \
         '  -p|--PKG     [-c] <pkg> [bin] ... ensure package installed' \
+        '  -c|--compat  [dir|file]           scan dual-shell (bash+zsh) compatibility traps' \
         '  -h|--help                         this help'
 }
 
@@ -223,6 +372,7 @@ _check_(){
             ;;
         -f|--FUNCTION)  _check_func_safe "$@" ;;
         -p|--PKG)       _check_pkg "$@" ;;
+        -c|--compat)    _check_compat "$@" ;;
         -h|--help|help) _check_usage; return 0 ;;
         *) _check_usage; return 1 ;;
     esac

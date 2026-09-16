@@ -18,21 +18,38 @@
 git_() {
   local repo=${SSOT:-"$HOME/ssot"}
   cd $repo &&
+  _guard_compat() {
+      if ! typeset -f _check_compat >/dev/null 2>&1 && [[ -f "$repo/shared/.bash_checker" ]]; then
+          source "$repo/shared/.bash_checker" 2>/dev/null
+      fi
+      if typeset -f _check_compat >/dev/null 2>&1; then
+          _check_compat "$repo"
+          return $?
+      fi
+      return 0
+  }
   if [[ -n "$1" ]]; then
      case "${1:-}" in
         s|status)  git status ;;
-        c|commit)  [[ -z "${2:-}" ]] && { cn 196 b "✗ need message: git_ commit '<msg>'"; return 1; }; git commit -m "$2" ;;
+        c|commit)
+            [[ -z "${2:-}" ]] && { cn 196 b "✗ need message: git_ commit '<msg>'"; return 1; }
+            _guard_compat || { cn 196 b "✗ commit aborted: fix compatibility issues first"; return 1; }
+            git commit -m "$2"
+            ;;
         a|add)     git add -A ;;
         p|push)    git push origin main && cn 10 bi "DONE push" ;;
         pl|pull)   git pull --rebase || { cn 9 b "PULL FAILED — resolve conflicts"; return 1; } ;;
         pln|pulln) git pull --no-rebase || { cn 9 b "PULL FAILED — resolve conflicts"; return 1; } ;;
         d|diff)    git diff --stat ;;
         l|log)     git log --oneline -10 ;;
-        all)       git add -A && \
-                   git commit -m "${2:-$(date '+%Y-%m-%d %H:%M:%S')}" && \
-                   (git pull --rebase || { cn 9 b "PULL FAILED — resolve conflicts"; return 1; }) && \
-                   git push origin main && \
-                   cn 10 bi "DONE push" ;;
+        all)
+            _guard_compat || { cn 196 b "✗ commit aborted: fix compatibility issues first"; return 1; }
+            git add -A && \
+            git commit -m "${2:-$(date '+%Y-%m-%d %H:%M:%S')}" && \
+            (git pull --rebase || { cn 9 b "PULL FAILED — resolve conflicts"; return 1; }) && \
+            git push origin main && \
+            cn 10 bi "DONE push"
+            ;;
         *)         git "$@" ;;
      esac
   else
