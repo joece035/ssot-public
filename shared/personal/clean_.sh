@@ -29,65 +29,105 @@ bk_clean(){
 		done	
 }
 
-link_check(){
+# รายการ Symlink ทั้งหมดภายใต้การจัดการของ SSOT
+ssot_link=(
+    "$HOME/.bashrc"
+    "$HOME/.zshrc"
+    "$HOME/.local/bin/joe"
+    "$HOME/.local/bin/node-status"
+    "$HOME/.local/bin/env"
+    "$SSOT/.env"
+)
 
+link_check(){
     for f in "${ssot_link[@]}"; do
-        local link_to=$(readlink $f)
-        if [[ -L $f ]]; then
-            cn 250 b "$f -> $(cn lg "" "$link_to")"
+        if [[ -L "$f" ]]; then
+            local link_to
+            link_to=$(readlink "$f")
+            if [[ -e "$f" ]]; then
+                cn 250 b "$f -> $(cn lg "" "$link_to")"
+            else
+                cn 1 b "$f -> $(cn 1 "" "$link_to [BROKEN]")"
+            fi
         else
             cn 1 b "$f not a symlink"
         fi
     done
-    
 }
 
-
-
-
 link_(){
-
     case "$1" in
-        -r|relink) 
-            for f in "${ssot_link[@]}"; do
-               if [[ -f "$f" ]]; then
-                    rm -f "$f" && cn 250 b "remove $f"
-               else
-                    cn 1 b "$f not found"
-               fi
+        -r|relink)
+            # ตรวจสอบความพร้อมของ Base Environment
+            if [[ -z "${SSOT:-}" || -z "${NODE_HOST:-}" ]]; then
+                cn 1 b "SSOT or NODE_HOST variable is not defined"
+                return 1
+            fi
+
+            # แมปปิ้ง Target -> Source ตามมาตรฐาน SSOT Infrastructure
+            local -A links=(
+                ["$HOME/.bashrc"]="$SSOT/profiles/$NODE_HOST/.bashrc"
+                ["$HOME/.zshrc"]="$SSOT/profiles/$NODE_HOST/.zshrc"
+                ["$HOME/.local/bin/joe"]="$SSOT/joe.sh"
+                ["$HOME/.local/bin/node-status"]="$SSOT/bootstrap/nodes/node-status.sh"
+                ["$HOME/.local/bin/env"]="$SSOT/bootstrap/templates/env"
+                ["$SSOT/.env"]="$HOME/.env"
+            )
+
+            # 1. Clean State: บังคับลบ Target เก่าทิ้งทั้งหมดแบบ Unconditional (ลบเพื่อทำใหม่ ไม่สนสถานะเดิม)
+            for target in "${!links[@]}"; do
+                rm -rf "$target"
+                cn 250 b "cleaned: $target"
             done
 
-            ln -sf "$SSOT/profiles/$NODE_HOST/.bashrc" "$HOME/.bashrc" && cn lg b "done symlink $SSOT/profiles/$NODE_HOST/.bashrc -> $HOME/.bashrc"
-            ln -sf "$SSOT/profiles/$NODE_HOST/.zshrc" "$HOME/.zshrc" && cn lg b "done symlink $SSOT/profiles/$NODE_HOST/.zshrc -> $HOME/.zshrc"
-            ln -sf "$SSOT/joe.sh" "$HOME/.local/bin/joe" && cn lg b "done symlink $SSOT/joe.sh -> $HOME/.local/bin/joe"
-            ln -sf "$SSOT/bootstrap/nodes/node-status.sh" "$HOME/.local/bin/node-status" && cn lg b "done symlink $SSOT/bootstrap/nodes/node-status.sh -> $HOME/.local/bin/node-status"
-            ln -sf "$SSOT/bootstrap/templates/env" "$HOME/.local/bin/env" && cn lg b "done symlink $SSOT/bootstrap/templates/env -> $HOME/.local/bin/env"
-            ln -sf "$SSOT/.env" "$HOME/.env" && cn lg b "done symlink $SSOT/.env -> $HOME/.env"
-            ;;
-        -c|check)
-                local directory="$2"
-                local count=0
-                for f in $(find "$directory" -maxdepth 1 -type l 2>/dev/null); do   
-                    local file_to=$(readlink "$f")
-                    if [[ $? -eq 0 ]]; then   
-                        cn 250 b "$f -> $(cn 100 b "$file_to")" 
-                        (( count++ ))
-                    fi
-                done
-                if [ $count -eq 0 ]; then
-                    echo "No links found in $directory"
+            # 2. ป้องกันกรณีไดเรกทอรีปลายทางยังไม่ถูกสร้าง
+            mkdir -p "$HOME/.local/bin"
+
+            # 3. Re-link ใหม่ทั้งหมดจาก Clean State
+            for target in "${!links[@]}"; do
+                local source="${links[$target]}"
+                if [[ -e "$source" ]]; then
+                    ln -sf "$source" "$target" && cn lg b "done symlink $source -> $target"
                 else
-                    echo "Total links: $count"
+                    cn 1 b "source not found: $source"
                 fi
+            done
+            ;;
+
+        -c|check)
+            local directory="$2"
+            if [[ -z "$directory" || ! -d "$directory" ]]; then
+                cn 1 b "Error: Please specify a valid directory. (e.g. link_ check /path/to/dir)"
+                return 1
+            fi
+
+            local count=0
+            while IFS= read -r -d '' f; do
+                local file_to
+                file_to=$(readlink "$f")
+                
+                # ตรวจสอบว่า Target ปลายทางมีอยู่จริงหรือไม่
+                if [[ -e "$f" ]]; then
+                    cn 250 b "$f -> $(cn 100 b "$file_to")"
+                else
+                    cn 1 b "$f -> $(cn 1 b "$file_to [BROKEN]")"
+                fi
+                (( count++ ))
+            done < <(find "$directory" -maxdepth 1 -type l -print0 2>/dev/null)
+
+            if [[ $count -eq 0 ]]; then
+                echo "No links found in $directory"
+            else
+                echo "Total links: $count"
+            fi
             ;;
 
         -s|--show|-ssot|--ssot)  
             link_check
             ;;
 
-        *) echo "$0 -r|relink| -c|check <directory> -s|--show|-ssot|--ssot"
+        *) 
+            echo "Usage: ${FUNCNAME[0]} {-r|relink | -c|check <directory> | -s|--show|-ssot|--ssot}"
             ;;
     esac
 }
-
-
