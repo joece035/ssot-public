@@ -260,7 +260,7 @@ HOOKEOF
                 [[ -z "$_entry" ]] && continue
                 line_num="${_entry%%:*}"
                 line_text="${_entry#*:}"
-                if [[ "$line_text" =~ BASH_SOURCE|FUNCNAME|test_arr ]]; then continue; fi
+                case "$line_text" in *BASH_SOURCE*|*FUNCNAME*|*test_arr*) continue ;; esac
                 echo "⚠️  [0-INDEX] $f:$line_num"
                 echo "   Line: $line_text"
                 echo "   Risk: Evaluates to EMPTY STRING in Zsh (1-based index)"
@@ -277,7 +277,7 @@ HOOKEOF
                 [[ -z "$_entry" ]] && continue
                 line_num="${_entry%%:*}"
                 line_text="${_entry#*:}"
-                [[ "$line_text" =~ ^[[:space:]]*# ]] && continue
+                case "$line_text" in [[:space:]]#*|\#*) continue ;; esac
                 echo "⚠️  [READ-RA] $f:$line_num"
                 echo "   Line: $line_text"
                 echo "   Risk: Causes 'bad option: -a' error in Zsh"
@@ -294,8 +294,8 @@ HOOKEOF
                 [[ -z "$_entry" ]] && continue
                 line_num="${_entry%%:*}"
                 line_text="${_entry#*:}"
-                [[ "$line_text" =~ ^[[:space:]]*# ]] && continue
-                [[ "$line_text" =~ mapfile\(\) ]] && continue
+                case "$line_text" in [[:space:]]#*|\#*) continue ;; esac
+                case "$line_text" in *'mapfile()'*) continue ;; esac
                 echo "⚠️  [MAPFILE] $f:$line_num"
                 echo "   Line: $line_text"
                 echo "   Risk: 'mapfile/readarray' is Bash 4+ only (undefined or returns 1-based array in Zsh)"
@@ -312,7 +312,7 @@ HOOKEOF
                 [[ -z "$_entry" ]] && continue
                 line_num="${_entry%%:*}"
                 line_text="${_entry#*:}"
-                [[ "$line_text" =~ ^[[:space:]]*# ]] && continue
+                case "$line_text" in [[:space:]]#*|\#*) continue ;; esac
                 echo "⚠️  [NAMEREF] $f:$line_num"
                 echo "   Line: $line_text"
                 echo "   Risk: 'declare -n' (nameref) is unsupported in Zsh"
