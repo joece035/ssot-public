@@ -35,8 +35,10 @@ ssot_link=(
     "$HOME/.zshrc"
     "$HOME/.local/bin/joe"
     "$HOME/.local/bin/node-status"
+    "$HOME/.local/bin/shared"
     "$HOME/.local/bin/env"
-    "$SSOT/.env"
+    "$HOME/.env"
+
 )
 
 link_check(){
@@ -71,8 +73,9 @@ link_(){
                 ["$HOME/.zshrc"]="$SSOT/profiles/$NODE_HOST/.zshrc"
                 ["$HOME/.local/bin/joe"]="$SSOT/joe.sh"
                 ["$HOME/.local/bin/node-status"]="$SSOT/bootstrap/nodes/node-status.sh"
+                ["$HOME/.local/bin/shared"]="$SSOT/tools/sync_shared.sh"
                 ["$HOME/.local/bin/env"]="$SSOT/bootstrap/templates/env"
-                ["$SSOT/.env"]="$HOME/.env"
+                ["$HOME/.env""]="$SSOT/.env"
             )
 
             # 1. Clean State: บังคับลบ Target เก่าทิ้งทั้งหมดแบบ Unconditional (ลบเพื่อทำใหม่ ไม่สนสถานะเดิม)
