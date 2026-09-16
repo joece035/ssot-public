@@ -1,7 +1,7 @@
 #!/bin/bash
 _C -f "set_" "draw_"
 # --- 1. Config & Defaults ---
- config_def() {
+_config_def() {
   # --- 1. Config & Defaults ---
   # -- setup color mode
     set_ "COLOR_MODE"                 "yes"          # auto / manual

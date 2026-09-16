@@ -396,46 +396,7 @@ case "$JOE_ENV" in
         ;;
 esac
 #-- Zshshell-setup
-zsh_setup(){
-    local JOE_ENV=${1:-$JOE_ENV} #-- TERMUX || MUMU
-    local zsh_path="${SSOT:-$HOME/ssot}/profiles/${device}/.zshrc"
-        case "$JOE_ENV" in
-            TERMUX|termux)
-                    if  [[ -f "$HOME/.zshrc" ]]; then
-                        mv "$HOME/.zshrc" "$HOME/.zshrcbk_by_setup" &&
-                        cn 10 bi "done backup .zshrc" &&
-                        #rm -f "$HOME/.zshrc" && cn 10 bi "deleted .zshrc" &&
-                        ln -s "${zsh_path}" "$HOME/.zshrc" &&
-                        [[ -f "$HOME/.zshrc" ]]&&
-                        c 10 bi "Done Symlink "${zsh_path}"";c 45 b "-->>";cn 198 b " ~/.zshrc"
-                    else
-                        ln -s ""${zsh_path}"" "$HOME/.zshrc" &&
-                        [[ -f "$HOME/.zshrc" ]]&&
-                        c 10 bi "Done Symlink "${zsh_path}"";c 45 b "-->>";cn 198 b " ~/.zshrc"
-                    fi
-                    ;;
-            MUMU|mumu)
-                    if  [[ -f "$HOME/.zshrc" ]]; then
-                        mv "$HOME/.zshrc" "$HOME/.zshrcbk_by_setup" &&
-                        cn 10 bi "done backup .zshrc" &&
-                        #rm -f "$HOME/.zshrc" && cn 10 bi "deleted .zshrc" &&
-                        ln -s "${zsh_path}" "$HOME/.zshrc" &&
-                        [[ -f "$HOME/.zshrc" ]]&&
-                        c 10 bi "Done Symlink "${zsh_path}"";c 45 b "-->>";cn 198 b " ~/.zshrc"
-                    else
-                        ln -s ""${zsh_path}"" "$HOME/.zshrc" &&
-                        [[ -f "$HOME/.zshrc" ]]&&
-                        c 10 bi "Done Symlink "${zsh_path}"";c 45 b "-->>";cn 198 b " ~/.zshrc"
-                    fi
-                    ;;
-            *)
-                    cn y b "้run zsh_setup <TERMUX or MUMU>"
-                    return 0
-                    ;;
-        esac
 
-
-}
 
 
 export gh_token=-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-
