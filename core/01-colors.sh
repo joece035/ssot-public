@@ -14,6 +14,15 @@
 #   →  ON | WARN  (สีละท่อน ในบรรทัดเดียว)
 # NOTE: ชื่อ cn (ไม่ใช่ cp) เพราะ cp ชนกับคำสั่งจริงของระบบ
 # ============================================================
+# foreground
+#\033[38;5;82m
+
+# background
+#\033[48;5;82m
+
+# reset
+#\033[0m
+
 _color_render() {
     local nl="$1"; shift
     local input_color="${1:-""}"
@@ -86,6 +95,15 @@ color() { _color_render 1 "$@"; }
 #   _b  _d  _i  _u  = bold / dim / italic / underline
 # ตัวอย่าง: echo -e "$(_c 208)$(_b)text$(_r)"
 # ============================================================
+# foreground 256
+_fg() { printf '\033[38;5;82m' "$1"; }
+
+# background 256
+_bg() { printf '\033[48;5;82m' "$1"; }
+
+# reset
+r_() { printf '\033[0m'; }
+
 _c() { printf '\e[38;5;%sm' "$1"; }   # color 256
 _r() { printf '\e[0m'; }                # reset
 _b() { printf '\e[1m'; }                # bold
@@ -467,6 +485,6 @@ Rcc() {
     done
 }
 draw_() {
-   printf "%*s" "$2" "" | sed "s/ /$1/g"
+   printf "%*s\n" "$2" "" | sed "s/ /$1/g"
 }
 alias d_='draw_'
