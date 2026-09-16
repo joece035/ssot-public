@@ -113,7 +113,7 @@ dashboard_array() {
 #     m -500         → default style, shifted right
 #     m a -500       → style_a, shifted right
 # ============================================================
-m() {
+status_board() {
     local arg1="${1:-}" arg2="${2:-}"
     local style="default" offset=""
 
