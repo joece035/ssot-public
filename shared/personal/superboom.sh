@@ -74,11 +74,11 @@ bp_(){
 		local _bd_c=240
 		local _l_c=240
 		local _r_c=240
-		local text_c=245
+		local text_c=171
 	# -- apply color and  -- sketup object
 		
 		local _bd="$(d_ "$_b" "$_w")"
-		local t=$(cn "$text_c" "b" "$text")
+		local t=$(cn "$text_c" "b" --bg 245 "$text")
 	# -- random or no
 		local bd l r blk
 	 if [[ -n "$random" || "$random" == "1" ]]; then
