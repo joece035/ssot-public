@@ -466,3 +466,7 @@ Rcc() {
         rc "$style" "$char"
     done
 }
+draw_() {
+   printf "%*s" "$2" "" | sed "s/ /$1/g"
+}
+alias d_='draw_'
