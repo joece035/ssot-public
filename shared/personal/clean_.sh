@@ -40,9 +40,10 @@ ssot_link=(
 )
 
 link_check(){
+    local link_to
     for f in "${ssot_link[@]}"; do
         if [[ -L "$f" ]]; then
-            local link_to
+            
             link_to=$(readlink "$f")
             if [[ -e "$f" ]]; then
                 cn 250 b "$f -> $(cn lg "" "$link_to")"
@@ -96,6 +97,7 @@ link_(){
 
         -c|check)
             local directory="$2"
+            local file_to
             if [[ -z "$directory" || ! -d "$directory" ]]; then
                 cn 1 b "Error: Please specify a valid directory. (e.g. link_ check /path/to/dir)"
                 return 1
@@ -103,8 +105,8 @@ link_(){
 
             local count=0
             while IFS= read -r -d '' f; do
-                local file_to
-                file_to=$(readlink "$f")
+                
+                file_to=$(readlink "$f" 2>/dev/null)
                 
                 # ตรวจสอบว่า Target ปลายทางมีอยู่จริงหรือไม่
                 if [[ -e "$f" ]]; then
