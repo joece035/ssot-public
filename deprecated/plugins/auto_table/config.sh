@@ -1,4 +1,5 @@
 #!/bin/bash
+_C -f "set_" "draw_"
 # --- 1. Config & Defaults ---
  config_def() {
   # --- 1. Config & Defaults ---
