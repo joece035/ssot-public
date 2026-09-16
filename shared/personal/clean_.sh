@@ -30,31 +30,32 @@ bk_clean(){
 }
 
 # รายการ Symlink ทั้งหมดภายใต้การจัดการของ SSOT
+SSOT="${SSOT:-$HOME/ssot}"
 ssot_link=(
-
     "$HOME/.bashrc"
     "$HOME/.zshrc"
     "$HOME/.local/bin/joe"
     "$HOME/.local/bin/node-status"
     "$HOME/.local/bin/shared"
     "$HOME/.local/bin/env"
-    "$HOME/.env"
-
+    "$SSOT/.env"
+    "$SSOT/.env.secret"
 )
 
 link_check(){
-    local link_to
+    local link_to=""
     for f in "${ssot_link[@]}"; do
         if [[ -L "$f" ]]; then
-            
-            link_to=$(readlink "$f")
+            link_to=$(readlink "$f" 2>/dev/null)
             if [[ -e "$f" ]]; then
                 cn 250 b "$f -> $(cn lg "" "$link_to")"
             else
                 cn 1 b "$f -> $(cn 1 "" "$link_to [BROKEN]")"
             fi
+        elif [[ -e "$f" ]]; then
+            cn 214 b "$f not a symlink (regular file)"
         else
-            cn 1 b "$f not a symlink"
+            cn 240 b "$f not found"
         fi
     done
 }
@@ -63,26 +64,34 @@ link_(){
     case "$1" in
         -r|relink)
             # ตรวจสอบความพร้อมของ Base Environment
-            if [[ -z "${SSOT:-}" || -z "${NODE_HOST:-}" ]]; then
-                cn 1 b "SSOT or NODE_HOST variable is not defined"
+            local ssot_dir="${SSOT:-$HOME/ssot}"
+            local node_host="${NODE_HOST:-$(echo "${JOE_ENV:-wsl2}" | tr '[:upper:]' '[:lower:]')}"
+
+            if [[ ! -d "$ssot_dir" ]]; then
+                cn 1 b "SSOT directory not found: $ssot_dir"
                 return 1
             fi
 
-            # แมปปิ้ง Target -> Source ตามมาตรฐาน SSOT Infrastructure
+            # แมปปิ้ง Target (Symlink) -> Source (ไฟล์ต้นทาง) ตามมาตรฐาน SSOT Infrastructure
             local -A links=(
-                ["$HOME/.bashrc"]="$SSOT/profiles/$NODE_HOST/.bashrc"
-                ["$HOME/.zshrc"]="$SSOT/profiles/$NODE_HOST/.zshrc"
-                ["$HOME/.local/bin/joe"]="$SSOT/joe.sh"
-                ["$HOME/.local/bin/node-status"]="$SSOT/bootstrap/nodes/node-status.sh"
-                ["$HOME/.local/bin/shared"]="$SSOT/tools/sync_shared.sh"
-                ["$HOME/.local/bin/env"]="$SSOT/bootstrap/templates/env"
-                ["$HOME/.env"]="$SSOT/.env.secret"
+                ["$HOME/.bashrc"]="$ssot_dir/profiles/$node_host/.bashrc"
+                ["$HOME/.zshrc"]="$ssot_dir/profiles/$node_host/.zshrc"
+                ["$HOME/.local/bin/joe"]="$ssot_dir/joe.sh"
+                ["$HOME/.local/bin/node-status"]="$ssot_dir/bootstrap/nodes/node-status.sh"
+                ["$HOME/.local/bin/shared"]="$ssot_dir/tools/sync_shared.sh"
+                ["$HOME/.local/bin/env"]="$ssot_dir/bootstrap/templates/env"
+                ["$ssot_dir/.env"]="$HOME/.env"
+                ["$ssot_dir/.env.secret"]="$HOME/.env.secret"
             )
 
-            # 1. Clean State: บังคับลบ Target เก่าทิ้งทั้งหมดแบบ Unconditional (ลบเพื่อทำใหม่ ไม่สนสถานะเดิม)
+            # 1. Clean State: บังคับลบเฉพาะ Target ที่เป็น Symlink เก่าทิ้งเพื่อเตรียมสร้างใหม่
             for target in "${!links[@]}"; do
-                rm -rf "$target"
-                cn 250 b "cleaned: $target"
+                if [[ -L "$target" ]]; then
+                    rm -f "$target"
+                    cn 250 b "cleaned symlink: $target"
+                elif [[ -e "$target" ]]; then
+                    cn 214 b "skip non-symlink (preserving file): $target"
+                fi
             done
 
             # 2. ป้องกันกรณีไดเรกทอรีปลายทางยังไม่ถูกสร้าง
@@ -101,7 +110,7 @@ link_(){
 
         -c|check)
             local directory="$2"
-            local file_to
+            local file_to=""
             if [[ -z "$directory" || ! -d "$directory" ]]; then
                 cn 1 b "Error: Please specify a valid directory. (e.g. link_ check /path/to/dir)"
                 return 1
@@ -109,7 +118,6 @@ link_(){
 
             local count=0
             while IFS= read -r -d '' f; do
-                
                 file_to=$(readlink "$f" 2>/dev/null)
                 
                 # ตรวจสอบว่า Target ปลายทางมีอยู่จริงหรือไม่
@@ -133,7 +141,7 @@ link_(){
             ;;
 
         *) 
-            echo "Usage: ${FUNCNAME[0]} {-r|relink | -c|check <directory> | -s|--show|-ssot|--ssot}"
+            echo "Usage: ${FUNCNAME[0]:-link_} {-r|relink | -c|check <directory> | -s|--show|-ssot|--ssot}"
             ;;
     esac
 }
