@@ -327,7 +327,8 @@ find_unsource_func() {
     echo "Searching for function [$func_name] in [$search_dir]..." >&2
 
     # เก็บ pattern ใน variable (หลีกเลี่ยงปัญหา quote ใน zsh)
-    local _pat="(^[[:space:]]*(function[[:space:]]+${func_name}|${func_name}[[:space:]]*\\(\\)))"
+    # word-boundary: function name must end at space, '(' or EOL (prevents over-matching short names like 'm')
+    local _pat="(^[[:space:]]*(function[[:space:]]+${func_name}([[:space:](]|$)|${func_name}[[:space:]]*\\(\\)))"
 
     # portable: ใช้ command substitution + here-string (bash+zsh compatible)
     local _results

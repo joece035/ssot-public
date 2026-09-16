@@ -83,7 +83,7 @@ _check_one_func() {
     # non-interactive: single-match auto-source only, multi-match = fail (no picker)
     # pure-bash: no grep/find — uses globstar (bash 4+) + [[ =~ ]] builtin regex
     if [[ -n "$context" && -d "$context" ]]; then
-        local -a _m=()
+        local -a _matches=()
         local _f _line _og_null _og_glob
         _og_null=$(shopt -p nullglob 2>/dev/null)
         _og_glob=$(shopt -p globstar 2>/dev/null)
@@ -92,17 +92,17 @@ _check_one_func() {
         for _f in "$context"/**/*.sh "$context"/**/*.bash "$context"/**/*.zsh; do
             [[ -f "$_f" ]] || continue
             while IFS= read -r _line; do
-                if [[ "$_line" =~ $_pat ]]; then _m+=("$_f"); break; fi
+                if [[ "$_line" =~ $_pat ]]; then _matches+=("$_f"); break; fi
             done < "$_f"
         done
         eval "$_og_null" 2>/dev/null
         eval "$_og_glob" 2>/dev/null
-        if [[ ${#_m[@]} -eq 1 ]]; then
+        if [[ ${#_matches[@]} -eq 1 ]]; then
             # shellcheck disable=SC1090
-            source "${_m[0]}" 2>/dev/null && _is_func_loaded "$func" && return 0
-        elif [[ ${#_m[@]} -gt 1 ]]; then
-            echo "[_check_ -f] '$func' ambiguous (${#_m[@]} files, refusing interactive pick in script):" >&2
-            printf '  - %s\n' "${_m[@]}" >&2
+            source "${_matches[0]}" 2>/dev/null && _is_func_loaded "$func" && return 0
+        elif [[ ${#_matches[@]} -gt 1 ]]; then
+            echo "[_check_ -f] '$func' ambiguous (${#_matches[@]} files, refusing interactive pick in script):" >&2
+            printf '  - %s\n' "${_matches[@]}" >&2
             return 1
         fi
     fi
@@ -116,7 +116,6 @@ _check_one_func() {
     echo "[_check_ -f] '$func' not loaded, cannot auto-source non-interactively" >&2
     return 1
 }
-
 _check_func_safe() {
     if [[ $# -eq 0 ]]; then
         echo "[_check_ -f] no function name provided" >&2
