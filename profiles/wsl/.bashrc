@@ -17,7 +17,6 @@ shopt -s checkwinsize
 if [[ $- == *i* && -f $HOME/.local/share/blesh/ble.sh ]]; then
     [[ ${BLE_VERSION-} ]] || source $HOME/.local/share/blesh/ble.sh --attach=none
 fi
-_check -f "$HOME/.local/share/blesh/ble.sh" "source"
 # ── 3. NVM & COMPLETIONS (MUST come BEFORE .env) ──
 # .env reads NVM_DIR to find node path — needs NVM init first
 export NVM_DIR="$HOME/.nvm"
@@ -84,5 +83,4 @@ export PATH="$HOME/.local/bin:$PATH"
 
 export TERM=xterm-256color
 
-source -- $HOME/.local/share/blesh/ble.sh
 [ -t 0 ] && stty sane 2>/dev/null || true
