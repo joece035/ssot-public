@@ -69,7 +69,7 @@ _set_prompt() {
     fi
     # ─────────────────────────────────────────────────────────────
 
-    local last_status_raw="▏▎▍▌▋▊▉█"
+    local last_status_raw='(ﾉ◕ヮ◕)ﾉ*:･ﾟ✧'
     local last_status
     if [ $exit_code -eq 0 ]; then
         last_status="$(_ps_b)$(_ps_c 46)${last_status_raw}$(_ps_r)"
