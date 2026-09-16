@@ -58,3 +58,49 @@ lgrn(){
     rn_lgr "$@"
 }
 
+bp_(){
+
+	# -- text
+		local text="${1:-$JOE_ENV}" 
+		local lens_="${#text}"
+	# -- dynamic width & object
+		local _w=$(( 2+lens_+2 ))
+		local _l='│' 
+		local _r='│'
+		local _b='─'
+
+		# -- color configuration
+		local random=1 
+		local _bd_c=240
+		local _l_c=240
+		local _r_c=240
+		local text_c=245
+	# -- apply color and  -- sketup object
+		
+		local _bd="$(d_ "$_b" "$_w")"
+		local t=$(cn "$text_c" "b" "$text")
+	# -- random or no
+		local bd l r blk
+	 if [[ -n "$random" || "$random" == "1" ]]; then
+	 	 bd=$(rc "b" "$_bd")
+	 	 #lr=$(rc "b" "$_l")
+		  #r=$(cn "b" "$_r")
+		 #blk=$(printf '%s %s %s\n' "$lr" "$t" "$lr")
+	 else	 
+		 bd=$(cn "$_bd_c" "b" "$_bd")
+		  #l=$(cn "$_l_c" "b" "$_l")
+	#	  r=$(cn "$_r_c" "b" "$_r")
+		 #blk=$(printf '%s %s %s\n' "$l" "$t" "$r")
+	 fi	
+		  l=$(cn "$_l_c" "b" "$_l")
+		  r=$(cn "$_r_c" "b" "$_r")
+		 blk=$(printf '%s %s %s\n' "$l" "$t" 
+	# -- render
+		local _bp_=""
+		_bp_+="$bd\n"
+		_bp_+="$blk\n"
+		_bp_+="$bd"
+		
+		echo -e "$_bp_"
+	  block_prompt="$_bp_"
+}
