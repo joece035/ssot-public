@@ -8,23 +8,34 @@ OVERLINE=$'\u203E'      # ขอบบน
 MID_LINE=$'\u2500'      # กลางบรรทัด (Standard Box)
 BOT_LINE=$'\u2581'      # ขอบล่างสุด (Block element)
 
-zz(){
-_bt_(){
-	draw_ "$TOP_LINE" $1
-}	
-#draw_ "$MID_LINE" 15
-_bb_(){
-	draw_ "$BOT_LINE" $1
-}	
+pfb(){
+	printf '%b\n' "$@"
+}
+
+ps1_(){
+	local _test _pad ps1 ps2
+	_bt_(){
+		draw_ "$TOP_LINE" $1
+	}	
+	_bb_(){
+		draw_ "$BOT_LINE" $1
+	}	
  	_test="$(echo ${1:-$JOE_ENV})"
 	_pad="$(( ${#_test} + 4 ))"
-_nl
-tf=""
-tf+="$(_bb_ $_pad)\n"
-tf+="$(printf '  %s  \n' "$_test")\n"
-tf+="$(_bt_ $_pad)\n"
+	
+		ps1=""
+		ps1+="$(_bb_ $_pad)\n"
+		ps1+="$(printf '%s%b%s' " " "$_test" " ")\n"
+		ps1+="$(_bt_ $_pad)\n"
 
-printf '%b\n' "$tf"
+		ps2=""
+		ps2+="$(_bt_ $_pad)\n"
+		ps2+="$(printf '%s%b%s' " " "$_test" " ")\n"
+		ps2+="$(_bb_ $_pad)\n"
+		
+
+		printf -v _to_PS1 '%b\n' "$ps1"
+		printf -v _to_PS2 '%b\n' "$ps2"
 }
 bp_(){
 
@@ -74,7 +85,6 @@ bp_(){
 		_bp_+="$blk\n"
 		_bp_+="$bdt"
 		
-		echo -e "$_bp_"
+		#echo -e "$_bp_"
 	  block_prompt="$_bp_"
 }
-bp_ ${1:-$JOE_ENV}

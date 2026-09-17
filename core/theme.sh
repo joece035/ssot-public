@@ -4,10 +4,27 @@
 # ======================================================
 
 # 1. Colors & escape helpers (PS1-safe: ทุก escape sequence ต้องหุ้มด้วย \[ ... \])
-_ps_c() { echo -n "\[\e[38;5;${1}m\]"; }
-_ps_r() { echo -n "\[\e[0m\]"; }
-_ps_b() { echo -n "\[\e[1m\]"; }
-_ps_d() { echo -n "\[\e[2m\]"; }
+# รองรับ psc <color> [style] <text...> ตามมาตรฐาน SSOT Color Engine V3 (core/01-colors.sh)
+if ! command -v psc >/dev/null 2>&1; then
+    _color_src="${SSOT:-${SCRIPTS_PATH:-$HOME/ssot}}/core/01-colors.sh"
+    [[ -f "$_color_src" ]] && source "$_color_src" 2>/dev/null
+fi
+
+# Fallback escape helper กรณีรันแยกเดี่ยวและยังไม่ได้ source 01-colors.sh
+if ! command -v psc >/dev/null 2>&1; then
+    psc() {
+        local c="${1:-}" s="${2:-}" t="${3:-}"
+        local num="$c"
+        case "$c" in
+            r) num=196;; lr) num=203;; g) num=82;; lg) num=46;; y) num=226;;
+            cr) num=51;; b) num=33;; ora) num=208;; gr) num=244;;
+        esac
+        local st=""
+        [[ "$s" =~ b ]] && st+="\e[1m"
+        [[ "$s" =~ d ]] && st+="\e[2m"
+        printf '\[\e[38;5;%sm%b\]%s\[\e[0m\]' "$num" "$st" "$t"
+    }
+fi
 
 # 2. ฟังก์ชันตรวจสอบ Git Branch แบบไม่หน่วงเครื่อง (Lightweight Git Status)
 _git_prompt() {
@@ -16,9 +33,9 @@ _git_prompt() {
         branch=$(git branch --show-current 2>/dev/null)
         if [ -n "$branch" ]; then
             if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
-                echo -n "$(_ps_b)$(_ps_c 226) 🌿 ${branch}*$(_ps_r)"
+                psc y b " 🌿 ${branch}*"
             else
-                echo -n "$(_ps_b)$(_ps_c 82) 🌿 ${branch}$(_ps_r)"
+                psc 82 b " 🌿 ${branch}"
             fi
         fi
     fi
@@ -61,34 +78,34 @@ _set_prompt() {
     # ✅ FIX 3: เช็ค _prev_row (ไม่ใช่ _SSOT_LAST_ROW ที่ update แล้ว)
     if (( _delta < 5 && _prev_row > 5 )); then
         if [ $exit_code -eq 0 ]; then
-            PS1=" - "
+            PS1=" $(psc lg b "  -→  ") "
         else
-            PS1=" $(_ps_b)$(_ps_c 196)❯─♥─❯$(_ps_r) "
+            PS1=" $(psc lr b "  -→  ") "
         fi
         return
     fi
     # ─────────────────────────────────────────────────────────────
 
-    local last_status_raw="$(bp_)"
+    local last_status_raw='(ﾉ◕ヮ◕)ﾉ*:･ﾟ✧'
     local last_status
     if [ $exit_code -eq 0 ]; then
-        last_status="$(_ps_b)$(_ps_c 46)${last_status_raw}$(_ps_r)"
+        last_status="$(psc lg b "$last_status_raw")"
     else
-        last_status="$(_ps_b)$(_ps_c 196)${last_status_raw}$(_ps_r)"
+        last_status="$(psc lr b "$last_status_raw")"
     fi
 
     # -- environment / current shell
     local cur_env="${JOE_ENV:-${MY_DEVICE:-WSL2}}"
     local cur_shell="${_SHELL:-${SHELL##*/}}"
-    local env_tag="< $(_ps_b)$(_ps_c 198)${cur_env}$(_ps_r) : $(_ps_b)$(_ps_c 208)${cur_shell}$(_ps_r) >"
+    local env_tag="< $(psc 198 b "$cur_env") : $(psc ora b "$cur_shell") >"
 
     # -- USER@HOST
     local cur_user="${USER:-$(id -un)}"
     local cur_host="${NODE_HOST:-wsl2}"
-    local user_host="$(_ps_b)$(_ps_c 51)${cur_user}$(_ps_r) @ $(_ps_b)$(_ps_c 226)${cur_host}$(_ps_r)"
+    local user_host="$(psc cr b "$cur_user") @ $(psc y b "$cur_host")"
 
     # -- Current Dir & Git
-    local current_dir="$(_ps_c 242)\w$(_ps_r)"
+    local current_dir="$(psc 242 "\w")"
     local git_info="$(_git_prompt)"
 
     # -- Dynamic border calculation
@@ -110,15 +127,24 @@ _set_prompt() {
     (( lens > (term_w - 2) )) && lens=$(( term_w - 2 ))
     (( lens < 20 )) && lens=40
 
-    local BN_BORDER_CHAR="┈"
-    local borde="$(_ps_d)$(_ps_c 235)$(_draw_border "$BN_BORDER_CHAR" "$lens")$(_ps_r)"
+    local BN_BORDER_CHAR_TOP="${BOT_LINE:-$'\u2581'}"
+    local BN_BORDER_CHAR_BOT="${TOP_LINE:-$'\u2594'}"
+
+    local _str_t=""
+    local _str_b=""
+    for (( _i = 1; _i <= lens; _i++ )); do
+        _str_t+="${BN_BORDER_CHAR_TOP}"
+        _str_b+="${BN_BORDER_CHAR_BOT}"
+    done
+    local border_top="$(psc 235 d "${_str_t}")"
+    local border_bot="$(psc 235 d "${_str_b}")"
 
     # -- ประกอบร่าง Dynamic PS1 (Prompt)
     local PS1_=""
-    PS1_+="${borde}\n"
+    PS1_+="${border_top}\n"
     PS1_+="${last_status} ${env_tag} ${user_host} in ${current_dir}${git_info}\n"
-    PS1_+="${borde}\n"
-    PS1_+="»"
+    PS1_+="${border_bot}\n"
+    PS1_+=" -→ "
 
     export -n PS1 2>/dev/null || true
     PS1="$PS1_"

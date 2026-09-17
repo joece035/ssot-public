@@ -29,6 +29,9 @@ _color_render() {
     local nl="$1"; shift
     local input_color="${1:-""}"
 
+    local is_ps=0
+    [[ "$nl" == "ps" ]] && is_ps=1
+
     # 0. Pre-scan: extract --bg <num> and --reset-bg / --rbg from remaining args
     local bg_esc=""
     local reset_bg=0
@@ -55,12 +58,16 @@ _color_render() {
     set -- "${_args_new[@]}"
 
     local eol="\n"
-    [[ "$nl" == "0" ]] && eol=""
+    [[ "$nl" == "0" || $is_ps -eq 1 ]] && eol=""
 
     # Standalone reset-bg without extra arguments
     if [[ $# -eq 0 ]]; then
         if [[ $reset_bg -eq 1 ]]; then
-            printf "${bg_esc}$(_rbg)${eol}"
+            if [[ $is_ps -eq 1 ]]; then
+                printf '\[%b%b\]%s' "${bg_esc}" "$(_rbg)" "${eol}"
+            else
+                printf "${bg_esc}$(_rbg)${eol}"
+            fi
             return 0
         fi
         input_color=""
@@ -74,7 +81,7 @@ _color_render() {
         r)   color_="$R"   ;;  lr)  color_="$LR"  ;;
         g)   color_="$G"   ;;  lg)  color_="$LG"  ;;
         y)   color_="$Y"   ;;
-        cr)  color_="$CR"  ;;  lcr) color_="$LCR" ;;
+        cr)  color_="$CR"  ;;  lcr|lc) color_="$LCR" ;;
         b)   color_="$B"   ;;  lb)  color_="$LB"  ;;
         m)   color_="$M"   ;;  lm)  color_="$LM"  ;;
         w)   color_="$W"   ;;  gr)  color_="$GR"  ;;
@@ -102,21 +109,43 @@ _color_render() {
     fi
 
     local targets=()
-    if [[ $# -gt 0 ]]; then targets=("${@}")
-    else targets=("No text provided")
+    if [[ $# -gt 0 ]]; then
+        targets=("${@}")
+    elif [[ $is_ps -eq 1 ]]; then
+        local _active_esc="${bg_esc}${color_}${style}"
+        if [[ "$input_color" =~ ^[0-9]+$ ]] && [[ "$input_color" -ge 0 ]] && [[ "$input_color" -le 255 ]]; then
+            _active_esc="${bg_esc}${style}$(_c "$input_color")"
+        fi
+        if [[ -n "$_active_esc" ]]; then
+            printf '\[%b\]' "$_active_esc"
+        else
+            printf '\[%b\]' "$(_r)"
+        fi
+        return 0
+    else
+        targets=("No text provided")
     fi
 
     # 4. Render
     local rst="$(_r)"
     [[ $reset_bg -eq 1 ]] && rst="$(_rbg)"
+    [[ $is_ps -eq 1 ]] && rst="\[${rst}\]"
 
     for text in "${targets[@]}"; do
         if [[ "$input_color" =~ ^[0-9]+$ ]] && [[ "$input_color" -ge 0 ]] && [[ "$input_color" -le 255 ]]; then
             # 256-color path
-            printf "${bg_esc}${style}$(_c "$input_color")%s${rst}${eol}" "$text"
+            if [[ $is_ps -eq 1 ]]; then
+                printf '\[%b\]%s%b' "${bg_esc}${style}$(_c "$input_color")" "$text" "$rst"
+            else
+                printf "${bg_esc}${style}$(_c "$input_color")%s${rst}${eol}" "$text"
+            fi
         else
             # Short-name path (V2 vars)
-            printf "%b" "${bg_esc}${color_}${style}${text}${rst}${eol}"
+            if [[ $is_ps -eq 1 ]]; then
+                printf '\[%b\]%s%b' "${bg_esc}${color_}${style}" "$text" "$rst"
+            else
+                printf "%b" "${bg_esc}${color_}${style}${text}${rst}${eol}"
+            fi
         fi
     done
 }
@@ -126,6 +155,9 @@ c() { _color_render 0 "$@"; }
 
 # cn — พิมพ์สี + ขึ้นบรรทัดใหม่ (ตัวปิดท้ายบรรทัด)
 cn() { _color_render 1 "$@"; }
+
+# psc — พิมพ์สีสำหรับ PS1 Prompt (PS1-safe: ทุก escape sequence ถูกหุ้มด้วย \[ ... \])
+psc() { _color_render ps "$@"; }
 
 # color — ชื่อเต็ม (legacy = มี newline เหมือนเดิม, ใช้ใน color_comparison/c256_/rainbo)
 color() { _color_render 1 "$@"; }
