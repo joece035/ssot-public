@@ -6,8 +6,10 @@
 #   color m bu "magenta bu"  # magenta + bold+underline
 # ============================================================
 # COLOR RENDER CORE
-#   _color_render <newline> <color> [style] <text...>
+#   _color_render <newline> <color> [style] [--bg <num>] [--reset-bg] <text...>
 #     newline : 1 = ลงท้ายด้วย \n (cn) | 0 = ไม่มี newline (c)
+#     --bg <num>   : ใส่สีพื้นหลัง (0-255)
+#     --reset-bg   : reset เฉพาะ bg (\e[49m) โดยไม่ reset fg/style (สำหรับ inline layout)
 #   c  <color> [style] <text...>   → พิมพ์สี ไม่มี newline (ต่อ layout ได้)
 #   cn <color> [style] <text...>   → พิมพ์สี + ขึ้นบรรทัดใหม่ (จบบรรทัด)
 # ตัวอย่าง: c 46 b "ON "; c 226 "| "; cn 208 "WARN"
@@ -27,8 +29,9 @@ _color_render() {
     local nl="$1"; shift
     local input_color="${1:-""}"
 
-    # 0. Pre-scan: extract --bg <num> from remaining args (before any shifting)
+    # 0. Pre-scan: extract --bg <num> and --reset-bg / --rbg from remaining args
     local bg_esc=""
+    local reset_bg=0
     local _args_new=()
     local _skip_next=0
     for _a in "$@"; do
@@ -43,10 +46,27 @@ _color_render() {
             _skip_next=1
             continue
         fi
+        if [[ "$_a" == "--reset-bg" || "$_a" == "--rbg" ]]; then
+            reset_bg=1
+            continue
+        fi
         _args_new+=("$_a")
     done
     set -- "${_args_new[@]}"
-    input_color="${1:-""}"
+
+    local eol="\n"
+    [[ "$nl" == "0" ]] && eol=""
+
+    # Standalone reset-bg without extra arguments
+    if [[ $# -eq 0 ]]; then
+        if [[ $reset_bg -eq 1 ]]; then
+            printf "${bg_esc}$(_rbg)${eol}"
+            return 0
+        fi
+        input_color=""
+    else
+        input_color="${1:-""}"
+    fi
 
     # 1. Resolve color
     local color_=""
@@ -87,15 +107,16 @@ _color_render() {
     fi
 
     # 4. Render
-    local eol="\n"
-    [[ "$nl" == "0" ]] && eol=""
+    local rst="$(_r)"
+    [[ $reset_bg -eq 1 ]] && rst="$(_rbg)"
+
     for text in "${targets[@]}"; do
         if [[ "$input_color" =~ ^[0-9]+$ ]] && [[ "$input_color" -ge 0 ]] && [[ "$input_color" -le 255 ]]; then
             # 256-color path
-            printf "${bg_esc}${style}$(_c "$input_color")%s$(_r)${eol}" "$text"
+            printf "${bg_esc}${style}$(_c "$input_color")%s${rst}${eol}" "$text"
         else
             # Short-name path (V2 vars)
-            printf "%b" "${bg_esc}${color_}${style}${text}$(_r)${eol}"
+            printf "%b" "${bg_esc}${color_}${style}${text}${rst}${eol}"
         fi
     done
 }
@@ -125,7 +146,9 @@ r_() { printf '\033[0m'; }
 
 # color 256
 _c() { printf '\e[38;5;%sm' "$1"; }
-_r() { printf '\e[0m'; }                # reset
+_r() { printf '\e[0m'; }                # reset all
+_rbg() { printf '\e[49m'; }             # reset background only
+_rfg() { printf '\e[39m'; }             # reset foreground only
 _b() { printf '\e[1m'; }                # bold
 _d() { printf '\e[2m'; }                # dim
 _i() { printf '\e[3m'; }                # italic
@@ -459,6 +482,28 @@ c256() {
     done
 }
 
+# c256bg — visual reference for 256-color backgrounds (auto-contrast text)
+c256bg() {
+    local i fg val r g b lum
+    for i in {0..255}; do
+        # เลือกสีตัวเลข (fg) ให้อ่านง่ายบนสีพื้นหลัง (bg)
+        if (( i < 16 )); then
+            case "$i" in 0|1|2|4|5|8) fg=15 ;; *) fg=0 ;; esac
+        elif (( i >= 232 )); then
+            (( i > 243 )) && fg=0 || fg=15
+        else
+            val=$(( i - 16 ))
+            r=$(( val / 36 ))
+            g=$(( (val % 36) / 6 ))
+            b=$(( val % 6 ))
+            lum=$(( r * 30 + g * 59 + b * 11 ))
+            (( lum > 240 )) && fg=0 || fg=15
+        fi
+        printf "%s%s%3d%s " "$(_bg "$i")" "$(_c "$fg")" "$i" "$(_r)"
+        (( (i+1)%16==0 )) && echo
+    done
+}
+
 c256_() {
     local i
     for i in {0..255}; do
@@ -508,3 +553,4 @@ draw_() {
    printf "%*s\n" "$2" "" | sed "s/ /$1/g"
 }
 alias d_='draw_'
+

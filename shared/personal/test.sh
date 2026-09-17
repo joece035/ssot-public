@@ -3,9 +3,6 @@
 # File: test.sh
 # ------------------------------------------------------------
 
- source "01-colors.sh"
- echo "TEST something"
- for f in $(ls -ltr $bin); do
-    echo $f
-done
+# (Stray test script - disabled to prevent overriding SSOT core/01-colors.sh)
+# source "$SSOT/core/01-colors.sh"
 

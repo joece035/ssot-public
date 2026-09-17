@@ -1,53 +1,143 @@
 #!/bin/bash
-fvar(){
+fvar() {
+    local search_dir="."
+    local custom_pattern=""
+    local match_mode="export"   # export (default) | all | word | custom
+    local ignore_case=0
+    local exclude_git=1
+    local targets=()
 
-# ค่าเริ่มต้น: ค้นหาในโฟลเดอร์ปัจจุบัน (.)
-SEARCH_DIR="."
+    # 1. แยกแยะ Argument และ Options
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -d|--dir)
+                search_dir="${2:-.}"
+                shift 2
+                ;;
+            -p|--pattern)
+                custom_pattern="${2:-}"
+                match_mode="custom"
+                shift 2
+                ;;
+            -a|--all)
+                match_mode="all"
+                shift
+                ;;
+            -w|--word)
+                match_mode="word"
+                shift
+                ;;
+            -i|--ignore-case)
+                ignore_case=1
+                shift
+                ;;
+            --git)
+                exclude_git=0
+                shift
+                ;;
+            -h|--help)
+                echo "วิธีใช้งาน: fvar [options] <คำค้นหา1> [คำค้นหา2 ...]"
+                echo ""
+                echo "Options (เทียบเท่าปุ่มค้นหาบน GUI Text Editor / Ctrl+H):"
+                echo "  -d, --dir <path>      ระบุโฟลเดอร์ค้นหา (default: .)"
+                echo "  -p, --pattern <pat>   กำหนด regex pattern เอง (%s แทนคำค้น)"
+                echo "                        ตัวอย่าง: -p \"%s=\" หรือ -p \"(export|local)\s+%s\""
+                echo "  -a, --all             หาทุกการประกาศตัวแปร: export, local หรือ VAR="
+                echo "  -w, --word            ค้นหาแบบ Whole Word (\b<word>\b)"
+                echo "  -i, --ignore-case     ไม่สนใจตัวพิมพ์เล็ก/ใหญ่ (Match Case OFF)"
+                echo "  --git                 รวมโฟลเดอร์ .git (ปกติจะ exclude ออก)"
+                echo ""
+                echo "ตัวอย่าง:"
+                echo "  fvar -d \$SSOT MY_DEVICE               # ค่าเริ่มต้น: หา export MY_DEVICE"
+                echo "  fvar -d \$SSOT -a MY_DEVICE            # หาการกำหนดค่าทั้งหมด (export/local/VAR=)"
+                echo "  fvar -d \$SSOT -w MY_DEVICE            # หาคำว่า MY_DEVICE ทุกที่ (Whole Word)"
+                echo "  fvar -d \$SSOT -p \"%s=\" MY_DEVICE     # หาเฉพาะที่มีเครื่องหมาย ="
+                echo "  fvar -d \$SSOT -p \"export.*MY_DEVICE\" # ใส่ custom regex ตรงๆ"
+                return 0
+                ;;
+            *)
+                targets+=("$1")
+                shift
+                ;;
+        esac
+    done
 
-# 1. เช็คว่ามี Argument แรกเป็น -d หรือ --dir หรือไม่
-if [ "$1" == "-d" ] || [ "$1" == "--dir" ]; then
-    SEARCH_DIR="$2"
-    shift 2  # เลื่อน Argument ออกไป 2 ตำแหน่ง เพื่อตัด -d และ Path โฟลเดอร์ออก
-fi
-
-# 2. ตรวจสอบว่าหลังจากเลื่อน Argument แล้ว ยังมีรายชื่อตัวแปรเหลืออยู่ไหม
-if [ $# -eq 0 ]; then
-    echo "วิธีใช้งาน:"
-    echo "  แบบปกติ (หาในโฟลเดอร์ปัจจุบัน): $0 <ตัวแปร1> [ตัวแปร2 ...]"
-    echo "  แบบระบุโฟลเดอร์:                $0 -d <path/to/dir> <ตัวแปร1> [ตัวแปร2 ...]"
-    echo ""
-    echo "ตัวอย่าง: $0 -d /etc PATH HOME"
-    exit 1
-fi
-
-# 3. ตรวจสอบว่าโฟลเดอร์ที่ระบุมีอยู่จริงหรือไม่
-if [ ! -d "$SEARCH_DIR" ]; then
-    echo "❌ error: ไม่พบโฟลเดอร์ '$SEARCH_DIR'"
-    exit 1
-fi
-
-echo "=========================================="
-echo " 🔍 กำลังค้นหาใน: $SEARCH_DIR"
-echo "=========================================="
-
-# 4. วนลูปหาทีละตัวแปร
-for var_name in "$@"; do
-    echo ""
-    echo "[+] ผลการค้นหาสำหรับตัวแปร: $var_name"
-    echo "------------------------------------------"
-    
-    results=$(grep -rnEI "export\s+${var_name}\b" "$SEARCH_DIR" 2>/dev/null)
-    
-    if [ -n "$results" ]; then
-        echo "$results"
-    else
-        echo "❌ ไม่พบการ export ตัวแปร '$var_name'"
+    # กรณีส่ง -p มาโดยไม่มีเป้าหมายคำค้น ให้ค้นหา pattern นั้นตรงๆ
+    if [[ "$match_mode" == "custom" && ${#targets[@]} -eq 0 && -n "$custom_pattern" ]]; then
+        targets=("$custom_pattern")
     fi
-done
 
-echo ""
-echo "=========================================="
+    # ตรวจสอบคำค้นหา
+    if [[ ${#targets[@]} -eq 0 ]]; then
+        echo "❌ กรุณาระบุคำค้นหา (พิมพ์ fvar -h เพื่อดูวิธีใช้)"
+        return 1
+    fi
+
+    # ตรวจสอบโฟลเดอร์
+    if [[ ! -d "$search_dir" ]]; then
+        echo "❌ error: ไม่พบโฟลเดอร์ '$search_dir'"
+        return 1
+    fi
+
+    echo "=========================================="
+    echo " 🔍 กำลังค้นหาใน: $search_dir"
+    echo "=========================================="
+
+    local grep_flags=(-rnEI)
+    [[ $ignore_case -eq 1 ]] && grep_flags+=(-i)
+    [[ $exclude_git -eq 1 ]] && grep_flags+=(--exclude-dir=.git)
+
+    for item in "${targets[@]}"; do
+        local regex=""
+        local label=""
+
+        case "$match_mode" in
+            export)
+                regex="export\s+${item}\b"
+                label="export ${item}"
+                ;;
+            all)
+                # Matches: export VAR=, local VAR=, or VAR=
+                regex="(export\s+|local\s+)?\b${item}\s*="
+                label="assignment: ${item}="
+                ;;
+            word)
+                # Whole word match like VS Code [|ab|]
+                regex="\b${item}\b"
+                label="whole word: ${item}"
+                ;;
+            custom)
+                if [[ "$custom_pattern" == *"%s"* ]]; then
+                    regex="${custom_pattern//%s/$item}"
+                elif [[ "$custom_pattern" == *"{}"* ]]; then
+                    regex="${custom_pattern//\{\}/$item}"
+                elif [[ -n "$custom_pattern" && "$item" != "$custom_pattern" ]]; then
+                    regex="${custom_pattern}${item}"
+                else
+                    regex="${item}"
+                fi
+                label="pattern: ${regex}"
+                ;;
+        esac
+
+        echo ""
+        cn lg b " [+] ผลการค้นหาสำหรับ: $item ($label) " --bg 240
+        echo "------------------------------------------"
+
+        local results
+        results=$(grep "${grep_flags[@]}" -e "$regex" "$search_dir" 2>/dev/null)
+
+        if [[ -n "$results" ]]; then
+            echo "$results"
+        else
+            echo "❌ ไม่พบข้อความที่ตรงกับ '$label'"
+        fi
+    done
+
+    echo ""
+    echo "=========================================="
 }
+
 # ==========================================
 # Helper Check Shell Type
 # ==========================================
@@ -61,9 +151,6 @@ _is_func_loaded() {
         declare -F "$func_name" >/dev/null 2>&1
     fi
 }
-
-<<<<<<< HEAD
-=======
 # ==========================================
 # Main Functions
 # ==========================================
