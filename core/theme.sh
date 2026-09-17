@@ -61,7 +61,7 @@ _set_prompt() {
     # ✅ FIX 3: เช็ค _prev_row (ไม่ใช่ _SSOT_LAST_ROW ที่ update แล้ว)
     if (( _delta < 5 && _prev_row > 5 )); then
         if [ $exit_code -eq 0 ]; then
-            PS1=" $(_ps_b)$(_ps_c 198)❯$(_ps_c 208)─$(_ps_c 196)♥$(_ps_c 208)─$(_ps_c 198)❯$(_ps_r) "
+            PS1=" - "
         else
             PS1=" $(_ps_b)$(_ps_c 196)❯─♥─❯$(_ps_r) "
         fi
@@ -69,7 +69,7 @@ _set_prompt() {
     fi
     # ─────────────────────────────────────────────────────────────
 
-    local last_status_raw='(ﾉ◕ヮ◕)ﾉ*:･ﾟ✧'
+    local last_status_raw="$(bp_)"
     local last_status
     if [ $exit_code -eq 0 ]; then
         last_status="$(_ps_b)$(_ps_c 46)${last_status_raw}$(_ps_r)"
