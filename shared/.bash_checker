@@ -378,15 +378,6 @@ _check_(){
     esac
 }
 
-_C(){
-	local mode=${1:-}
-	shift
-		case "$mode" in
-				-v|--verbose)						
+_C(){				
 						_check_ "$@"
-						;;
-				-z)
-						_check_ "$@" >/dev/null 2>&1
-						;;
-		esac				
 }
