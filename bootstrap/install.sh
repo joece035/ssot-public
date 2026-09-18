@@ -467,34 +467,102 @@ fi
 
 # ============================================================
 
-# \u2500\u2500 2d. SSH Pubkey Vault Unlock \u2500\u2500
+# ── 3d. SSH Node Keypair Generation ──
+log "Stage 3d: SSH node keypair"
+_NODE_KEY="$HOME/.ssh/id_ed25519_node"
+_NODE_PUB="$HOME/.ssh/id_ed25519_node.pub"
+mkdir -p "$HOME/.ssh" && chmod 700 "$HOME/.ssh"
+
+if [[ ! -f "$_NODE_KEY" ]]; then
+    _node_comment="${MY_DEVICE:-$(hostname)}-$(echo "$JOE_ENV" | tr '[:upper:]' '[:lower:]')"
+    ssh-keygen -t ed25519 -C "$_node_comment" -f "$_NODE_KEY" -N "" -q
+    ok "Generated SSH node keypair: $_NODE_KEY"
+    ok "  Comment: $_node_comment"
+else
+    ok "SSH node keypair exists: $_NODE_KEY"
+fi
+
+# ── 3e. SSH Pubkey Vault Unlock ──
 PUBKEY_SCRIPT="$SSOT/bootstrap/nodes/pubkey-manager.sh"
 PUBKEY_VAULT="$SSOT/core/pubkeys.enc"
 
 if [[ -f "$PUBKEY_VAULT" ]] && [[ -f "$PUBKEY_SCRIPT" ]]; then
-    log "Stage 3d: Installing SSH pubkeys from vault (core/pubkeys.enc)"
+    log "Stage 3e: Installing SSH pubkeys from vault (core/pubkeys.enc)"
     if [[ -n "${SSOT_VAULT_PASS:-}" ]]; then
         # Non-interactive: passphrase provided via env var
         if bash "$PUBKEY_SCRIPT" unlock 2>/dev/null; then
-            ok "Pubkeys installed \u2192 ~/.ssh/authorized_keys"
+            ok "Pubkeys installed -> ~/.ssh/authorized_keys"
         else
-            warn "Pubkey unlock failed \u2014 run 'vault unlock_pubkey' manually"
+            warn "Pubkey unlock failed -- run 'vault unlock_pubkey' manually"
         fi
     else
-        # Interactive: prompt user
-        read -r -t 15 -p "   \ud83d\udd11 Install SSH pubkeys from vault? [Y/n] (default: Y): " _pk_choice < /dev/tty || _pk_choice="Y"
+        # Interactive: write prompt directly to /dev/tty (avoids subshell rendering issue)
+        printf "   🔑 Install SSH pubkeys from vault? [Y/n] (default: Y): " > /dev/tty
+        read -r -t 15 _pk_choice < /dev/tty || _pk_choice="Y"
         if [[ "${_pk_choice:-Y}" =~ ^[Yy]?$ ]]; then
-            if bash "$PUBKEY_SCRIPT" unlock 2>/dev/null; then
-                ok "Pubkeys installed \u2192 ~/.ssh/authorized_keys"
+            if bash "$PUBKEY_SCRIPT" unlock < /dev/tty; then
+                ok "Pubkeys installed -> ~/.ssh/authorized_keys"
             else
-                warn "Pubkey unlock failed \u2014 run 'vault unlock_pubkey' manually"
+                warn "Pubkey unlock failed -- run 'vault unlock_pubkey' manually"
             fi
         else
-            echo "  \ud83d\udca1 Run 'vault unlock_pubkey' when ready"
+            echo "  💡 Run 'vault unlock_pubkey' when ready"
         fi
     fi
 else
-    ok "No pubkey vault found \u2014 skipping (core/pubkeys.enc)"
+    ok "No pubkey vault found -- skipping (core/pubkeys.enc)"
+fi
+
+# ── 3f. Publish this node's pubkey -> bootstrap/nodes/pending/ (Step C) ──
+# Allows the hub (WSL2) to collect all pending keys with: vault lock_pubkey --collect
+log "Stage 3f: Publishing node pubkey for hub collection"
+_PENDING_DIR="$SSOT/bootstrap/nodes/pending"
+_NODE_LABEL="${MY_DEVICE:-$(hostname)}"
+_PENDING_FILE="$_PENDING_DIR/${_NODE_LABEL}.pub"
+
+if [[ -f "$_NODE_PUB" ]]; then
+    mkdir -p "$_PENDING_DIR"
+
+    # Idempotent: only update if pubkey changed
+    _current_pub="$(cat "$_NODE_PUB")"
+    _stored_pub="$(cat "$_PENDING_FILE" 2>/dev/null || echo "")"
+
+    if [[ "$_current_pub" == "$_stored_pub" ]]; then
+        ok "Pubkey already published: bootstrap/nodes/pending/${_NODE_LABEL}.pub"
+    else
+        cp "$_NODE_PUB" "$_PENDING_FILE"
+        ok "Published: bootstrap/nodes/pending/${_NODE_LABEL}.pub"
+
+        # Ensure pending/*.pub are git-tracked (not ignored by parent .gitignore)
+        _PENDING_GITIGNORE="$_PENDING_DIR/.gitignore"
+        if [[ ! -f "$_PENDING_GITIGNORE" ]]; then
+            printf '*\n!.gitignore\n!*.pub\n' > "$_PENDING_GITIGNORE"
+        fi
+
+        # Best-effort git push
+        if git -C "$SSOT" remote get-url origin &>/dev/null; then
+            echo "  📤 Pushing pubkey to git..."
+            git -C "$SSOT" add "$_PENDING_FILE" "$_PENDING_GITIGNORE" 2>/dev/null || true
+            if git -C "$SSOT" diff --cached --quiet 2>/dev/null; then
+                ok "Nothing new to push (pubkey already committed)"
+            else
+                if git -C "$SSOT" commit -m "chore(pubkey): add ${_NODE_LABEL} pending pubkey" 2>/dev/null; then
+                    if git -C "$SSOT" push 2>/dev/null; then
+                        ok "Pushed! Hub can now run: vault lock_pubkey --collect"
+                    else
+                        warn "git push failed -- run: git -C $SSOT push"
+                    fi
+                else
+                    warn "git commit failed -- run manually"
+                fi
+            fi
+        else
+            warn "No git remote -- skipping push"
+            echo "  💡 Copy $_PENDING_FILE to hub and run: vault lock_pubkey --collect"
+        fi
+    fi
+else
+    warn "No node pubkey found at $_NODE_PUB -- skipping publish"
 fi
 
 # STAGE 4 — Wire Shell Profile

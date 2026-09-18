@@ -119,6 +119,7 @@ cmd_lock_pubkey() {
     local fetch_host=""
     local fetch_user=""
     local fetch_port="22"
+    local collect_pending=false
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -126,14 +127,16 @@ cmd_lock_pubkey() {
             --from)     fetch_host="$2"; shift 2 ;;
             --user)     fetch_user="$2"; shift 2 ;;
             --port)     fetch_port="$2"; shift 2 ;;
+            --collect)  collect_pending=true; shift ;;
             --help|-h)
-                echo "Usage: $(basename "$0") lock_pubkey [--add <key>] [--from <host>]"
+                echo "Usage: $(basename "$0") lock_pubkey [--add <key>] [--from <host>] [--collect]"
                 echo ""
                 echo "Options:"
                 echo "  --add <key>      Add a specific public key"
                 echo "  --from <host>    Fetch pubkey from remote node"
                 echo "  --user <user>    SSH user for remote fetch"
                 echo "  --port <port>    SSH port for remote fetch"
+                echo "  --collect        Collect all pending pubkeys from bootstrap/nodes/pending/*.pub"
                 echo ""
                 echo "Without options: encrypts local ~/.ssh/id_ed25519_node.pub"
                 return 0
@@ -242,6 +245,37 @@ cmd_lock_pubkey() {
                 printf "   %-12s $(c 244 "offline")\n" "$node_name"
             fi
         done
+    fi
+
+    # ── Collect pending pubkeys from bootstrap/nodes/pending/ (Step C) ──
+    if [[ "$collect_pending" == true ]]; then
+        local pending_dir="$SSOT/bootstrap/nodes/pending"
+        echo ""
+        cn 226 b "📥 Collecting pending pubkeys from $pending_dir..."
+        local collected=0
+        if [[ -d "$pending_dir" ]]; then
+            for pub_file in "$pending_dir"/*.pub; do
+                [[ -f "$pub_file" ]] || continue
+                local node_name
+                node_name="$(basename "$pub_file" .pub)"
+                local pub_key
+                pub_key="$(cat "$pub_file")"
+                if [[ "$pub_key" != ssh-* ]]; then
+                    printf "   %-14s $(c 196 b "invalid key format")\n" "$node_name"
+                    continue
+                fi
+                if _key_exists_in_file "$tmp_keys" "$pub_key"; then
+                    printf "   %-14s $(c 226 b "already in vault")\n" "$node_name"
+                else
+                    echo "$pub_key" >> "$tmp_keys"
+                    printf "   %-14s $(c 82 b "added") %s\n" "$node_name" "$(_key_comment "$pub_key")"
+                    collected=$((collected + 1))
+                fi
+            done
+            cn 82 b "  Collected $collected new key(s) from pending/"
+        else
+            cn 226 b "  No pending/ directory found — skipping"
+        fi
     fi
 
     # Count final keys (excluding comments)
