@@ -379,5 +379,13 @@ _check_(){
 }
 
 _C(){
-	_check_ "$@"
+	local mode=${1:-}
+	shift
+		case "$mode" in
+				-v|--verbose)						
+						_check_ "$@"
+						;;
+				*)
+						_check_ "$@" >/dev/null 2>&1
+						;;
 }
