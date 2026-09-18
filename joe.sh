@@ -9,38 +9,8 @@
 # ── Step 0: JOE_ENV detection (fallback — ปกติ set จาก ~/.env หรือ .bashrc) ──
 # ค่าที่ใช้ได้: TERMUX | WSL | GIT-BASH | MUMU
 
-# Git Bash Guard: Windows OS inherits JOE_ENV="WINDOWS" into child processes — force GIT-BASH in Git Bash
-case "$(uname -s)" in
-    MINGW*|MSYS*|CYGWIN*)
-        export JOE_ENV="GIT-BASH"
-        ;;
-esac
+export JOE_ENV=$(_CHECK_ -j)
 
-if [[ -z "${JOE_ENV:-}" || "${JOE_ENV:-}" == "WINDOWS" || "${JOE_ENV:-}" == "window" ]]; then
-    if [[ -d "/data/data/com.termux" ]]; then
-        if [[ -n "${MUMU_DEVICE:-}" ]] || [[ "$(getprop ro.product.model 2>/dev/null)" =~ (MuMu|vphone) ]]; then
-            export JOE_ENV="MUMU"
-        else
-            export JOE_ENV="TERMUX"
-        fi
-    elif command -v apk >/dev/null 2>&1; then
-        # ACODEX: must check before WSL — ACODEX runs on WSL filesystem
-        export JOE_ENV="ACODEX"
-    elif grep -qi microsoft /proc/version 2>/dev/null; then
-        if [[ "$(id -un 2>/dev/null)" == "joez" ]]; then
-            export JOE_ENV="WSL2"
-        else
-            export JOE_ENV="WSL"
-        fi
-    elif [[ -n "${MSYSTEM:-}" ]] || [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]]; then
-        export JOE_ENV="GIT-BASH"
-    fi
-fi
-
-# Normalize MY_DEVICE to match profiles/ (never let 'window' poison shell profile)
-if [[ "${MY_DEVICE:-}" == "window" || -z "${MY_DEVICE:-}" ]]; then
-    export MY_DEVICE="$(echo "${JOE_ENV:-git-bash}" | tr '[:upper:]' '[:lower:]')"
-fi
 
 
 #--- Global constants (machine-independent)
