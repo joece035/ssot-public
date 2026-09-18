@@ -123,7 +123,7 @@ _set_prompt() {
         [[ -n "$b" ]] && git_branch_len=$(( ${#b} + 5 ))
     fi
 
-    local text_len=$(( 8 + 1 + (${#cur_env} + ${#cur_shell} + 7) + 1 + (${#cur_user} + 3 + ${#cur_host}) + 4 + ${#raw_pwd} + git_branch_len + 6 ))
+    local text_len=$(( 8 + 1 + (${#cur_env} + ${#cur_shell} + 7) + 1 + (${#cur_user} + 3 + ${#cur_host}) + 4 + ${#raw_pwd} + git_branch_len + 8 ))
 
     local lens=$text_len
     (( lens > (term_w - 2) )) && lens=$(( term_w - 2 ))
