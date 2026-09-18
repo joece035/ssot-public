@@ -11,7 +11,7 @@ shopt -s checkwinsize
 
 # ── 2. BASH LINE EDITOR (Source only, no attach yet) ──
 
-# ── Fix ble.sh locale (Termux has no locale command) ──
+# ── Fix ble.sh locale (MUMU has no locale command) ──
 export LANG="en_US.UTF-8"
 export LC_ALL="en_US.UTF-8"
 export LC_CTYPE="en_US.UTF-8"

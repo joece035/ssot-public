@@ -66,7 +66,7 @@ _get_pass() {
         echo "$SSOT_VAULT_PASS"
     else
         read -r -s -p "$prompt" pass < /dev/tty
-        echo ""
+        echo "" >&2  # cosmetic newline → stderr only, never captured
         echo "$pass"
     fi
 }

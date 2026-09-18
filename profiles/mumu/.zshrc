@@ -1,8 +1,8 @@
 # ================================================================
-# ~/.zshrc - JOE SSOT ZSH Config (Termux)
-# MASTER: WSL | SSOT: ~/ssot/tools/zshrc_termux.zsh
-# Deployed by: Fresh_termux_fullsetup_SSOT.sh (links to ~/.zshrc)
-# Do NOT edit on Termux -- edit in WSL, Syncthing syncs it.
+# ~/.zshrc - JOE SSOT ZSH Config (MUMU)
+# MASTER: WSL | SSOT: ~/ssot/tools/zshrc_MUMU.zsh
+# Deployed by: Fresh_MUMU_fullsetup_SSOT.sh (links to ~/.zshrc)
+# Do NOT edit on MUMU -- edit in WSL, Syncthing syncs it.
 # ================================================================
 [[ -f "$HOME/ssot/.bash_helper" ]] && source "$HOME/ssot/.bash_helper"
 # -- Terminal type (SSH sessions inherit no TERM -- micro/TUI needs this)
@@ -68,13 +68,24 @@ if [[ -z "${_OMZ_SOURCED:-}" ]]; then
 fi
 
 # -- ZSH/Bash compat layer (BEFORE joe.sh) ---------------------
-[[ -f "$HOME/.env" ]] && source "$HOME/.env"
+# ~/.local/bin/env handles: PATH, ~/.env, SSOT auto-detect, joe.sh
+[[ -f "$HOME/.local/bin/env" ]] && source "$HOME/.local/bin/env"
+
+# Environment-specific overrides
+export JOE_ENV="${JOE_ENV:-MUMU}"
+export MY_DEVICE="${MY_DEVICE:-MUMU}"
+
+# ZSH/Bash compat layer
 SSOT="${SSOT:-$HOME/ssot}"
 [[ -f "$SSOT/.zsh-bash-compat.sh" ]] && source "$SSOT/.zsh-bash-compat.sh"
 
 # -- JOE SSOT single entry point --------------------------------
-# joe.sh: JOE_ENV detection -> 00-env.sh -> 01-colors.sh -> functions
-[[ -f "$SSOT/joe.sh" ]] && source "$SSOT/joe.sh"
+# joe.sh is auto-sourced by ~/.local/bin/env via SSOT
+# CRLF guard: convert CRLF→LF if needed
+if [[ -f "${SSOT}/joe.sh" ]] && grep -qU $'\r' "${SSOT}/joe.sh" 2>/dev/null; then
+    sed -i 's/\r$//' "${SSOT}/joe.sh"
+    echo "⚠️  CRLF→LF: joe.sh (auto-fixed)"
+fi
 
 # -- Powerlevel10k config --------------------------------------
 [[ -f "$HOME/.p10k.zsh" ]] && source "$HOME/.p10k.zsh"
@@ -128,7 +139,7 @@ micro() {
             return $?
         else
             printf '\033[31mERROR: micro requires an interactive TTY\033[0m\n'
-            printf 'Fix: Open Termux on MuMu directly, or use: ssh -t\n'
+            printf 'Fix: Open MUMU on MuMu directly, or use: ssh -t\n'
             return 1
         fi
     fi
@@ -146,7 +157,7 @@ micro() {
 }
 
 # -- pnpm (global bin dir; removed by an accidental WIP edit 2026-08-08) --
-export PNPM_HOME="/data/data/com.termux/files/home/.local/share/pnpm"
+export PNPM_HOME="/data/data/com.MUMU/files/home/.local/share/pnpm"
 case ":$PATH:" in
   *":$PNPM_HOME/bin:"*) ;;
   *) export PATH="$PNPM_HOME/bin:$PATH" ;;
