@@ -190,7 +190,7 @@ auto_start_ssh(){
     else
         command -v cn &>/dev/null && cn 10 bi "ssh activated port : ${SSH_PORT}" >&2
     fi
- elif [[ "$JOE_ENV" == "TERMUX" || "$JOE_ENV" == "MUMU" ]]; then
+ elif [[ "$JOE_ENV" == @(TERMUX|MUMU|OPPO|ACODEX) ]]; then
     # Termux / MuMu: ใช้ sshd binary ตรงๆ
     # NOTE: Termux ใหม่ rename process เป็น "sshd-session" ไม่ใช่ "sshd"
     # → pgrep -x sshd ใช้ไม่ได้ ต้อง check จาก port ที่ bind อยู่จริงแทน
@@ -327,7 +327,7 @@ alias re="pp"
  } >/dev/null 2>&1
 
 # เช็คว่า JOE_ENV ไม่ใช่ WSL, OPPO หรือ MUMU
-if [[ "$JOE_ENV" == @(OPPO) ]]; then
+if [[ "$JOE_ENV" == @(OPPOZ) ]]; then
 
     # 1. เช็คก่อนว่ามีคำสั่ง pgrep ในระบบไหม
     if ! command -v pgrep >/dev/null 2>&1; then
