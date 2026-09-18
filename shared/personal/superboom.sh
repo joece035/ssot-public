@@ -7,7 +7,8 @@
 # ============================================================
 
 _() {
-    _check_ -f bn_2
+    _check_ bn_2 >/dev/null 2>&1
+		
     local base_c="${WIN_PATH}c/Users/User/Documents/mumusharedfolder"
     local base_z="${WIN_PATH}z/MuMuSharedFolder"
     local base_backup="${WIN_PATH}h/boom"
