@@ -56,7 +56,8 @@ _set_prompt() {
     local exit_code=$?
 
     # ─── SMART PROMPT GUARD ───────────────────────────────────────
-    local _cur_row=0
+  smart_prompt(){
+		local _cur_row=0
     if [[ -t 0 ]] && [[ -t 1 ]]; then
         local _old_stty
         _old_stty=$(stty -g 2>/dev/null)
@@ -85,7 +86,8 @@ _set_prompt() {
         return
     fi
     # ─────────────────────────────────────────────────────────────
-
+	}	
+	smart_prompt
     local last_status_raw='(ﾉ◕ヮ◕)ﾉ*:･ﾟ✧'
     local last_status
     if [ $exit_code -eq 0 ]; then
@@ -121,7 +123,7 @@ _set_prompt() {
         [[ -n "$b" ]] && git_branch_len=$(( ${#b} + 5 ))
     fi
 
-    local text_len=$(( 8 + 1 + (${#cur_env} + ${#cur_shell} + 7) + 1 + (${#cur_user} + 3 + ${#cur_host}) + 4 + ${#raw_pwd} + git_branch_len ))
+    local text_len=$(( 8 + 1 + (${#cur_env} + ${#cur_shell} + 7) + 1 + (${#cur_user} + 3 + ${#cur_host}) + 4 + ${#raw_pwd} + git_branch_len + 6 ))
 
     local lens=$text_len
     (( lens > (term_w - 2) )) && lens=$(( term_w - 2 ))
@@ -136,8 +138,8 @@ _set_prompt() {
         _str_t+="${BN_BORDER_CHAR_TOP}"
         _str_b+="${BN_BORDER_CHAR_BOT}"
     done
-    local border_top="$(psc 235 d "${_str_t}")"
-    local border_bot="$(psc 235 d "${_str_b}")"
+    local border_top="$(psc 54 d "${_str_t}")"
+    local border_bot="$(psc 54 d "${_str_b}")"
 
     # -- ประกอบร่าง Dynamic PS1 (Prompt)
     local PS1_=""
