@@ -385,7 +385,7 @@ _C(){
 				-v|--verbose)						
 						_check_ "$@"
 						;;
-				*)
+				-z)
 						_check_ "$@" >/dev/null 2>&1
 						;;
 		esac				
