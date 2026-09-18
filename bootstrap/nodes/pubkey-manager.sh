@@ -65,8 +65,9 @@ _get_pass() {
     if [[ -n "${SSOT_VAULT_PASS:-}" ]]; then
         echo "$SSOT_VAULT_PASS"
     else
-        read -r -s -p "$prompt" pass < /dev/tty
-        echo "" >&2  # cosmetic newline → stderr only, never captured
+        printf "%s" "$prompt" > /dev/tty  # always render prompt on terminal
+        read -r -s pass < /dev/tty
+        echo "" > /dev/tty  # cosmetic newline back to terminal
         echo "$pass"
     fi
 }

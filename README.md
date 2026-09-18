@@ -8,9 +8,11 @@ Works on: **Termux** · **MuMu** · **WSL** · **Git Bash** · **AcodeX**
 
 ```bash
 # One-liner bootstrap
+pkg install -y curl git
 curl -fsSL https://raw.githubusercontent.com/joece035/ssot-public/main/bootstrap/install.sh | bash
 
 # Or clone first, then install with specific device name as $1
+pkg install -y git
 git clone https://github.com/joece035/ssot-public.git ~/ssot
 bash ~/ssot/bootstrap/install.sh 
 ```
