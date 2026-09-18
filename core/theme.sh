@@ -140,11 +140,11 @@ _set_prompt() {
     done
     local border_top="$(psc 54 d "${_str_t}")"
     local border_bot="$(psc 54 d "${_str_b}")"
-
+		local sep=$(psc 54 d "|")
     # -- ประกอบร่าง Dynamic PS1 (Prompt)
     local PS1_=""
     PS1_+="${border_top}\n"
-    PS1_+="${last_status} ${env_tag} ${user_host} in ${current_dir}${git_info}\n"
+    PS1_+="${sep}${last_status} ${env_tag} ${user_host} in ${current_dir}${git_info}${sep}\n"
     PS1_+="${border_bot}\n"
     PS1_+=" -→ "
 
