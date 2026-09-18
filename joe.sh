@@ -57,6 +57,12 @@ if [[ -z "${SSOT:-}" ]]; then
         MUMU)
             export SSOT="/data/data/com.termux/files/home/ssot"
             ;;
+				OPPO)
+            export SSOT="/data/data/com.termux/files/home/ssot"
+            ;;
+				ACODEX)
+            export SSOT="/home/ssot"
+            ;;		
         WSL)
             export SSOT="$HOME/ssot"
             ;;
@@ -88,7 +94,7 @@ case "$JOE_ENV" in
         export SSH_PORT=8020
         ;;
     WSL)
-	    export hpc="/mnt/c/Users/User"
+	      export hpc="/mnt/c/Users/User"
         export DASHBOARD_DIR="$HOME/dashboard"
         export PYTHON_VENV="${PYTHON_VENV:-$HOME/.venv/bin/activate}"
         export OBSIDIAN_VAULT="$hpc/DESKTOP/obsidian/alphadev_vaults"
@@ -99,7 +105,7 @@ case "$JOE_ENV" in
 
         ;;
     WSL2)
-	    export hpc="/mnt/c/Users/User"
+	     export hpc="/mnt/c/Users/User"
         export DASHBOARD_DIR="$HOME/dashboard"
         export PYTHON_VENV="${PYTHON_VENV:-$HOME/.venv/bin/activate}"
         export OBSIDIAN_VAULT="$hpc/DESKTOP/obsidian/alphadev_vaults"
