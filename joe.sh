@@ -61,7 +61,7 @@ if [[ -z "${SSOT:-}" ]]; then
             export SSOT="/data/data/com.termux/files/home/ssot"
             ;;
 				ACODEX)
-            export SSOT="/home/ssot"
+            export SSOT="$HOME/ssot"
             ;;		
         WSL)
             export SSOT="$HOME/ssot"
