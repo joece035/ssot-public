@@ -144,7 +144,7 @@ _set_prompt() {
     # -- ประกอบร่าง Dynamic PS1 (Prompt)
     local PS1_=""
     PS1_+="${border_top}\n"
-    PS1_+="${sep}${last_status} ${env_tag} ${user_host} in ${current_dir}${git_info}${sep}\n"
+    PS1_+="${sep} ${last_status} ${env_tag} ${user_host} in ${current_dir}${git_info} ${sep}\n"
     PS1_+="${border_bot}\n"
     PS1_+=" -→ "
 
