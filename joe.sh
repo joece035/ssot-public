@@ -10,6 +10,7 @@
 # ค่าที่ใช้ได้: TERMUX | WSL | GIT-BASH | MUMU
 
 export JOE_ENV=$(_check_ -j)
+echo "$JOE_ENV"
 
 
 
