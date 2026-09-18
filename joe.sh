@@ -291,13 +291,14 @@ alias re="pp"
 # Required by Powerlevel10k instant prompt (sourced first in .zshrc):
 # p10k is strict — ANY stdout during zsh init invalidates the
 # instant prompt and prints a multi-line warning to the user.
+ssot_load ${LOAD_LIST:-}
  {
     unbinding -a g    
-    ssot_load ${LOAD_LIST:-}
+    
     pf ${AI_PROFILE:-mom}
-    case "$JOE_ENV" in 
+   	  case "$JOE_ENV" in 
         TERMUX|MUMU|OPPO) rc_delete ;;
-    esac
+  	  esac
     unset LOAD_LIST
     unset AI_PROFILE
 		auto_start_ssh
