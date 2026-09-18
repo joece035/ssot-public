@@ -121,6 +121,8 @@ esac
         export SSH_WSL_PORT=2222
         export SSH_WSL2_PORT=2223
         export SSH_WIN_PORT=22
+				export SSH_ACODEX_PORT=8021
+				export SSH_OPPO_PORT=8023
 
 
 
@@ -298,6 +300,7 @@ alias re="pp"
     esac
     unset LOAD_LIST
     unset AI_PROFILE
+		auto_start_ssh
 
  } >/dev/null 2>&1
 
