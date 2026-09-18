@@ -9,7 +9,7 @@
 # ── Step 0: JOE_ENV detection (fallback — ปกติ set จาก ~/.env หรือ .bashrc) ──
 # ค่าที่ใช้ได้: TERMUX | WSL | GIT-BASH | MUMU
 
-export JOE_ENV=$(_CHECK_ -j)
+export JOE_ENV=$(_check_ -j)
 
 
 
