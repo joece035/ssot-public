@@ -61,7 +61,7 @@ case "$JOE_ENV" in
          export NODE_HOST="oppo"
          ;;
     ACODEX)
-         export NODE_HOST="acodex"
+         export NODE_HOST="100.110.26.16"
          ;;
 		WSL)
          export HERMES_DIR="$HOME/.hermes"
