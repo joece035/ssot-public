@@ -178,7 +178,7 @@ auto_start_ssh(){
     fi
 	else
 		if ! pgrep -f "sshd.*-p.*${SSH_PORT}" >/dev/null 2>&1; then
-        $(command -v sshd -p "$SSH_PORT") && { command -v cn &>/dev/null && cn 10 b "SSH Daemon started on port ${SSH_PORT}." >&2; } || { command -v cn &>/dev/null && cn 9 b "Failed to start sshd on port ${SSH_PORT}." ; }
+        /usr/sbin/sshd -p "$SSH_PORT" && { command -v cn &>/dev/null && cn 10 b "SSH Daemon started on port ${SSH_PORT}." >&2; } || { command -v cn &>/dev/null && cn 9 b "Failed to start sshd on port ${SSH_PORT}." ; }
     else
         command -v cn &>/dev/null && cn 10 bi "ssh activated port : ${SSH_PORT}" #>&2	
 		fi		
