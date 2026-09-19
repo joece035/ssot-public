@@ -40,6 +40,8 @@ if [[ -z "${SSOT:-}" ]]; then
     fi
 fi
 
+# ── 2. Load secret env vars (JOE_ENV, SSOT, secrets) ──
+[ -f ~/.env.secret ] && . ~/.env.secret
 # ============================================================
 # shell_setup() — Symlink shell profiles from $SSOT/profiles/
 # ============================================================

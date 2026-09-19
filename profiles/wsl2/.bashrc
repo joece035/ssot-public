@@ -25,7 +25,7 @@ nvm use default >/dev/null 2>&1 || true
 
 # ── 4. ENVIRONMENT & PATHS ──
 # ~/.local/bin/env handles: PATH, ~/.env, SSOT auto-detect, joe.sh
-. "$HOME/.local/bin/env"
+_C -o -f "$HOME/.local/bin/env" "source"
 
 # Environment-specific overrides (set by ~/.local/bin/env via ~/.env)
 export JOE_ENV="${JOE_ENV:-WSL2}"
