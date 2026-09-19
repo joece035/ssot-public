@@ -149,7 +149,7 @@ _set_prompt() {
     PS1_+=" -→ "
 
     export -n PS1 2>/dev/null || true
-    PS1="$(psc --bg 235 "$PS1_")"
+    PS1="$PS1_"
 }
 
 # ✅ FIX 4: ลบ duplicate — เหลือแค่ชุดเดียว
