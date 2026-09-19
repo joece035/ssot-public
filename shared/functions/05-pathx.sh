@@ -103,13 +103,7 @@ p() {
   local raw converted drive rest distro
 
   # 1. Input: $1 หรือ clipboard
-  if [[ -n "${1:-}" ]]; then
-    raw="$1"
-  elif command -v cb_read >/dev/null 2>&1; then
-    raw="$(cb_read)"
-  elif command -v powershell.exe >/dev/null 2>&1; then
-    raw="$(powershell.exe -NoProfile -Command "Get-Clipboard" 2>/dev/null | tr -d '\r')"
-  fi
+  raw="${1:-$(cb_read)}"
 
   [[ -z "$raw" ]] && { echo "[p] No input." >&2; return 1; }
 

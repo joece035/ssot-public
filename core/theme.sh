@@ -170,14 +170,14 @@ _set_prompt() {
     # -- 2. Dynamic border calculation: ยิงวัดความกว้างรอบเดียว (One-Shot)
     local term_w
     term_w=$(tput cols 2>/dev/null || echo 80)
-    (( term_w < 40 )) && term_w=80
+    (( term_w < 37 )) && term_w=37
 
     local text_len
     text_len=$(_w "$prompt_content")
 
     local lens=$text_len
     (( lens > (term_w - 2) )) && lens=$(( term_w - 2 ))
-    (( lens < 20 )) && lens=40
+    (( lens < 37 )) && lens=$(( term_w - 2 ))
 
     local BN_BORDER_CHAR_TOP="${BOT_LINE:-$'\u2581'}"
     local BN_BORDER_CHAR_BOT="${TOP_LINE:-$'\u2594'}"
