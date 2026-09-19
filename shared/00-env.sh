@@ -326,11 +326,13 @@ export SHOPEE_PAGE_ID="${SHOPEE_PAGE_ID:-}"
 
 # ของแม่ (mom) — key ใหม่ต่อวันที่ 2026-07-25
 export OC_KEY_MOM="${OC_KEY_MOM:-}"
+export OC_KEY_ZEN_MOM="${OC_KEY_ZEN_MOM:-${OC_ZEN_MOM:-}}"
+export OC_ZEN_MOM="${OC_ZEN_MOM:-$OC_KEY_ZEN_MOM}"
 
 # ของพี่โจ (joe) — key เก่า ใช้ได้ปกติ
 export OC_KEY_JOE="${OC_KEY_JOE:-}"
 
-# OpenCode Zen (joe เท่านั้น — ใช้ Claude Sonnet)
+# OpenCode Zen (joe — ใช้ Claude Sonnet)
 export OC_KEY_ZEN="${OC_KEY_ZEN:-}"
 
 # Shared endpoint
@@ -341,7 +343,7 @@ export OC_BASE_URL="https://opencode.ai/zen/go/v1"
 # ai_profile() ใน joe.sh จะ overwrite ตอนสลับ profile
 export OPENCODE_GO_API_KEY="$OC_KEY_MOM"
 export OPENCODE_API_KEY="$OC_KEY_MOM"
-export OPENCODE_ZEN_API_KEY="$OC_KEY_ZEN"
+export OPENCODE_ZEN_API_KEY="${OC_KEY_ZEN_MOM:-$OC_KEY_ZEN}"
 export OPENCODE_GO_BASE_URL="$OC_BASE_URL"
 
 # ============================================================

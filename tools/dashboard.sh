@@ -358,7 +358,7 @@ _render_ai_profile() {
     local zen_status="${_D}—${_Z}"
     if [[ -n "${OPENCODE_ZEN_API_KEY:-}" ]]; then
         zen_status="${_G}✅ configured${_Z}"
-    elif [[ "$current_profile" == "joe" ]]; then
+    else
         zen_status="${_Y}⚠️  not set${_Z}"
     fi
 

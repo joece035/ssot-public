@@ -6,9 +6,10 @@
 #          stc                   - show full stats dashboard (with live API probe)
 #
 # SSOT: key lives in ~/ssot/00-env.sh
-#   OC_KEY_MOM  - OpenCode Go sub, key แม่ (default, has credits)
-#   OC_KEY_JOE  - OpenCode Go sub, key พี่โจ
-#   OC_KEY_ZEN  - OpenCode Zen (Claude Sonnet 4.5) - joe only
+#   OC_KEY_MOM      - OpenCode Go sub, key แม่ (default, has credits)
+#   OC_KEY_ZEN_MOM  - OpenCode Zen (Claude Sonnet 4.5) - mom
+#   OC_KEY_JOE      - OpenCode Go sub, key พี่โจ
+#   OC_KEY_ZEN      - OpenCode Zen (Claude Sonnet 4.5) - joe
 #
 # Default: mom (currently has credits). Pass joe to switch.
 # ============================================================
@@ -34,7 +35,7 @@ ai_profile() {
             fi
             export OPENCODE_API_KEY="$OPENCODE_GO_API_KEY"
             export OPENCODE_GO_BASE_URL="${OC_BASE_URL:-https://opencode.ai/zen/go/v1}"
-            export OPENCODE_ZEN_API_KEY=""  # mom ไม่มี Zen
+            export OPENCODE_ZEN_API_KEY="${OC_KEY_ZEN_MOM:-${OC_ZEN_MOM:-}}"
             ;;
 
         joe)
