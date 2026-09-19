@@ -95,7 +95,6 @@ _set_prompt() {
     else
         last_status="$(psc lr b "$last_status_raw")"
     fi
-
     # -- environment / current shell
     local cur_env="${JOE_ENV:-${MY_DEVICE:-WSL2}}"
     local cur_shell="${_SHELL:-${SHELL##*/}}"
@@ -107,23 +106,20 @@ _set_prompt() {
     local user_host="$(psc cr b "$cur_user") @ $(psc y b "$cur_host")"
 
     # -- Current Dir & Git
-    local current_dir="$(psc 242 "\w")"
+    local current_dir="$(psc 242 "${PWD/#$HOME/\~}")"
     local git_info="$(_git_prompt)"
+    local sep="$(psc 54 b '|')"
 
-    # -- Dynamic border calculation
+    # -- 1. รวมเนื้อหาของแถวกลางจริงที่จะแสดงผล
+    local prompt_content="${sep} ${last_status} ${env_tag} ${user_host} in ${current_dir}${git_info} ${sep}"
+
+    # -- 2. Dynamic border calculation: ยิงวัดความกว้างรอบเดียว (One-Shot)
     local term_w
     term_w=$(tput cols 2>/dev/null || echo 80)
     (( term_w < 40 )) && term_w=80
 
-    local raw_pwd="${PWD/#$HOME/\~}"
-    local git_branch_len=0
-    if command -v git >/dev/null 2>&1; then
-        local b
-        b=$(git branch --show-current 2>/dev/null)
-        [[ -n "$b" ]] && git_branch_len=$(( ${#b} + 5 ))
-    fi
-
-    local text_len=$(( 9 + (${#cur_env} + ${#cur_shell} + 7) + 1 + (${#cur_user} + 3 + ${#cur_host}) + 4 + ${#raw_pwd} + git_branch_len + 9 ))
+    local text_len
+    text_len=$(_w "$prompt_content")
 
     local lens=$text_len
     (( lens > (term_w - 2) )) && lens=$(( term_w - 2 ))
@@ -132,19 +128,18 @@ _set_prompt() {
     local BN_BORDER_CHAR_TOP="${BOT_LINE:-$'\u2581'}"
     local BN_BORDER_CHAR_BOT="${TOP_LINE:-$'\u2594'}"
 
-    local _str_t=""
-    local _str_b=""
+    local _str_t="" _str_b=""
     for (( _i = 1; _i <= lens; _i++ )); do
         _str_t+="${BN_BORDER_CHAR_TOP}"
         _str_b+="${BN_BORDER_CHAR_BOT}"
     done
     local border_top="$(psc 54 b "${_str_t}")"
     local border_bot="$(psc 54 b "${_str_b}")"
-		local sep=$(psc 54 b '|')
-    # -- ประกอบร่าง Dynamic PS1 (Prompt)
+
+    # -- 3. ประกอบร่าง Dynamic PS1 (Prompt)
     local PS1_=""
     PS1_+="${border_top}\n"
-    PS1_+="${sep} ${last_status} ${env_tag} ${user_host} in ${current_dir}${git_info} ${sep}\n"
+    PS1_+="${prompt_content}\n"
     PS1_+="${border_bot}\n"
     PS1_+=" -→ "
 

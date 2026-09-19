@@ -142,7 +142,7 @@ print(w)
     fi
 }
 
-wcals(){
+_w(){
 	get_real_width "$@"
 }
 
