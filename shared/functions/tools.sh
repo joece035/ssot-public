@@ -125,19 +125,11 @@ unbinding_all (){
     cn 10 b "  $target"
 }
 
-# -- ฟังก์ชั่นหา Display Width ที่แท้จริง (รวม Emoji และตัด ANSI Code ออก)
-get_w() {
-    local text="$1"
-    # ตัด ANSI escape code ออกก่อนนับ
-    local plain_text=$(echo -e "$text" | sed 'r'%"$(printf '\033')"\%\%b%g | sed 's/\x1b\[[0-9;]*m//g')
 
-    # ใช้ python3 นับความกว้างหน้าจอจริง
-    python3 -c "import unicodeattr, sys; import unicodedata; print(sum(2 if unicodedata.east_asian_width(c) in 'WF' else 1 for c in '''$plain_text'''))" 2>/dev/null || echo "${#plain_text}"
-}
 ew() {
     local text="$1"
     local width
-    width=$(get_visible_width "$text")
+    width=$(get_visible_width2 "$text")
     echo "$width"
 }
 get_visible_width2() {
@@ -158,7 +150,7 @@ get_visible_width2() {
     print(max(width, 0))
 PY
 }
-we() {
+emo_width() {
     get_visible_width2 "$@"
 }
 #-- git tools

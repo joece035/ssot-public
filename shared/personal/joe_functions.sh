@@ -113,5 +113,15 @@ repository_remote_url(){
 }
 alias gremote='repository_remote_url'
 
+# -- ฟังก์ชั่นหา Display Width ที่แท้จริง (รวม Emoji และตัด ANSI Code ออก)
+get_real_width() {
+    local text="$1"
+    # ตัด ANSI escape code ออกก่อนนับ
+    local plain_text=$(echo -e "$text" | sed 'r'%"$(printf '\033')"\%\%b%g | sed 's/\x1b\[[0-9;]*m//g')
+
+    # ใช้ python3 นับความกว้างหน้าจอจริง
+    python3 -c "import unicodeattr, sys; import unicodedata; print(sum(2 if unicodedata.east_asian_width(c) in 'WF' else 1 for c in '''$plain_text'''))" 2>/dev/null || echo "${#plain_text}"
+}
+
 
 
