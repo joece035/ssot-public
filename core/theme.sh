@@ -91,7 +91,7 @@ _set_prompt() {
     local last_status_raw='(ﾉ◕ヮ◕)ﾉ*:･ﾟ✧'
     local last_status
     if [ $exit_code -eq 0 ]; then
-        last_status="$(psc lg b "$last_status_raw")"
+        last_status="$(mc b "$last_status_raw")"
     else
         last_status="$(psc lr b "$last_status_raw")"
     fi
@@ -138,8 +138,8 @@ _set_prompt() {
         _str_t+="${BN_BORDER_CHAR_TOP}"
         _str_b+="${BN_BORDER_CHAR_BOT}"
     done
-    local border_top="$(psc 54 d "${_str_t}")"
-    local border_bot="$(psc 54 d "${_str_b}")"
+    local border_top="$(psc 54 b "${_str_t}")"
+    local border_bot="$(psc 54 b "${_str_b}")"
 		local sep=$(psc 54 b '|')
     # -- ประกอบร่าง Dynamic PS1 (Prompt)
     local PS1_=""
