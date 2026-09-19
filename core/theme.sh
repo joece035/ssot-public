@@ -54,10 +54,9 @@ if [[ -n "${BASH_VERSION:-}" ]]; then
 
 _set_prompt() {
     local exit_code=$?
+    local _cur_row=0
 
-    # ─── SMART PROMPT GUARD ───────────────────────────────────────
-  smart_prompt(){
-		local _cur_row=0
+    # 1. อ่านตำแหน่ง Cursor ปัจจุบัน
     if [[ -t 0 ]] && [[ -t 1 ]]; then
         local _old_stty
         _old_stty=$(stty -g 2>/dev/null)
@@ -66,18 +65,75 @@ _set_prompt() {
         IFS='[;R' read -r -d 'R' _ _cur_row _ </dev/tty 2>/dev/null
         stty "$_old_stty" 2>/dev/null
     fi
-    # ✅ FIX 1: sanitize — ป้องกัน arithmetic crash เมื่ออ่านไม่ได้
+
     [[ "$_cur_row" =~ ^[0-9]+$ ]] || _cur_row=0
 
-    # ✅ FIX 2: บันทึก prev ก่อน update _SSOT_LAST_ROW
     local _prev_row=${_SSOT_LAST_ROW:-0}
     _SSOT_LAST_ROW=$_cur_row
 
+    # ดึงจำนวนบรรทัดทั้งหมดของหน้าจอ Terminal ปัจจุบัน
+    local _max_lines=${LINES:-$(tput lines 2>/dev/null || echo 24)}
+
+    # 2. คำนวณ Delta
     local _delta=$(( _cur_row - _prev_row ))
     (( _delta < 0 )) && _delta=$(( -_delta ))
 
-    # ✅ FIX 3: เช็ค _prev_row (ไม่ใช่ _SSOT_LAST_ROW ที่ update แล้ว)
-    if (( _delta < 5 && _prev_row > 5 )); then
+    # -------------------------------------------------------------
+    # 🎯 SMART PROMPT LIFECYCLE (v2):
+    # 1. Clear screen หรือ cursor กระโดดขึ้นบนสุด (_cur_row <= 2 หรือ _cur_row < _prev_row)
+    #    -> แสดง Full Banner ทันที
+    # 2. เลื่อนลงมาระหว่างกลางจอ (_cur_row < _max_lines) และเคยแสดง Banner ไปแล้ว
+    #    -> แสดง Mini Prompt (-→ ) เสมอ เพราะ Banner บนสุดยังอยู่บนหน้าจอแน่นอน
+    # 3. Output ก้อนใหญ่ดัน Cursor จากกลางจอลงมามิดขอบล่าง (_delta กระโดด)
+    #    -> เช่น คำสั่ง seq, ls, cat, for-loop ที่ดันจอลงมาจนชนขอบล่าง -> แสดง Full Banner
+    # 4. Cursor ติดขอบล่างจออยู่แล้ว (_cur_row >= _max_lines)
+    #    -> ถ้าเป็นคำสั่งเงียบ (cd, export, enter ว่าง) ให้คง Mini Prompt ไว้
+    #    -> ถ้าเป็นคำสั่งที่มี output รันติดต่อกันจนพ้นจอ ให้แสดง Full Banner
+    # -------------------------------------------------------------
+    local show_mini=0
+
+    # CASE 1: Clear screen หรือ cursor กระโดดขึ้นบนสุด
+    if (( _cur_row <= 2 || (_cur_row < _prev_row && _prev_row > 2) )); then
+        _SSOT_BANNER_SHOWN=1
+        _SSOT_SCROLL_COUNT=0
+        show_mini=0
+
+    # CASE 2: อยู่ระหว่างกลางจอ (_cur_row < _max_lines) และเคยแสดง Banner แล้ว
+    elif (( _cur_row < _max_lines && ${_SSOT_BANNER_SHOWN:-0} == 1 )); then
+        show_mini=1
+
+    # CASE 3: Output ก้อนใหญ่ดันลงมาจากกลางจอจนชนขอบล่าง (_prev_row อยู่ห่างจากขอบล่างเกิน 4 บรรทัด)
+    elif (( _cur_row >= _max_lines && _prev_row > 0 && _prev_row < (_max_lines - 4) )); then
+        _SSOT_BANNER_SHOWN=1
+        _SSOT_SCROLL_COUNT=0
+        show_mini=0
+
+    # CASE 4: ติดขอบล่างจออยู่แล้ว (_cur_row >= _max_lines)
+    else
+        # เช็คคำสั่งล่าสุดจาก history (ถ้ามี)
+        local last_cmd=""
+        if [[ $- == *i* ]]; then
+            last_cmd=$(history 1 2>/dev/null | sed -E 's/^[ ]*[0-9]+[ ]*//')
+        fi
+
+        # ถ้าเป็นคำสั่งที่ไม่มี output (cd, pushd, popd, export, unset หรือเคาะ Enter เปล่า)
+        if [[ -z "$last_cmd" || "$last_cmd" =~ ^(cd|pushd|popd|export|unset)([[:space:]]|$) ]]; then
+            show_mini=1
+        else
+            # ถ้าเป็นคำสั่งที่มี output (เช่น seq, ls, git, cat, for ... done)
+            _SSOT_SCROLL_COUNT=$(( ${_SSOT_SCROLL_COUNT:-0} + 1 ))
+            if (( _SSOT_SCROLL_COUNT < 2 )); then
+                show_mini=1
+            else
+                _SSOT_SCROLL_COUNT=0
+                _SSOT_BANNER_SHOWN=1
+                show_mini=0
+            fi
+        fi
+    fi
+
+    # ถ้าเข้าเงื่อนไข Mini Prompt: พิมพ์แค่ -→ แล้วจบฟังก์ชันทันที
+    if (( show_mini == 1 )); then
         if [ $exit_code -eq 0 ]; then
             PS1=" $(psc lg b "  -→  ") "
         else
@@ -85,9 +141,7 @@ _set_prompt() {
         fi
         return
     fi
-    # ─────────────────────────────────────────────────────────────
-	}	
-	smart_prompt
+
     local last_status_raw='(ﾉ◕ヮ◕)ﾉ*:･ﾟ✧'
     local last_status
     if [ $exit_code -eq 0 ]; then
@@ -149,6 +203,8 @@ _set_prompt() {
 
 # ✅ FIX 4: ลบ duplicate — เหลือแค่ชุดเดียว
 _SSOT_LAST_ROW=0
+_SSOT_BANNER_SHOWN=0
+_SSOT_SCROLL_COUNT=0
 export -n PROMPT_COMMAND 2>/dev/null || true
 PROMPT_COMMAND=_set_prompt
 
@@ -166,3 +222,4 @@ if [[ $- == *i* ]] && command -v fastfetch >/dev/null 2>&1; then
 fi
 
 echo
+
