@@ -167,7 +167,7 @@ auto_start_ssh(){
     else
         command -v cn &>/dev/null && cn 10 bi "ssh activated port : ${SSH_PORT}" >&2
     fi
- elif [[ "$JOE_ENV" == @(TERMUX|MUMU|OPPO|ACODEX) ]]; then
+ elif [[ "$JOE_ENV" == @(TERMUX|MUMU|OPPO) ]]; then
     # Termux / MuMu: ใช้ sshd binary ตรงๆ
     # NOTE: Termux ใหม่ rename process เป็น "sshd-session" ไม่ใช่ "sshd"
     # → pgrep -x sshd ใช้ไม่ได้ ต้อง check จาก port ที่ bind อยู่จริงแทน
