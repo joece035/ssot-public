@@ -29,6 +29,11 @@ _is_func_loaded() {
 }
 fi
 
+# -- _vlog fallback (canonical lives in .bash_helper — already defined if sourced first) --
+if ! typeset -f _vlog >/dev/null 2>&1; then
+    _vlog() { [[ "${SSOT_VERBOSE:-0}" == "1" ]] && echo "$@" >&2; }
+fi
+
 # -- fallback: shell guard (canonical cshell lives in .bash_helper) --
 if ! typeset -f _check_shell >/dev/null 2>&1; then
 _check_shell() {
@@ -76,12 +81,13 @@ _check_one_func() {
 
     # prefer canonical auto-loader when interactive
     if [[ -t 0 ]] && typeset -f auto_source >/dev/null 2>&1; then
+        _vlog "⚠️  [_check_ -f] '$func' not loaded — attempting auto_source..."
         auto_source "$func" "$context"
         return $?
     fi
 
-    # non-interactive: single-match auto-source only, multi-match = fail (no picker)
-    # pure-bash: no grep/find — uses globstar (bash 4+) + [[ =~ ]] builtin regex
+    # non-interactive: single-match auto-source only, multi-match = fail
+    _vlog "🔍 [_check_ -f] Searching for '$func' in '$context'..."
     if [[ -n "$context" && -d "$context" ]]; then
         local -a _matches=()
         local _f _line _og_null _og_glob
@@ -99,7 +105,10 @@ _check_one_func() {
         eval "$_og_glob" 2>/dev/null
         if [[ ${#_matches[@]} -eq 1 ]]; then
             # shellcheck disable=SC1090
-            source "${_matches[1]:-${_matches[0]}}" 2>/dev/null && _is_func_loaded "$func" && return 0
+            source "${_matches[1]:-${_matches[0]}}" 2>/dev/null && _is_func_loaded "$func" && {
+                _vlog "✅ [_check_ -f] Sourced: ${_matches[1]:-${_matches[0]}}"
+                return 0
+            }
         elif [[ ${#_matches[@]} -gt 1 ]]; then
             echo "[_check_ -f] '$func' ambiguous (${#_matches[@]} files, refusing interactive pick in script):" >&2
             printf '  - %s\n' "${_matches[@]}" >&2

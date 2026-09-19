@@ -123,7 +123,7 @@ _set_prompt() {
         [[ -n "$b" ]] && git_branch_len=$(( ${#b} + 5 ))
     fi
 
-    local text_len=$(( 8 + 1 + (${#cur_env} + ${#cur_shell} + 7) + 1 + (${#cur_user} + 3 + ${#cur_host}) + 4 + ${#raw_pwd} + git_branch_len + 8 ))
+    local text_len=$(( 9 + (${#cur_env} + ${#cur_shell} + 7) + 1 + (${#cur_user} + 3 + ${#cur_host}) + 4 + ${#raw_pwd} + git_branch_len + 9 ))
 
     local lens=$text_len
     (( lens > (term_w - 2) )) && lens=$(( term_w - 2 ))
@@ -143,9 +143,9 @@ _set_prompt() {
 		local sep=$(psc 54 b '|')
     # -- ประกอบร่าง Dynamic PS1 (Prompt)
     local PS1_=""
-    PS1_+=" ${border_top}\n"
+    PS1_+="${border_top}\n"
     PS1_+="${sep} ${last_status} ${env_tag} ${user_host} in ${current_dir}${git_info} ${sep}\n"
-    PS1_+=" ${border_bot}\n"
+    PS1_+="${border_bot}\n"
     PS1_+=" -→ "
 
     export -n PS1 2>/dev/null || true

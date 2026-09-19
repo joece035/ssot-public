@@ -6,6 +6,21 @@ if ! command -v _color_render >/dev/null 2>&1; then
     fi
 fi
 # ==========================================
+# 🚩 VERBOSE FLAG — ควบคุม debug output ของ auto_source / find_unsource_func
+#
+#   SSOT_VERBOSE=1   → debug mode  : แสดง 🔍 Searching / ✅ Sourced ทุก message
+#   SSOT_VERBOSE=0   → silent mode : เงียบ (everyday use, default)
+#
+# Toggle on-the-fly:
+#   export SSOT_VERBOSE=1   # เปิด debug
+#   export SSOT_VERBOSE=0   # ปิด  (หรือ unset SSOT_VERBOSE)
+# ==========================================
+: "${SSOT_VERBOSE:=0}"   # default = silent
+
+# _vlog — print iff SSOT_VERBOSE=1  (to stderr to not pollute subshell capture)
+_vlog() { [[ "${SSOT_VERBOSE:-0}" == "1" ]] && echo "$@" >&2; }
+
+# ==========================================
 # 1. นิยามฟังก์ชัน _check() (เวอร์ชัน Cross-Shell)
 # ==========================================
 _check() {
@@ -324,7 +339,7 @@ find_unsource_func() {
         return 1
     fi
 
-    echo "Searching for function [$func_name] in [$search_dir]..." >&2
+    _vlog "🔍 Searching for function '$func_name' in '$search_dir'..."
 
     # เก็บ pattern ใน variable (หลีกเลี่ยงปัญหา quote ใน zsh)
     # word-boundary: function name must end at space, '(' or EOL (prevents over-matching short names like 'm')
@@ -344,14 +359,14 @@ find_unsource_func() {
 
     case "${#matches[@]}" in
         0)
-            echo "Function [$func_name] not found in [$search_dir]" >&2
+            _vlog "❌ Function '$func_name' not found in '$search_dir'"
             return 1
             ;;
         1)
             echo "${matches[1]:-${matches[0]}}"
             ;;
         *)
-            echo "Found ${#matches[@]} files containing [$func_name]:" >&2
+            _vlog "🔀 Found ${#matches[@]} files containing '$func_name':"
             if command -v fzf >/dev/null 2>&1; then
                 local selected
                 selected=$(printf '%s\n' "${matches[@]}" | \
@@ -394,7 +409,7 @@ auto_source() {
 
     # สั่ง source ไฟล์สคริปต์ที่เจอ
     if source "$script_path"; then
-        echo "✅ Sourced ($CURRENT_SHELL): $script_path"
+        _vlog "✅ Sourced (${CURRENT_SHELL:-$_SHELL}): $script_path"
     else
         echo "❌ Failed to source: $script_path" >&2
         return 1
@@ -459,7 +474,7 @@ _check_func() {
         if _is_func_loaded "$f"; then
             continue
         fi
-        echo "⚠️  '$f' not loaded — attempting auto_source..." >&2
+        _vlog "⚠️  '$f' not loaded — attempting auto_source..."
         auto_source "$f" "$context" || {
             echo "❌ Cannot proceed: '$f' unavailable" >&2
             err=1
