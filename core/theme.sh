@@ -143,9 +143,9 @@ _set_prompt() {
 		local sep=$(psc 54 b '|')
     # -- ประกอบร่าง Dynamic PS1 (Prompt)
     local PS1_=""
-    PS1_+="${border_top}\n"
+    PS1_+=" ${border_top}\n"
     PS1_+="${sep} ${last_status} ${env_tag} ${user_host} in ${current_dir}${git_info} ${sep}\n"
-    PS1_+="${border_bot}\n"
+    PS1_+=" ${border_bot}\n"
     PS1_+=" -→ "
 
     export -n PS1 2>/dev/null || true
