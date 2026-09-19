@@ -20,6 +20,9 @@ _config_def() {
    set_ "BN_SEP"                   " : "
 }
 # --- 2 Config & rc ---
+_config_rc() {
+    config_rc "$@"
+}
 config_rc(){
   
     set_ "COLOR_MODE"                 "no"          # auto / manual

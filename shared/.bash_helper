@@ -23,6 +23,16 @@ _vlog() { [[ "${SSOT_VERBOSE:-0}" == "1" ]] && echo "$@" >&2; }
 # ==========================================
 # 1. นิยามฟังก์ชัน _check() (เวอร์ชัน Cross-Shell)
 # ==========================================
+# Cache for lazy-sourcing in _check()
+if [[ -z "${_SSOT_SOURCED_FILES_INIT:-}" ]]; then
+    if [ -n "$ZSH_VERSION" ]; then
+        typeset -gA _SSOT_SOURCED_FILES 2>/dev/null || true
+    else
+        declare -gA _SSOT_SOURCED_FILES 2>/dev/null || true
+    fi
+    _SSOT_SOURCED_FILES_INIT=1
+fi
+
 _check() {
     local type="${1:--f}"
     local tar_input="${2:-}"
@@ -30,12 +40,30 @@ _check() {
     local item=""
     [ $# -ge 3 ] && shift 3 || shift $#
 
+    _check_exec() {
+        local _t="$1"
+        shift
+        if [[ "$cmd" == "source" || "$cmd" == "." ]]; then
+            if [[ -n "${_SSOT_SOURCED_FILES[$_t]:-}" ]]; then
+                return 0
+            fi
+            if test "$type" "$_t"; then
+                "$cmd" "$_t" "$@"
+                local _rc=$?
+                [[ $_rc -eq 0 ]] && _SSOT_SOURCED_FILES["$_t"]=1
+                return $_rc
+            fi
+            return 1
+        fi
+        test "$type" "$_t" && "$cmd" "$_t" "$@"
+    }
+
     if [ -n "$ZSH_VERSION" ]; then
         if [[ "${(tP)tar_input}" == *array* || "${(tP)tar_input}" == *association* ]]; then
             setopt LOCAL_OPTIONS
             unsetopt KSH_ARRAYS 2>/dev/null
             for item in "${(@P)tar_input}"; do
-                test "$type" "$item" && "$cmd" "$item" "$@"
+                _check_exec "$item" "$@"
             done
             return 0
         fi
@@ -43,13 +71,13 @@ _check() {
         if [[ "$(declare -p "$tar_input" 2>/dev/null)" =~ ^declare\ -[aA] ]]; then
             local -n ref="$tar_input"
             for item in "${ref[@]}"; do
-                test "$type" "$item" && "$cmd" "$item" "$@"
+                _check_exec "$item" "$@"
             done
             return 0
         fi
     fi
 
-    test "$type" "$tar_input" && "$cmd" "$tar_input" "$@"
+    _check_exec "$tar_input" "$@"
 }
 #-- helper for  functin, alias unbinding
 unbinding(){

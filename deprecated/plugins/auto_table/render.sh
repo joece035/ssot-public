@@ -37,7 +37,7 @@ n_(){
 bn_2() {
     # --- 0. Config & Defaults ---
 
-    _check_ -f _config_rc
+    _C -f _config_rc
 
     local title="${BN_TITLE:-Shortcuts folders}"
     local title_c="${BN_TITLE_COLOR:-208}"
@@ -119,7 +119,7 @@ bn_2() {
 bn_3() {
     # --- 0. Config & Defaults ---
 
-    _check_ -f _config_def
+    _C -f _config_def
 
     local title="${BN_TITLE:-Shortcuts folders}"
     local title_c="${BN_TITLE_COLOR:-208}"

@@ -345,11 +345,13 @@ HOOKEOF
 _check_usage() {
     # printf is a bash builtin — zero external dependency
     printf >&2 '%s\n' \
-        'usage: _check_ <mode> [args...]' \
+        'usage: _check_ <mode> [args...] OR _check_ <func> [args...]' \
         '  -o|--object  -f <path> [cmd...]   test object then run cmd (default: source)' \
         '  -s|--shell   [bash|zsh]           guard shell (no arg prints current shell)' \
         '  -j|--JENV    [--set|--force]      ensure JOE_ENV' \
         '  -f|--FUNCTION <func|array>... [-d dir] ensure function(s) loaded' \
+        '  -r|--run     <func> [args...]     lazy-load function and execute with args' \
+        '  <func> [args...]                  lazy-load function (and execute if args given)' \
         '  -p|--PKG     [-c] <pkg> [bin] ... ensure package installed' \
         '  -c|--compat  [dir|file]           scan dual-shell (bash+zsh) compatibility traps' \
         '  -h|--help                         this help'
@@ -380,10 +382,31 @@ _check_(){
             _check_JOE_ENV "$@"
             ;;
         -f|--FUNCTION)  _check_func_safe "$@" ;;
+        -r|--run)
+            local _target_fn="${1:-}"
+            shift || true
+            [[ -z "$_target_fn" ]] && { echo "[_check_ -r] no function name provided" >&2; return 1; }
+            if ! _is_func_loaded "$_target_fn"; then
+                _check_func_safe "$_target_fn" || return $?
+            fi
+            "$_target_fn" "$@"
+            ;;
         -p|--PKG)       _check_pkg "$@" ;;
         -c|--compat)    _check_compat "$@" ;;
         -h|--help|help) _check_usage; return 0 ;;
-        *) _check_usage; return 1 ;;
+        *)
+            # Smart lazy-load: If first argument is not a flag, treat as function
+            if [[ "$mode" != -* ]]; then
+                if ! _is_func_loaded "$mode"; then
+                    _check_func_safe "$mode" || return $?
+                fi
+                if [[ $# -gt 0 ]]; then
+                    "$mode" "$@"
+                    return $?
+                fi
+                return 0
+            fi
+            _check_usage; return 1 ;;
     esac
 }
 

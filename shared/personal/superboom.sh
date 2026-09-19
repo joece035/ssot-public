@@ -7,8 +7,6 @@
 # ============================================================
 
 _() {
-    _check_ bn_2 >/dev/null 2>&1
-		
     local base_c="${WIN_PATH}c/Users/User/Documents/mumusharedfolder"
     local base_z="${WIN_PATH}z/MuMuSharedFolder"
     local base_backup="${WIN_PATH}h/boom"
@@ -33,8 +31,8 @@ _() {
         bvdo)        printf "%s\n" "${base_backup}/VideoRecords" ;;
         zss)         printf "%s\n" "${base_z}/Screenshots" ;;
         zvdo)        printf "%s\n" "${base_z}/VideoRecords" ;;
-        -h|--help)   ( bn_2 "${list_[@]}" ) ;;
-        *)           ( bn_3 "${list_[@]}" ) ;;
+        -h|--help)   _C bn_2 "${list_[@]}" ;;
+        *)           _C bn_3 "${list_[@]}" ;;
     esac
 }
 
