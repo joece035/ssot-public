@@ -113,14 +113,33 @@ repository_remote_url(){
 }
 alias gremote='repository_remote_url'
 
-# -- ฟังก์ชั่นหา Display Width ที่แท้จริง (รวม Emoji และตัด ANSI Code ออก)
+# -- ฟังก์ชั่นหา Display Width ที่แท้จริง (รวม Emoji, Wide characters และตัด ANSI Code / PS1 delimiters ออก)
 get_real_width() {
     local text="$1"
-    # ตัด ANSI escape code ออกก่อนนับ
-    local plain_text=$(echo -e "$text" | sed 'r'%"$(printf '\033')"\%\%b%g | sed 's/\x1b\[[0-9;]*m//g')
+    # 1. ตัด Bash PS1 prompt delimiters (\[, \])
+    text="${text//\\[/}"
+    text="${text//\\]/}"
 
-    # ใช้ python3 นับความกว้างหน้าจอจริง
-    python3 -c "import unicodeattr, sys; import unicodedata; print(sum(2 if unicodedata.east_asian_width(c) in 'WF' else 1 for c in '''$plain_text'''))" 2>/dev/null || echo "${#plain_text}"
+    # 2. ตัด ANSI escape codes และ OSC sequences
+    local plain_text
+    plain_text=$(printf '%s' "$text" | sed -E $'s/\x1b\\[[0-9;?]*[a-zA-Z]//g; s/\x1b\\][^\x07\x1b]*(\x07|\x1b\\\\)//g')
+
+    # 3. คำนวณ display column width (CJK/Emoji/Wide = 2, Combining mark = 0, ปกติ = 1)
+    if command -v python3 >/dev/null 2>&1; then
+        python3 -c '
+import sys, unicodedata
+text = sys.argv[1]
+w = 0
+for ch in text:
+    if unicodedata.combining(ch):
+        continue
+    eaw = unicodedata.east_asian_width(ch)
+    w += 2 if eaw in ("W", "F") else 1
+print(w)
+' "$plain_text" 2>/dev/null || echo "${#plain_text}"
+    else
+        echo "${#plain_text}"
+    fi
 }
 
 

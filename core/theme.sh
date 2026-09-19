@@ -169,3 +169,5 @@ if [[ $- == *i* ]] && command -v fastfetch >/dev/null 2>&1; then
         fastfetch --logo ubuntu
     fi
 fi
+
+echo
