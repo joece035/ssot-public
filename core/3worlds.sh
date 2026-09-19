@@ -144,7 +144,7 @@ wsl() {
 wsl2() {
   local -a ssh_opts=(-o ConnectTimeout=5 -o BatchMode=yes)
   [[ -f "${KEY_NODE}" ]] && ssh_opts+=(-i "${KEY_NODE}")
-  _ssh_node "${NODE_WSL2_USER}" "${NODE_WSL2_HOST}" "${NODE_WSL2_PORT:-22}" "${ssh_opts[@]}" -- "$@"
+  _ssh_node "${NODE_WSL2_USER}" "${NODE_WSL2_HOST}" "${NODE_WSL2_PORT:-2223}" "${ssh_opts[@]}" -- "$@"
 }
 
 
