@@ -142,5 +142,7 @@ print(w)
     fi
 }
 
-
+wcals(){
+	get_real_width "$@"
+}
 
