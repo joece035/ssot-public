@@ -120,7 +120,7 @@ pkg_manager() {
                 return 1
             fi
             ;;
-        LINUX)
+        KALI)
             if [[ "$EUID" -ne 0 ]] && command -v sudo >/dev/null 2>&1; then
                 sudo apt update && sudo apt install -y "$pkg"
             else
