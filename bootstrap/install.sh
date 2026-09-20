@@ -171,6 +171,8 @@ detect_joe_env() {
         fi    
     elif [[ -n "${MSYSTEM:-}" ]] || [[ "${OSTYPE:-}" == "msys" ]]; then
         echo "GIT-BASH"
+    elif command -v apt >/dev/null 2>&1; then
+        echo "KALI"
     else
         echo "UNKNOWN"
     fi
@@ -256,6 +258,9 @@ _install_pkg() {
             WSL|WSL2)
                 sudo apt-get install -y "$pkg" 2>/dev/null || warn "  apt install $pkg failed"
                 ;;
+            KALI)
+                sudo apt install -y "$pkg" 2>/dev/null || warn "  apt install $pkg failed"
+                ;;
             ACODEX)
                 apk add "$pkg" 2>/dev/null || warn "  apk add $pkg failed"
                 ;;
@@ -276,6 +281,9 @@ case "$JOE_ENV" in
         ;;
     ACODEX)
         apk update 2>/dev/null || warn "apk update failed (non-fatal)"
+        ;;
+    KALI)
+        sudo apt update -qq 2>/dev/null || warn "apt update failed (non-fatal)"
         ;;
 esac
 
