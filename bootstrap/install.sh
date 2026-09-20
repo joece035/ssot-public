@@ -381,10 +381,6 @@ log "Stage 3: Configuring ~/.env"
 ENV_FILE="$HOME/.env"
 
 if [[ ! -f "$ENV_FILE" ]]; then
-    if [[ -f "$SSOT/.env.example" ]]; then
-        cp "$SSOT/.env.example" "$ENV_FILE"
-        ok "Created ~/.env from .env.example"
-    else
         touch "$ENV_FILE"
         ok "Created empty ~/.env"
     fi
