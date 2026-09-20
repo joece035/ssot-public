@@ -18,7 +18,7 @@ case ":${PATH}:" in
     *:"$HOME/.local/bin":*) ;;
     *) export PATH="$HOME/.local/bin:$PATH" ;;
 esac
-
+ 
 # ── 2. Load private env vars (JOE_ENV, SSOT, secrets) ──
 [ -f ~/.env ] && . ~/.env
 
@@ -39,6 +39,8 @@ if [[ -z "${SSOT:-}" ]]; then
         export SSOT="$HOME/ssot"
     fi
 fi
+
+
 
 # ── 2. Load secret env vars (JOE_ENV, SSOT, secrets) ──
 [ -f ~/.env.secret ] && . ~/.env.secret
@@ -312,7 +314,7 @@ repo() {
     if grep -q "^export SSOT=" "$HOME/.env" 2>/dev/null; then
         sed -i "s|^export SSOT=.*|export SSOT=$repository|" "$HOME/.env"
     else
-        echo "export SSOT=$repository" >> "$HOME/.env"
+        printf '\nexport SSOT="%s"\n' "$repository" >> "$HOME/.env"
     fi
     export SSOT="$repository"
 

@@ -18,6 +18,7 @@ export PATH="$HOME/.local/bin:$HOME/.local/lib/openclaw/bin:$HOME/.opencode/bin:
 export TERM="${TERM:-xterm-256color}"
 export COLORTERM="truecolor"
 
+
 # -- Shell Options (Prevent glob errors & duplicate fpath) ------
 setopt NO_NOMATCH 2>/dev/null || true
 setopt NULL_GLOB 2>/dev/null || true
@@ -63,6 +64,8 @@ fi
 
 # -- ZSH/Bash compat layer & SSOT entry point ------------------
 SSOT="${SSOT:-$HOME/ssot}"
+
+
 source_files=(
     "$HOME/.env"
     "$SSOT/.zsh-bash-compat.sh"

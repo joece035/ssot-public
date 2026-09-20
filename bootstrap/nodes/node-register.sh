@@ -210,7 +210,7 @@ _update_my_device() {
         sed -i "s/^export MY_DEVICE=.*/export MY_DEVICE=\"$device_name\"/" "$env_file"
         cn 226 b "🔄 MY_DEVICE: $current → $device_name"
     else
-        echo "export MY_DEVICE=\"$device_name\"" >> "$env_file"
+        printf '\nexport MY_DEVICE="%s"\n' "$device_name" >> "$env_file"
         cn 82 b "✅ MY_DEVICE=$device_name"
     fi
 }

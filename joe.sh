@@ -5,6 +5,7 @@
 # Works on WSL, Termux (incl. MuMu), and Git Bash via single source.
 # Detection order: Termux → WSL → Git Bash → MUMU
 # ============================================================
+# -- first of everything make sure you have yet to source main helper
 
 # ── Step 0: JOE_ENV detection (fallback — ปกติ set จาก ~/.env หรือ .bashrc) ──
 # ค่าที่ใช้ได้: TERMUX | WSL | GIT-BASH | MUMU

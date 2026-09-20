@@ -174,7 +174,7 @@ fi
 if grep -q "^export JOE_ENV=" "$HOME/.env" 2>/dev/null; then
     sed -i "s/^export JOE_ENV=.*/export JOE_ENV=\"$JOE_ENV\"/" "$HOME/.env"
 else
-    echo "export JOE_ENV=\"$JOE_ENV\"" >> "$HOME/.env"
+    printf '\nexport JOE_ENV="%s"\n' "$JOE_ENV" >> "$HOME/.env"
 fi
 
 # 5.4 Dynamic Node Identity Registration (MY_DEVICE)
@@ -192,7 +192,7 @@ if ! grep -q "^export MY_DEVICE=" "$HOME/.env" 2>/dev/null; then
     echo "📱 Node Identity Registration:"
     read -r -t 10 -p "   Name this node in the SSOT mesh (default: $_def_device): " _chosen_dev < /dev/tty || _chosen_dev="$_def_device"
     _chosen_dev="${_chosen_dev:-$_def_device}"
-    echo "export MY_DEVICE=\"$_chosen_dev\"" >> "$HOME/.env"
+    printf '\nexport MY_DEVICE="%s"\n' "$_chosen_dev" >> "$HOME/.env"
     echo "  ✅ Registered node: MY_DEVICE=$_chosen_dev"
 fi
 
