@@ -6,7 +6,9 @@
 # Detection order: Termux → WSL → Git Bash → MUMU
 # ============================================================
 # -- first of everything make sure you have yet to source main helper
-
+if ! declare -f _check &> /dev/null; then
+    [[ -f "$HOME/ssot/.bash_helper" ]] && source "$HOME/ssot/.bash_helper"
+fi
 # ── Step 0: JOE_ENV detection (fallback — ปกติ set จาก ~/.env หรือ .bashrc) ──
 # ค่าที่ใช้ได้: TERMUX | WSL | GIT-BASH | MUMU
 
