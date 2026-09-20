@@ -326,12 +326,16 @@ _check_JOE_ENV() {
         fi
     elif command -v apk >/dev/null 2>&1; then
         _result="ACODEX"
-    elif grep -qi microsoft /proc/version 2>/dev/null; then
-        if [[ $(id -un) == "joez" ]]; then
+		elif command -v apk >/dev/null 2>&1; then
+        if grep -qi microsoft /proc/version 2>/dev/null; then
+       		 if [[ $(id -un) == "joez" ]]; then
             _result="WSL2"
-        else    
+  	       else    
             _result="WSL"
-        fi    
+       		 fi
+				else
+						_result="KALI"
+				fi
     elif [[ -n "${MSYSTEM:-}" ]] || [[ "${OSTYPE:-}" == "msys" ]]; then
         _result="GIT-BASH"
     else
