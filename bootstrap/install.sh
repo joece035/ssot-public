@@ -632,7 +632,7 @@ case "$JOE_ENV" in
         ;;
     ACODEX)
         PROFILE_DIR="$SSOT/profiles/acodex"
-        SHELL_RC="$HOME/.zshrc"
+        SHELL_RC="$HOME/.bashrc"
         ;;
 		KALI)
         PROFILE_DIR="$SSOT/profiles/kali"
