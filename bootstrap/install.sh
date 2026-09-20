@@ -177,12 +177,12 @@ detect_joe_env() {
 }
 
 log "Stage 0: Detecting environment"
-JOE_ENV="$(detect_joe_env "${1:-}")"
+JOE_ENV="$(detect_joe_env "${1:-}" | tr '[:lower:]' '[:upper:]')"
 export JOE_ENV
 
-# Also set MY_DEVICE if provided via argument
+# Also set MY_DEVICE if provided via argument (normalize to lowercase)
 if [[ -n "${1:-}" ]]; then
-    MY_DEVICE="$1"
+    MY_DEVICE="$(echo "$1" | tr '[:upper:]' '[:lower:]')"
     export MY_DEVICE
 fi
 
@@ -211,8 +211,19 @@ if [[ "$JOE_ENV" == "GIT-BASH" ]]; then
 fi
 
 # Source pkg_manager if available (repo may already be cloned)
-_PKG_MGR="$HOME/ssot/functions/pkg_manager.sh"
-if [[ -f "$_PKG_MGR" ]]; then
+# Canonical path is shared/functions/ (root functions/ is legacy and does not exist)
+_PKG_MGR=""
+for _cand_dir in "$HOME/ssot" "$HOME/bashscripts"; do
+    if [[ -f "$_cand_dir/shared/functions/pkg_manager.sh" ]]; then
+        _PKG_MGR="$_cand_dir/shared/functions/pkg_manager.sh"
+        break
+    fi
+done
+# Legacy fallback (pre-shared/ layout)
+if [[ -z "$_PKG_MGR" && -f "$HOME/ssot/functions/pkg_manager.sh" ]]; then
+    _PKG_MGR="$HOME/ssot/functions/pkg_manager.sh"
+fi
+if [[ -n "$_PKG_MGR" ]]; then
     # shellcheck source=/dev/null
     source "$_PKG_MGR"
     _HAVE_PKGMGR=true
@@ -387,6 +398,16 @@ fi
 
 chmod 600 "$ENV_FILE" 2>/dev/null || true
 
+# ── 2b-pre. Recover MY_DEVICE from previous ~/.env (re-runs keep identity) ──
+if [[ -z "${MY_DEVICE:-}" ]]; then
+    _saved_device="$(grep '^export MY_DEVICE=' "$ENV_FILE" 2>/dev/null | head -1 | sed 's/^export MY_DEVICE="//;s/"$//')"
+    if [[ -n "$_saved_device" ]]; then
+        MY_DEVICE="$_saved_device"
+        export MY_DEVICE
+        ok "MY_DEVICE recovered from ~/.env: $MY_DEVICE"
+    fi
+fi
+
 # ── 2b. Vault Detection & Auto-Unlock ──
 VAULT_FILE="$SSOT/core/.env.enc"
 VAULT_SCRIPT="$SSOT/bootstrap/vault/ssot-vault.sh"
@@ -436,18 +457,22 @@ else
 fi
 
 # ── 2c. Node Identity Registration ──
+# Always runs (idempotent): registers this device as an SSOT node member by
+# creating bootstrap/nodes/<name>.node.env (full NODE_* schema) + pinning
+# MY_DEVICE in ~/.env. This is what makes one-command onboarding work.
 NODE_SCRIPT="$SSOT/bootstrap/nodes/node-register.sh"
 if [[ -f "$NODE_SCRIPT" ]]; then
     log "Stage 3c: Registering node identity"
-    if [[ -n "${MY_DEVICE:-}" ]]; then
-        ok "MY_DEVICE already set: $MY_DEVICE"
+    if JOE_ENV="$JOE_ENV" SSOT="$SSOT" bash "$NODE_SCRIPT" --auto ${MY_DEVICE:+$MY_DEVICE} 2>&1 | sed 's/^/  /'; then
+        ok "Node registered"
     else
-        # Auto-detect and register node (non-interactive)
-        if JOE_ENV="$JOE_ENV" SSOT="$SSOT" bash "$NODE_SCRIPT" --auto 2>/dev/null; then
-            ok "Node registered"
-        else
-            warn "Node registration skipped — run 'node-register' later"
-        fi
+        warn "Node registration failed — run 'node-register --auto' later"
+    fi
+    # Re-read MY_DEVICE (node-register pins it in ~/.env)
+    _reg_device="$(grep '^export MY_DEVICE=' "$ENV_FILE" 2>/dev/null | head -1 | sed 's/^export MY_DEVICE="//;s/"$//')"
+    if [[ -n "$_reg_device" ]]; then
+        MY_DEVICE="$_reg_device"
+        export MY_DEVICE
     fi
 else
     # Fallback: just set MY_DEVICE in ~/.env
@@ -707,12 +732,20 @@ fi
 
 log "Stage 4.6: auto detect and install ble"
 
-
- if [[ ! -f "~/.local/share/blesh/ble.sh" || ! -d "$HOME/ble.sh" ]]; then
- 		cd $HOME &&
- 		git clone --recursive --depth 1 --shallow-submodules https://github.com/akinomyoga/ble.sh.git
-		make -C ble.sh install PREFIX=~/.local
- fi		
+# Idempotent: quoted "~" never expands, so always test $HOME unquoted.
+# Guarded with || warn (set -e is on — a failed clone must not abort install).
+if [[ ! -f "$HOME/.local/share/blesh/ble.sh" ]]; then
+    if [[ ! -d "$HOME/ble.sh" ]]; then
+        git clone --recursive --depth 1 --shallow-submodules https://github.com/akinomyoga/ble.sh.git "$HOME/ble.sh" 2>/dev/null \
+            || warn "ble.sh clone failed (non-fatal)"
+    fi
+    if [[ -d "$HOME/ble.sh" ]]; then
+        make -C "$HOME/ble.sh" install PREFIX="$HOME/.local" 2>/dev/null \
+            || warn "ble.sh install failed (non-fatal)"
+    fi
+else
+    ok "ble.sh already installed"
+fi
 # ============================================================
 # STAGE 4.7 — Broken Symlink Scanner & Cleanup
 # ============================================================
@@ -789,6 +822,19 @@ else
     ok "$BIN_DIR/node-status already linked"
 fi
 
+# node-register command (one-short-command onboarding: node-register --auto <name>)
+if [[ ! -L "$BIN_DIR/node-register" ]]; then
+    if [[ -f "$SSOT/bootstrap/nodes/node-register.sh" ]]; then
+        ln -sf "$SSOT/bootstrap/nodes/node-register.sh" "$BIN_DIR/node-register"
+        chmod +x "$SSOT/bootstrap/nodes/node-register.sh"
+        ok "Created: $BIN_DIR/node-register → bootstrap/nodes/node-register.sh"
+    else
+        ok "$BIN_DIR/node-register not available (node-register.sh not found) — skipping"
+    fi
+else
+    ok "$BIN_DIR/node-register already linked"
+fi
+
 # STAGE 6 — SSH Audit & Self-Healing
 # ============================================================
 if [[ -f "$SSOT/bootstrap/script/ssh_audit.sh" ]]; then
@@ -815,9 +861,9 @@ log "  Checking critical files..."
 _critical_files=(
     "$HOME/.env"
     "$SSOT/joe.sh"
-    "$SSOT/bootstrap/00-env.sh"
+    "$SSOT/shared/00-env.sh"
     "$SSOT/core/01-colors.sh"
-    "$SSOT/core/aliases.sh"
+    "$SSOT/shared/aliases.sh"
     "$SSOT/core/3worlds.sh"
     "$HOME/.local/bin/env"
 )
@@ -903,7 +949,7 @@ else
 fi
 
 # ── 7g. Key modules existence check ──
-for _mod in "bootstrap/00-env.sh" "core/01-colors.sh" "core/aliases.sh" "core/3worlds.sh"; do
+for _mod in "shared/00-env.sh" "core/01-colors.sh" "shared/aliases.sh" "core/3worlds.sh"; do
     if [[ -f "$SSOT/$_mod" ]]; then
         ok "$_mod — found"
     else
@@ -915,14 +961,14 @@ done
 # ── 7h. Syntax check all .sh files ──
 if command -v bash >/dev/null 2>&1; then
     _syntax_fails=0
-    for _f in "$SSOT"/core/*.sh "$SSOT"/functions/*.sh; do
+    for _f in "$SSOT"/core/*.sh "$SSOT"/shared/functions/*.sh "$SSOT"/shared/personal/*.sh; do
         [[ -f "$_f" ]] || continue
         if ! bash -n "$_f" 2>/dev/null; then
             _syntax_fails=$((_syntax_fails + 1))
         fi
     done
     if [[ $_syntax_fails -eq 0 ]]; then
-        ok "Syntax check — all core/*.sh and functions/*.sh pass"
+        ok "Syntax check — all core + shared .sh pass"
     else
         warn "Syntax check — $_syntax_fails file(s) have errors"
     fi

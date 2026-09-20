@@ -71,6 +71,7 @@ SSH_DIR="$HOME/.ssh"
 CONFIG_FILE="$SSH_DIR/config"
 mkdir -p "$SSH_DIR"
 chmod 700 "$SSH_DIR"
+touch "$CONFIG_FILE"
 [[ -f "$CONFIG_FILE" ]] && cp "$CONFIG_FILE" "${CONFIG_FILE}.bak.$(date +%Y%m%d_%H%M%S)"
 
 _KEX="curve25519-sha256,curve25519-sha256@libssh.org,diffie-hellman-group14-sha256,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512,ecdh-sha2-nistp256,ecdh-sha2-nistp384,ecdh-sha2-nistp521"
@@ -96,6 +97,10 @@ Host $alias
 EOF
 }
 
+# Build the mesh block to a temp file first, then merge:
+#   - markers present → replace block in place (user content outside preserved)
+#   - markers absent  → append block (never wipe existing user config)
+_BLOCK_TMP="$(mktemp)"
 {
     echo "# >>> JOE_SSOT_MESH_START >>>"
     echo "# SSOT Mesh — Multi-Node Topology"
@@ -118,7 +123,22 @@ EOF
     entry "acodex" "$NODE_ACODEX_HOST" "$NODE_ACODEX_USER" "$NODE_ACODEX_PORT"
     entry "window" "$NODE_WIN_HOST"    "$NODE_WIN_USER"    "$NODE_WIN_PORT"
     echo "# <<< JOE_SSOT_MESH_END <<<"
-} > "$CONFIG_FILE"
+} > "$_BLOCK_TMP"
+
+if grep -q "JOE_SSOT_MESH_START" "$CONFIG_FILE" 2>/dev/null; then
+    _OUT_TMP="$(mktemp)"
+    awk -v block="$_BLOCK_TMP" '
+        /JOE_SSOT_MESH_START/ { while ((getline line < block) > 0) print line; close(block); skip=1; next }
+        /JOE_SSOT_MESH_END/ { skip=0; next }
+        !skip { print }
+    ' "$CONFIG_FILE" > "$_OUT_TMP"
+    cat "$_OUT_TMP" > "$CONFIG_FILE"
+    rm -f "$_OUT_TMP"
+else
+    [[ -s "$CONFIG_FILE" ]] && printf '\n' >> "$CONFIG_FILE"
+    cat "$_BLOCK_TMP" >> "$CONFIG_FILE"
+fi
+rm -f "$_BLOCK_TMP"
 
 chmod 600 "$CONFIG_FILE"
 echo "mesh-regen: wrote $CONFIG_FILE (localhost-wsl=$LOCALHOST_WSL)"

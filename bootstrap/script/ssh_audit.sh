@@ -634,7 +634,15 @@ test_mesh() {
         c 252 "... "
         if ssh -o BatchMode=yes -o ConnectTimeout=2 -o StrictHostKeyChecking=accept-new "$node" exit 2>/dev/null; then
             cn 46 b "[ONLINE - AUTH OK]"
-        elif nc -z -w 1 "$node" 22 2>/dev/null || nc -z -w 1 "$node" 8022 2>/dev/null || nc -z -w 1 "$node" 8023 2>/dev/null; then
+            continue
+        fi
+        # SSH failed — resolve this node's real host:port from ssh config
+        # (ssh -G never connects) and probe the port directly.
+        local _phost _pport
+        _phost="$(ssh -G "$node" 2>/dev/null | awk '/^hostname /{print $2}')"
+        _pport="$(ssh -G "$node" 2>/dev/null | awk '/^port /{print $2}')"
+        if [[ -n "$_phost" && -n "$_pport" ]] && command -v nc >/dev/null 2>&1 \
+            && nc -z -w 1 "$_phost" "$_pport" 2>/dev/null; then
             cn 226 b "[PORT OPEN - AUTH PENDING]"
         else
             cn 244 "[OFFLINE / UNREACHABLE]"

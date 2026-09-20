@@ -98,10 +98,11 @@ cmd_lock() {
     fi
 
     # Migration: if locking from legacy ~/.env, extract pure secrets to ~/.env.secret
+    # Machine-local vars stay out of the shared vault (SSOT paths differ per device).
     if [[ "$target_secret" == "$LOCAL_ENV" || "$target_secret" == "$SSOT_ENV" ]]; then
         cn 214 b "⚡ Migrating pure secrets from $(basename "$target_secret") → $LOCAL_SECRET..."
         mkdir -p "$(dirname "$LOCAL_SECRET")"
-        grep -vE '^[[:space:]]*(export[[:space:]]+)?(JOE_ENV|MY_DEVICE|HERMES_DIR|PYTHON_VENV|SDCARD_PATH|NODE_HOST|NODE_BIN|SCRIPTS_PATH|COLOR_PATH)=' "$target_secret" > "$LOCAL_SECRET"
+        grep -vE '^[[:space:]]*(export[[:space:]]+)?(JOE_ENV|MY_DEVICE|SSOT|HERMES_DIR|PYTHON_VENV|SDCARD_PATH|NODE_HOST|NODE_BIN|SCRIPTS_PATH|COLOR_PATH)=' "$target_secret" > "$LOCAL_SECRET"
         chmod 600 "$LOCAL_SECRET"
         ln -sf "$LOCAL_SECRET" "$SSOT_SECRET" 2>/dev/null || true
         target_secret="$LOCAL_SECRET"
@@ -185,6 +186,13 @@ cmd_unlock() {
         fi
 
         # Write to LOCAL_SECRET (~/.env.secret) ONLY. Do NOT overwrite ~/.env!
+        # Guard: back up a pre-existing local secret file before replacing it.
+        if [[ -f "$LOCAL_SECRET" ]]; then
+            local _bak="${LOCAL_SECRET}.bak.$(date +%Y%m%d_%H%M%S)"
+            cp "$LOCAL_SECRET" "$_bak" 2>/dev/null || true
+            chmod 600 "$_bak" 2>/dev/null || true
+            echo "📦 Previous local secrets backed up: $_bak"
+        fi
         mv "$tmp_out" "$LOCAL_SECRET"
         chmod 600 "$LOCAL_SECRET"
         ln -sf "$LOCAL_SECRET" "$SSOT_SECRET" 2>/dev/null || true

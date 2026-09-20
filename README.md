@@ -6,26 +6,34 @@ Works on: **Termux** · **MuMu** · **WSL** · **Git Bash** · **AcodeX**
 
 ## ⚡ Quick Install (New Device)
 
-```bash
-# One-liner bootstrap
-pkg install -y curl git
-curl -fsSL https://raw.githubusercontent.com/joece035/ssot-public/main/bootstrap/install.sh | bash
+One short command — installs deps, wires shell, unlocks vault, and registers
+this device as an SSOT node member (`bootstrap/nodes/<name>.node.env`):
 
-# Or clone first, then install with specific device name as $1
+```bash
+# Clone first, then install with your device name as $1
 pkg install -y git
 git clone https://github.com/joece035/ssot-public.git ~/ssot
-bash ~/ssot/bootstrap/install.sh 
+bash ~/ssot/bootstrap/install.sh <device>
+#  e.g. termux | mumu | oppo | wsl | wsl2 | acodex   (Git-Bash auto-detects)
+
+# Or set MY_DEVICE env var (same effect):
+MY_DEVICE=oppo bash ~/ssot/bootstrap/install.sh
+
+# Fully remote one-liner (device via MY_DEVICE, defaults to auto-detect):
+curl -fsSL https://raw.githubusercontent.com/joece035/ssot-public/main/bootstrap/install.sh | bash
 ```
 
 The installer will:
-1. Detect your environment (Termux/WSL/GitBash/MuMu)
+1. Detect your environment (Termux/WSL/GitBash/MuMu) — `$1`/`MY_DEVICE` wins over auto-detect
 2. Install essential packages
 3. Clone the repo (if not already present)
-4. Create `~/.env` from template
-5. Wire your shell profile (`.bashrc` / `.zshrc`)
-6. Create tool symlinks (`joe`, `syncctl`, `node-status`)
-7. Run SSH audit
-8. Verify installation
+4. Create `~/.env` from template (pins `JOE_ENV` at top, recovers `MY_DEVICE` on re-runs)
+5. Unlock vault secrets (`core/.env.enc`, needs `SSOT_VAULT_PASS` non-interactively)
+6. Register node identity → `bootstrap/nodes/<name>.node.env` + publish pubkey for hub collection
+7. Wire your shell profile (`.bashrc` / `.zshrc`)
+8. Create tool symlinks (`joe`, `syncctl`, `node-status`, `node-register`)
+9. Run SSH audit
+10. Verify installation
 
 ## 📁 Structure
 
