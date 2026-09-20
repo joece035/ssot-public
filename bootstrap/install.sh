@@ -634,6 +634,11 @@ case "$JOE_ENV" in
         PROFILE_DIR="$SSOT/profiles/acodex"
         SHELL_RC="$HOME/.zshrc"
         ;;
+		KALI)
+        PROFILE_DIR="$SSOT/profiles/kali"
+        SHELL_RC="$HOME/.bashrc"
+        ;;
+    		
     *)
         PROFILE_DIR="$SSOT/profiles/wsl"
         SHELL_RC="$HOME/.bashrc"
