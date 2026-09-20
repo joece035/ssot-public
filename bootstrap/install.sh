@@ -26,6 +26,8 @@
 
 set -euo pipefail
 
+[[ -f "$HOME/ssot/joe.sh" ]] && source "$HOME/ssot/joe.sh"
+
 # ── Minimal color helpers (no dependency on 01-colors.sh yet) ──
 if [[ -t 1 ]] && command -v tput >/dev/null 2>&1 && tput sgr0 >/dev/null 2>&1; then
     _BOLD="$(tput bold)"; _RESET="$(tput sgr0)"
