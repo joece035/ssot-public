@@ -450,7 +450,7 @@ EOF
 
 EOF
             ;;		
-        *)  cn y b "usage : -d or -f"; return 1 ;;
+        *)  cn y b "usage : -d -sh -py -f"; return 1 ;;
     esac
 
 }
