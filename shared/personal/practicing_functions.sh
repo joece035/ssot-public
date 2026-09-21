@@ -487,3 +487,6 @@ perm(){
         done
     fi
 
+py(){
+python3 "$@"
+}
