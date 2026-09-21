@@ -24,7 +24,7 @@
 # Idempotent: safe to re-run. Skips completed steps.
 # ============================================================
 
-set -euo pipefail
+#set -euo pipefail
 
 [[ -f "$HOME/ssot/joe.sh" ]] && source "$HOME/ssot/joe.sh"
 
