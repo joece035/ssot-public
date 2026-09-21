@@ -434,6 +434,22 @@ new() {
 
 EOF
             ;;
+		  	"-py")  
+            mkdir -p "$(dirname "$target")"  
+            touch "$target" && 
+            cn y bi "✅ ไฟล์ .sh ถูกสร้างเรียบร้อยที่: $target" &&
+            chmod +x "$target" && c lg bi "ให้สิทธิ์รันไฟล์  ";c 45 b "$(basename "$target")  ";cn lg bi "เรียบร้อย"  && 
+            cat << EOF > "$target"
+#!/usr/bin/env python3
+# ------------------------------------------------------------
+# File: $(basename "$target")
+# ------------------------------------------------------------
+
+
+
+
+EOF
+            ;;		
         *)  cn y b "usage : -d or -f"; return 1 ;;
     esac
 
