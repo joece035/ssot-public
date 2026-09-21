@@ -381,9 +381,8 @@ log "Stage 3: Configuring ~/.env"
 ENV_FILE="$HOME/.env"
 
 if [[ ! -f "$ENV_FILE" ]]; then
-        touch "$ENV_FILE"
-        ok "Created empty ~/.env"
-    fi
+    touch "$ENV_FILE"
+    ok "Created empty ~/.env"
 else
     ok "~/.env already exists"
 fi
