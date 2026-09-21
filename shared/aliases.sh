@@ -95,6 +95,7 @@ alias jenv="cn lg b $JOE_ENV"
 alias repos="cn lg b $SSOT"
 alias envm='bash "$SSOT/tools/env-manager.sh"'
 alias envmgr='bash "$SSOT/tools/env-manager.sh"'
+alias b2p='bash "$SSOT/tools/b2p.sh"'
 
 
 
