@@ -208,15 +208,34 @@ winrate_cal(){
 
         card+=(
             "$(c 245 " 🚀 Wins Needed  : ")$(c 46 b "0")$(c 248 " (Target already reached! 🎉)")"
-            "$(c 245 " 🛡️  Loss Cushion : ")$(c 214 b "+$loss_fmt")$(c 248 " losses before dropping")"
+            "$(c 245 " 🛡️  Loss Cushion : ")$(c 214 b "+$loss_fmt")$(c 248 " losses (to maintain ≥ $winrate_need%)")"
         )
     else
-        card+=( "$(c 245 " 🚀 Wins Needed  : ")$(c 82 b "+$need_fmt")$(c 248 " in a row")" )
-        if (( check_need == winrate_need )); then
-            card+=( "$(c 245 " 🛡️  Status       : ")$(c 46 b "Verified ($check_need% = target) ✅")" )
-        else
-            card+=( "$(c 245 " 🛡️  Status       : ")$(c 196 b "Mismatch ($check_need% ≠ target) ❌")" )
+        # Penalty ต่อการแพ้ 1 ครั้ง = target / (100 - target) wins
+        local penalty
+        penalty=$(mth "ROUNDUP($winrate_need / (100 - $winrate_need), 0)" 0)
+        penalty="${penalty%.*}"
+        local pen_fmt="$(_comma "$penalty")"
+
+        # คำนวณ Floor Cushion: แพ้ได้อีกกี่เกมก่อนหลุด % ปัจจุบัน (เช่น หลุด 98% ร่วงไป 97%)
+        local floor_pct
+        floor_pct=$(mth "INT($cur_wr)" 0)
+        floor_pct="${floor_pct%.*}"
+        if (( $(awk -v c="$cur_wr" -v f="$floor_pct" 'BEGIN{print (c == f) ? 1 : 0}') )); then
+            floor_pct=$(( floor_pct - 1 ))
         fi
+
+        local floor_losses=0
+        if (( floor_pct > 0 )); then
+            floor_losses=$(mth "FLOOR((100*$w - $floor_pct*$total) / $floor_pct, 0)" 0)
+            floor_losses="${floor_losses%.*}"
+        fi
+        local floor_fmt="$(_comma "$floor_losses")"
+
+        card+=(
+            "$(c 245 " 🚀 Wins Needed  : ")$(c 82 b "+$need_fmt")$(c 248 " in a row ")$(c 244 "• 1 loss = ")$(c 214 "+$pen_fmt")"
+            "$(c 245 " 🛡️  Floor Cushion : ")$(c 214 b "+$floor_fmt")$(c 248 " losses (to maintain ≥ $floor_pct%)")"
+        )
     fi
 
     box_card --border 240 "${card[@]}"
