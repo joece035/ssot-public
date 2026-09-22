@@ -545,15 +545,21 @@ c256_() {
     done
 }
 
+# -- warn 
+_warn(){
+  cn y b "$@ ⚠"
+}
+
 # --error
 _er(){
- cn lr b "$@ ⛔"
+ cn 196 b "$@ ⛔"
 }
 
  # --successfully
 _sc(){
  	cn lg b "$@ ✅"
  }
+_ok(){ _sc "$@"; }
 
  # --explain
  _ep(){
@@ -585,4 +591,126 @@ draw_() {
    printf "%*s\n" "$2" "" | sed "s/ /$1/g"
 }
 alias d_='draw_'
+
+# ============================================================
+# REAL DISPLAY WIDTH & DYNAMIC TERMINAL BOX CARD
+# ============================================================
+get_real_width() {
+    local text="$1"
+    text="${text//\\[/}"
+    text="${text//\\]/}"
+
+    local plain_text
+    plain_text=$(printf '%s' "$text" | sed -E $'s/\x1b\\[[0-9;?]*[a-zA-Z]//g; s/\x1b\\][^\x07\x1b]*(\x07|\x1b\\\\)//g')
+
+    if command -v python3 >/dev/null 2>&1; then
+        python3 -c '
+import sys, unicodedata
+text = sys.argv[1]
+w = 0
+for ch in text:
+    if unicodedata.combining(ch) or ch == "\ufe0f":
+        continue
+    code = ord(ch)
+    if (0x1F300 <= code <= 0x1FAFF) or (0x2600 <= code <= 0x27BF) or (0x2300 <= code <= 0x23FF):
+        w += 2
+        continue
+    eaw = unicodedata.east_asian_width(ch)
+    w += 2 if eaw in ("W", "F") else 1
+print(w)
+' "$plain_text" 2>/dev/null || echo "${#plain_text}"
+    else
+        echo "${#plain_text}"
+    fi
+}
+
+_w() {
+    get_real_width "$@"
+}
+
+box_card() {
+    # Usage: box_card [--border <color_code>] "line1" "---" "line2" ...
+    #        or via pipe: printf "%s\n" "..." | box_card
+    local border_color="240"
+    local lines=()
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --border|-b)
+                border_color="$2"
+                shift 2
+                ;;
+            *)
+                lines+=("$1")
+                shift
+                ;;
+        esac
+    done
+
+    # Read from stdin if no lines provided as arguments
+    if [[ ${#lines[@]} -eq 0 ]]; then
+        while IFS= read -r line; do
+            lines+=("$line")
+        done
+    fi
+
+    [[ ${#lines[@]} -eq 0 ]] && return 0
+
+    if command -v python3 >/dev/null 2>&1; then
+        printf '%s\n' "${lines[@]}" | python3 -c '
+import sys, re, unicodedata
+
+def real_width(s):
+    plain = re.sub(r"\x1b\[[0-9;?]*[a-zA-Z]|\x1b\][^\x07\x1b]*(\x07|\x1b\\)", "", s)
+    plain = plain.replace("\\[", "").replace("\\]", "")
+    w = 0
+    for ch in plain:
+        if unicodedata.combining(ch) or ch == "\ufe0f":
+            continue
+        code = ord(ch)
+        if (0x1F300 <= code <= 0x1FAFF) or (0x2600 <= code <= 0x27BF) or (0x2300 <= code <= 0x23FF):
+            w += 2
+        elif unicodedata.east_asian_width(ch) in ("W", "F"):
+            w += 2
+        else:
+            w += 1
+    return w
+
+lines = sys.stdin.read().splitlines()
+border_c = sys.argv[1] if len(sys.argv) > 1 else "240"
+bc = f"\033[38;5;{border_c}m"
+rst = "\033[0m"
+
+widths = [real_width(line) if line != "---" else 0 for line in lines]
+max_w = max(widths) if widths else 40
+max_w = max(max_w, 32)
+
+div = "─" * (max_w + 2)
+print(f"{bc}╭{div}╮{rst}")
+for line, w in zip(lines, widths):
+    if line == "---":
+        print(f"{bc}├{div}┤{rst}")
+    else:
+        pad = max_w - w
+        sp = " " * pad
+        print(f"{bc}│{rst} {line}{sp} {bc}│{rst}")
+print(f"{bc}╰{div}╯{rst}")
+' "$border_color"
+    else
+        # Fallback without python
+        local max_w=46
+        local div
+        div="$(draw_ "─" "$((max_w + 2))")"
+        cn "$border_color" "╭${div}╮"
+        for l in "${lines[@]}"; do
+            if [[ "$l" == "---" ]]; then
+                cn "$border_color" "├${div}┤"
+            else
+                printf "%s │\n" "$(cn "$border_color" "│") $l"
+            fi
+        done
+        cn "$border_color" "╰${div}╯"
+    fi
+}
+
 

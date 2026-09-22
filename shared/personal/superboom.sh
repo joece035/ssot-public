@@ -103,3 +103,121 @@ bp_(){
 		echo -e "$_bp_"
 	  block_prompt="$_bp_"
 }
+
+winrate_cal(){
+    #  Usage: winrate_cal <wins> <losses> [target_%]
+    #  Example: winrate_cal 40 60      → auto target = next whole %
+    #           winrate_cal 40 60 60   → target = 60%
+
+    local w="${1:-}"
+    local l="${2:-}"
+
+    # Helper: เพิ่ม comma คั่นหลักพัน (Pure Bash)
+    _comma() {
+        local v="$1"
+        while [[ "$v" =~ ^([0-9]+)([0-9]{3})(.*) ]]; do
+            v="${BASH_REMATCH[1]},${BASH_REMATCH[2]}${BASH_REMATCH[3]}"
+        done
+        echo "$v"
+    }
+
+    # Helper: Usage Card เมื่อไม่ใส่ argument
+    if [[ -z "$w" || -z "$l" ]]; then
+        box_card --border 240 \
+            "$(c 214 b " 🎯 WIN RATE CALCULATOR — USAGE")" \
+            "---" \
+            "$(c 245 " Syntax  : ")$(c 51 "winrate_cal <wins> <losses> [target]")" \
+            "$(c 245 " Example : ")$(c 141 "winrate_cal 40 60")" \
+            "$(c 245 "           ")$(c 141 "winrate_cal 40000 2200 96")"
+        return 1
+    fi
+
+    if (( w + l == 0 )); then
+        _er "Total matches cannot be 0"
+        return 1
+    fi
+
+    local cur_wr wc_tar winrate_need odd wins_needed check_need
+    local total=$(( w + l ))
+
+    # 1. Current win rate (2 decimal)
+    cur_wr=$(mth "ROUND(100*($w/$total), 2)" 3)
+
+    # 2. Target win rate (default = next whole %)
+    wc_tar=$(mth "ROUNDUP($cur_wr, 0)" 0)
+    wc_tar="${wc_tar%.*}"
+    winrate_need=${3:-$wc_tar}
+    winrate_need="${winrate_need%.*}"
+
+    # Format ตัวเลข
+    local w_fmt="$(_comma "$w")"
+    local l_fmt="$(_comma "$l")"
+    local tot_fmt="$(_comma "$total")"
+
+    # Edge Case: เป้าหมาย <= ปัจจุบัน หรือเป็นไปไม่ได้
+    local is_already_achieved=0
+    local is_impossible=0
+
+    if (( winrate_need >= 100 && l > 0 )); then
+        is_impossible=1
+        wins_needed="N/A"
+        odd="∞"
+    elif (( $(awk -v c="$cur_wr" -v t="$winrate_need" 'BEGIN{print (c >= t) ? 1 : 0}') )); then
+        is_already_achieved=1
+        wins_needed="0"
+        odd=$(mth "ROUND((1/(1-($winrate_need/100)))-1, 2)")
+    else
+        # Implied fractional odds at target WR: 1/(1-t) - 1
+        odd=$(mth "ROUND((1/(1-($winrate_need/100)))-1, 2)")
+
+        # Wins needed to reach target WR: n = (target*(W+L) - 100*W) / (100 - target)
+        wins_needed=$(mth "ROUNDUP(($winrate_need*$total - 100*$w) / (100-$winrate_need), 0)" 0)
+        wins_needed="${wins_needed%.*}"
+
+        check_need=$(mth "ROUND(100*(($wins_needed+$w)/($wins_needed+$total)), 0)" 0)
+        check_need="${check_need%.*}"
+    fi
+
+    local need_fmt
+    if [[ "$wins_needed" =~ ^[0-9]+$ ]]; then
+        need_fmt="$(_comma "$wins_needed")"
+    else
+        need_fmt="$wins_needed"
+    fi
+
+    # ── Dynamic Box Card Rendering ──
+    local -a card=()
+    card+=(
+        "$(c 51 b " 🎯 WIN RATE TARGET CALCULATOR")"
+        "---"
+        "$(c 245 " 📊 Matches     : ")$(c 229 b "$tot_fmt")$(c 245 " total (")$(c 46 b "${w_fmt}W")$(c 245 " - ")$(c 196 b "${l_fmt}L")$(c 245 ")")"
+        "---"
+        "$(c 245 " ⚡ Current WR   : ")$(c 226 b "$cur_wr%")"
+        "$(c 245 " 🎯 Target WR    : ")$(c 45 b "$winrate_need%")"
+        "$(c 245 " 🎲 Implied Odds : ")$(c 214 "$odd : 1")"
+        "---"
+    )
+
+    if (( is_impossible )); then
+        card+=( "$(c 196 b " ⛔ IMPOSSIBLE : 100% requires 0 losses!")" )
+    elif (( is_already_achieved )); then
+        local losses_allowed
+        losses_allowed=$(mth "FLOOR((100*$w - $winrate_need*$total) / $winrate_need, 0)" 0)
+        losses_allowed="${losses_allowed%.*}"
+        local loss_fmt="$(_comma "$losses_allowed")"
+
+        card+=(
+            "$(c 245 " 🚀 Wins Needed  : ")$(c 46 b "0")$(c 248 " (Target already reached! 🎉)")"
+            "$(c 245 " 🛡️  Loss Cushion : ")$(c 214 b "+$loss_fmt")$(c 248 " losses before dropping")"
+        )
+    else
+        card+=( "$(c 245 " 🚀 Wins Needed  : ")$(c 82 b "+$need_fmt")$(c 248 " in a row")" )
+        if (( check_need == winrate_need )); then
+            card+=( "$(c 245 " 🛡️  Status       : ")$(c 46 b "Verified ($check_need% = target) ✅")" )
+        else
+            card+=( "$(c 245 " 🛡️  Status       : ")$(c 196 b "Mismatch ($check_need% ≠ target) ❌")" )
+        fi
+    fi
+
+    box_card --border 240 "${card[@]}"
+}

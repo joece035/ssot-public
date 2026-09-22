@@ -413,3 +413,35 @@ _check_(){
 _C(){				
 						_check_ "$@"
 }
+
+get_real_width() {
+    local text="$1"
+    # 1. ??? Bash PS1 prompt delimiters (\[, \])
+    text="${text//\\[/}"
+    text="${text//\\]/}"
+
+    # 2. ??? ANSI escape codes ??? OSC sequences
+    local plain_text
+    plain_text=$(printf '%s' "$text" | sed -E $'s/\x1b\\[[0-9;?]*[a-zA-Z]//g; s/\x1b\\][^\x07\x1b]*(\x07|\x1b\\\\)//g')
+
+    # 3. ????? display column width (CJK/Emoji/Wide = 2, Combining mark = 0, ???? = 1)
+    if command -v python3 >/dev/null 2>&1; then
+        python3 -c '
+import sys, unicodedata
+text = sys.argv[1]
+w = 0
+for ch in text:
+    if unicodedata.combining(ch):
+        continue
+    eaw = unicodedata.east_asian_width(ch)
+    w += 2 if eaw in ("W", "F") else 1
+print(w)
+' "$plain_text" 2>/dev/null || echo "${#plain_text}"
+    else
+        echo "${#plain_text}"
+    fi
+}
+
+_w(){
+	get_real_width "$@"
+}

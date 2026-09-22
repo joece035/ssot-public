@@ -131,9 +131,17 @@ mathsbk() {
 #   mth pi() * 2                   → 6.28              (constant)
 #   mth SQRT(144) + 2^3            → 20                (mixed)
 #
-# Functions (case-insensitive): SUM, AVG, MIN, MAX, ABS, INT, ROUND,
-#   ROUNDUP, ROUNDDOWN, CEIL, FLOOR, POW, SQRT, MOD, IF,
+# Functions (case-insensitive): SUM, AVG, MIN, MAX, ABS, INT,
+#   ROUND(expr,digits)    — round half-up to N decimals
+#   ROUNDUP(expr,digits)  — always round away from zero (Excel ROUNDUP)
+#   ROUNDDOWN(expr,digits)— always round toward zero   (Excel ROUNDDOWN)
+#   CEIL, FLOOR, POW, SQRT, MOD, IF,
 #   SIN, COS, TAN, ASIN, ACOS, ATAN, LOG, LN, EXP, PI, E
+#
+# ROUNDUP/ROUNDDOWN examples:
+#   mth "ROUNDUP(100/(3*((30-70)/40)), 0)"   → -34
+#   mth "ROUNDDOWN(100/(3*((30-70)/40)), 5)" → -33.33333
+#   mth "ROUND(22/7, 4)"                     → 3.1429
 #
 # Operators: + - * / ^ %  (^ = power, % = mod; ** also accepted)
 # ============================================================
@@ -451,7 +459,42 @@ EOF
                 if (fn == "sqrt")  { v = st[sp--]; st[++sp] = sqrt(v); sttype[sp] = "n" }
                 else if (fn == "abs")   { v = st[sp--]; st[++sp] = (v < 0 ? -v : v); sttype[sp] = "n" }
                 else if (fn == "int")   { v = st[sp--]; st[++sp] = int(v); sttype[sp] = "n" }
-                else if (fn == "round") { v = st[sp--]; st[++sp] = (v < 0 ? -int(-v+0.5) : int(v+0.5)); sttype[sp] = "n" }
+                else if (fn == "round") {
+                    argc = rpn_argc[t]; if (argc == 0) argc = 1
+                    if (argc >= 2) {
+                        # ROUND(expr, digits) — 2-arg Excel form
+                        d = int(st[sp--]); v = st[sp--]
+                        m = 10^(d<0?0:d); sgn=(v>=0?1:-1); av=(v>=0?v:-v)*m
+                        st[++sp] = sgn * int(av+0.5) / m; sttype[sp] = "n"
+                    } else {
+                        v = st[sp--]; st[++sp] = (v < 0 ? -int(-v+0.5) : int(v+0.5)); sttype[sp] = "n"
+                    }
+                }
+                else if (fn == "roundup") {
+                    # ROUNDUP(expr, digits) — Excel: always away from zero
+                    argc = rpn_argc[t]; if (argc == 0) argc = 1
+                    if (argc >= 2) {
+                        d = int(st[sp--]); v = st[sp--]
+                        m = 10^(d<0?0:d); sgn=(v>=0?1:-1); av=(v>=0?v:-v)*m; iv=int(av)
+                        st[++sp] = sgn * (av > iv ? iv+1 : iv) / m; sttype[sp] = "n"
+                    } else {
+                        # 1-arg fallback: ceiling away from zero
+                        v = st[sp--]; iv=int(v>=0?v:-v); sgn=(v>=0?1:-1)
+                        st[++sp] = sgn*(v!=int(v)?iv+1:iv); sttype[sp] = "n"
+                    }
+                }
+                else if (fn == "rounddown") {
+                    # ROUNDDOWN(expr, digits) — Excel: always toward zero (truncate)
+                    argc = rpn_argc[t]; if (argc == 0) argc = 1
+                    if (argc >= 2) {
+                        d = int(st[sp--]); v = st[sp--]
+                        m = 10^(d<0?0:d); sgn=(v>=0?1:-1); av=(v>=0?v:-v)*m
+                        st[++sp] = sgn * int(av) / m; sttype[sp] = "n"
+                    } else {
+                        # 1-arg fallback: truncate toward zero
+                        v = st[sp--]; st[++sp] = int(v); sttype[sp] = "n"
+                    }
+                }
                 else if (fn == "ceil")  { v = st[sp--]; st[++sp] = (v == int(v) ? v : (v > 0 ? int(v)+1 : int(v))); sttype[sp] = "n" }
                 else if (fn == "floor") { v = st[sp--]; st[++sp] = (v < 0 && v != int(v) ? int(v)-1 : int(v)); sttype[sp] = "n" }
                 else if (fn == "sin")   { v = st[sp--]; st[++sp] = sin(v); sttype[sp] = "n" }
