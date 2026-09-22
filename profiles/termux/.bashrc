@@ -64,8 +64,7 @@ fi
 
 
 
-# Added by Antigravity CLI installer
-export PATH="$HOME/.local/bin:$PATH"
+
 
 # pnpm
 export PNPM_HOME="$HOME/.local/share/pnpm"

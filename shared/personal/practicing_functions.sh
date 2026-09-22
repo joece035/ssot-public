@@ -460,33 +460,6 @@ perm(){
     chmod +x "$target" && c 10 bi "ให้สิทธิ์รันไฟล์  ";c 45 b "$(basename "$target")  ";cn 10 bi "เรียบร้อย" 
 }
 
-
-
-    
-    pack=(
-        "git"
-        "sshd"
-        "tput"
-        "curl"
-        "micro"
-        "which"
-        "find"
-        "openssl"
-    )
-    missing_pkgs=()
-    
-    for p in "${pack[@]}"; do
-        if ! command -v "$p" >/dev/null 2>&1; then
-            missing_pkgs+=("$p")
-        fi
-    done
-    if [[ -n "${missing_pkgs[@]}" ]]; then
-        echo "Missing packages: ${missing_pkgs[*]}"
-        for p in "${missing_pkgs[@]}"; do
-            echo "no $p"
-        done
-    fi
-
 py(){
 python3 "$@"
 }

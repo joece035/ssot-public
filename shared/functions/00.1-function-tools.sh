@@ -125,6 +125,8 @@ mathsbk() {
 #   mth AVG 10 20 30 2             → 20.00             (scale suffix)
 #   mth 10/3 0 d                   → 3                 (down)
 #   mth 10/3 4                     → 3.3333            (scale, default round)
+#   mth "45/(3*(5+10))"            → 1.00              (nested parens)
+#   mth "100/(3*((30-70)/40))" 5 d → -33.33333         (scale+mode with parens)
 #   mth if(100>50, "yes", "no")    → yes               (Excel IF)
 #   mth pi() * 2                   → 6.28              (constant)
 #   mth SQRT(144) + 2^3            → 20                (mixed)
@@ -232,32 +234,20 @@ EOF
 
     local peeled_result
     if peeled_result="$(_mth_peel "$raw")"; then
-        # Only apply peel if expression is "simple" (no function calls) or peel
-        # is a mode-only (Pattern D). For function calls, only peel mode, not scale.
         local _rest="${peeled_result#*|}"
         local _pscale="${_rest%|*}"
         local _pmode="${_rest##*|}"
-        if [[ "$raw" == *\(* ]] && [[ -n "$_pscale" ]]; then
-            # Function call + trailing scale → take the new_s (drop trailing scale)
-            # but don't apply the scale to the result (function result has its own scale)
-            raw="${peeled_result%%|*}"
-        else
+        raw="${peeled_result%%|*}"
+        [[ -n "$_pscale" ]] && scale="$_pscale"
+        [[ -n "$_pmode" ]]  && mode="$_pmode"
+        # Try second peel (handles both scale + mode in either order)
+        if peeled_result="$(_mth_peel "$raw")"; then
+            _rest="${peeled_result#*|}"
+            _pscale="${_rest%|*}"
+            _pmode="${_rest##*|}"
             raw="${peeled_result%%|*}"
             [[ -n "$_pscale" ]] && scale="$_pscale"
             [[ -n "$_pmode" ]]  && mode="$_pmode"
-            # Try second peel
-            if peeled_result="$(_mth_peel "$raw")"; then
-                _rest="${peeled_result#*|}"
-                _pscale="${_rest%|*}"
-                _pmode="${_rest##*|}"
-                if [[ "$raw" == *\(* ]] && [[ -n "$_pscale" ]]; then
-                    raw="${peeled_result%%|*}"
-                else
-                    raw="${peeled_result%%|*}"
-                    [[ -n "$_pscale" ]] && scale="$_pscale"
-                    [[ -n "$_pmode" ]]  && mode="$_pmode"
-                fi
-            fi
         fi
     fi
 
