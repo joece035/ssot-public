@@ -603,17 +603,29 @@ math()  { mth "$@"; }
 #   • Requires python3 + sympy  (auto-installed if missing)
 # ============================================================
 slv() {
-    [[ $# -eq 0 || -z "$*" ]] && {
+    local -a clean_args=()
+    local deg_mode="0"
+    for arg in "$@"; do
+        case "$arg" in
+            -d|--deg|--degree) deg_mode="1" ;;
+            *) clean_args+=("$arg") ;;
+        esac
+    done
+
+    [[ ${#clean_args[@]} -eq 0 ]] && {
         cat <<'EOF' >&2
 slv — Algebraic Equation Solver  (alias: solve)
-Usage: slv <equation> [var=value] ...
+Usage: slv [--deg|-d] <equation> [var=value] ...
+
+Options:
+  -d, --deg, --degree   Use degrees for trigonometric functions (default: radians)
 
 Examples:
-  slv "x=2x+y" "y=2"           # x=-2  y=2
-  slv "2x=2y"                   # x=y   (symbolic)
-  slv "x+y+z=10" "y=3" "z=2"   # x=5
-  slv "a^2+b^2=c^2" "a=3" "b=4"# c=5
-  slv "F=m*a" "m=10" "a=9.8"   # F=98
+  slv "x=2x+y" "y=2"                # x=-2  y=2
+  slv --deg "h=a*sin(b)" a=10 b=30  # h=5   (sin(30°) = 0.5)
+  slv "2x=2y"                       # x=y   (symbolic)
+  slv "a^2+b^2=c^2" "a=3" "b=4"     # c=5
+  slv "F=m*a" "m=10" "a=9.8"        # F=98
 EOF
         return 1
     }
@@ -624,20 +636,27 @@ EOF
     fi
     if ! python3 -c "import sympy" 2>/dev/null; then
         echo "slv: installing sympy..." >&2
-        python3 -m pip install --quiet sympy || {
-            echo "slv: failed to install sympy" >&2; return 1
-        }
+        if command -v pip3 >/dev/null 2>&1 || python3 -m pip --version >/dev/null 2>&1; then
+            python3 -m pip install --quiet sympy || {
+                ensure python3-sympy python3-sympy || { echo "slv: failed to install sympy" >&2; return 1; }
+            }
+        else
+            ensure python3-sympy python3-sympy || ensure python3-pip python3-pip || return 1
+            python3 -c "import sympy" 2>/dev/null || python3 -m pip install --quiet sympy || true
+        fi
     fi
 
     # ── Build argument list for Python ────────────────────────
-    local eq="$1"; shift
-    local -a knowns=("$@")
+    local eq="${clean_args[0]}"
+    local -a knowns=("${clean_args[@]:1}")
 
     # ── Python solver ─────────────────────────────────────────
-    python3 - "$eq" "${knowns[@]}" <<'PYEOF'
+    python3 - "$deg_mode" "$eq" "${knowns[@]}" <<'PYEOF'
 import sys, re
 from sympy import (symbols, Eq, solve, simplify, sympify,
-                   sqrt, Rational, pi, E as euler, zoo, oo, nan)
+                   sqrt, Rational, pi, E as euler, zoo, oo, nan,
+                   sin, cos, tan, asin, acos, atan, sinh, cosh, tanh,
+                   exp, log, Abs, factorial, floor, ceiling, I, rad, deg)
 from sympy.parsing.sympy_parser import (parse_expr,
     standard_transformations, implicit_multiplication_application,
     convert_xor)
@@ -645,25 +664,44 @@ from sympy.parsing.sympy_parser import (parse_expr,
 transformations = (standard_transformations +
                    (implicit_multiplication_application, convert_xor))
 
-args   = sys.argv[1:]
-eq_str = args[0]
-knowns = args[1:]           # e.g. ["y=2", "z=5"]
+deg_mode = (sys.argv[1] == "1")
+eq_str   = sys.argv[2]
+knowns   = sys.argv[3:]           # e.g. ["y=2", "z=5"]
 
-# ── Helper: parse a raw expression string → sympy expr ────
-def parse(s, local_syms=None):
-    # Start with math constants; user-declared symbols override them
-    ns = {"sqrt": sqrt, "pi": pi, "e": euler, "E": euler}
-    if local_syms:
-        ns.update({str(v): v for v in local_syms})   # user symbols win
-    return parse_expr(s, local_dict=ns, transformations=transformations)
+# ── Math functions table for expression parsing ───────────
+MATH_FUNCS = {
+    "sqrt": sqrt, "pi": pi, "e": euler, "E": euler,
+    "sinh": sinh, "cosh": cosh, "tanh": tanh,
+    "exp": exp, "log": log, "ln": log,
+    "abs": Abs, "Abs": Abs,
+    "factorial": factorial, "floor": floor, "ceiling": ceiling,
+    "rad": rad, "deg": deg,
+    "sind": lambda x: sin(rad(x)),
+    "cosd": lambda x: cos(rad(x)),
+    "tand": lambda x: tan(rad(x)),
+    "asind": lambda x: deg(asin(x)),
+    "acosd": lambda x: deg(acos(x)),
+    "atand": lambda x: deg(atan(x)),
+}
+
+if deg_mode:
+    MATH_FUNCS.update({
+        "sin": lambda x: sin(rad(x)),
+        "cos": lambda x: cos(rad(x)),
+        "tan": lambda x: tan(rad(x)),
+        "asin": lambda x: deg(asin(x)),
+        "acos": lambda x: deg(acos(x)),
+        "atan": lambda x: deg(atan(x)),
+    })
+else:
+    MATH_FUNCS.update({
+        "sin": sin, "cos": cos, "tan": tan,
+        "asin": asin, "acos": acos, "atan": atan,
+    })
+
+BUILTINS = set(MATH_FUNCS.keys()) | {"int","mod","pow","min","max","sum","avg"}
 
 # ── Collect all variable names from the equation ──────────
-# NOTE: use plain regex (no \b) so implicit-multiply vars like 2x, 3y are caught
-# Single-letter constants (e, E, pi) are NOT in BUILTINS — they are treated as
-# user variables when found standalone in equations.  If the user wants Euler's
-# number they can write exp(1) or 2.718.
-BUILTINS = {"sqrt","sin","cos","tan","log","ln","exp",
-            "abs","int","mod","pow","min","max","sum","avg"}
 raw_vars_set = set(re.findall(r'[a-zA-Z_][a-zA-Z0-9_]*', eq_str))
 raw_vars_set = {v for v in raw_vars_set if v not in BUILTINS}
 
@@ -675,8 +713,14 @@ for kv in knowns:
 
 raw_vars = sorted(raw_vars_set)
 
-# ── Create sympy symbol objects ────────────────────────────
-sym_map = {v: symbols(v, real=True) for v in raw_vars}
+# ── Create sympy symbol objects (complex-capable) ─────────
+sym_map = {v: symbols(v) for v in raw_vars}
+
+# ── Helper: parse a raw expression string → sympy expr ────
+def parse(s):
+    ns = dict(MATH_FUNCS)
+    ns.update({str(v): v for v in sym_map.values()})
+    return parse_expr(s, local_dict=ns, transformations=transformations)
 
 # ── Parse known substitutions ──────────────────────────────
 subs = {}
@@ -688,7 +732,7 @@ for kv in knowns:
     k = k.strip(); v = v.strip()
     if k in sym_map:
         try:
-            subs[sym_map[k]] = parse(v, sym_map.values())
+            subs[sym_map[k]] = parse(v)
         except Exception:
             subs[sym_map[k]] = sympify(v)
 
@@ -699,8 +743,8 @@ if "=" not in eq_str:
 
 lhs_s, rhs_s = eq_str.split("=", 1)
 try:
-    lhs = parse(lhs_s.strip(), sym_map.values())
-    rhs = parse(rhs_s.strip(), sym_map.values())
+    lhs = parse(lhs_s.strip())
+    rhs = parse(rhs_s.strip())
 except Exception as exc:
     print(f"slv: parse error — {exc}", file=sys.stderr)
     sys.exit(1)
@@ -710,19 +754,22 @@ equation = Eq(lhs, rhs)
 # ── Substitute knowns into the equation ───────────────────
 equation_subst = equation.subs(subs)
 
+# ── Check for division by zero / singularity ──────────────
+if equation_subst.has(zoo) or lhs.subs(subs).has(zoo) or rhs.subs(subs).has(zoo):
+    print("\n  \033[1;31mUndefined\033[0m (division by zero / singularity)\n")
+    sys.exit(0)
+
 # ── Identify unknowns ──────────────────────────────────────
 unknowns = [sym_map[v] for v in raw_vars if sym_map[v] not in subs]
 
 # ── Solve ─────────────────────────────────────────────────
-results = {}
-
 if not unknowns:
     # Everything is known — evaluate both sides
     val = simplify(lhs.subs(subs) - rhs.subs(subs))
     if val == 0:
-        print("✓ Equation is satisfied (both sides equal).")
+        print("\n  \033[1;32m✓ Equation is satisfied (both sides equal).\033[0m\n")
     else:
-        print(f"✗ Equation NOT satisfied (difference = {val}).")
+        print(f"\n  \033[1;31m✗ Equation NOT satisfied (difference = {val}).\033[0m\n")
     sys.exit(0)
 
 try:
@@ -734,28 +781,26 @@ except Exception as exc:
 # ── Format output ─────────────────────────────────────────
 ANSI_G  = "\033[1;32m"   # bright green  (variable name)
 ANSI_C  = "\033[1;36m"   # bright cyan   (value)
+ANSI_Y  = "\033[1;33m"   # bright yellow (warning note)
 ANSI_R  = "\033[0m"      # reset
 
 def fmt_val(v):
     """Pretty-print a sympy value."""
-    # Numeric? try float
     try:
-        f = float(v)
-        # Show as int if it's exact
-        if f == int(f) and abs(f) < 1e15:
-            return str(int(f))
-        # Scientific notation for very large/small
-        if abs(f) > 1e10 or (f != 0 and abs(f) < 1e-4):
+        if v.is_number and v.is_real:
+            f = float(v)
+            if f == int(f) and abs(f) < 1e15:
+                return str(int(f))
+            if abs(f) > 1e10 or (f != 0 and abs(f) < 1e-4):
+                return f"{f:.6g}"
             return f"{f:.6g}"
-        return f"{f:.6g}"
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, AttributeError):
         pass
-    # Symbolic — return simplified string
     return str(simplify(v))
 
 print()   # leading blank line
 
-# ── Prefer positive solutions ────────────────────────────────────────
+# ── Prefer positive solutions ──────────────────────────────
 def _prefer_positive(solutions, unknowns, subs):
     """Prefer the solution where all solved unknowns are positive real numbers."""
     if len(solutions) <= 1:
@@ -763,13 +808,13 @@ def _prefer_positive(solutions, unknowns, subs):
     for candidate in solutions:
         vals = [candidate.get(sym, sym).subs(subs) for sym in unknowns]
         try:
-            if all(float(v) > 0 for v in vals):
+            if all(v.is_real and float(v) > 0 for v in vals):
                 return candidate
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, AttributeError):
             pass
     return solutions[0]  # fallback
 
-# ── Symbolic fallback: underdetermined systems ──────────────────────────────
+# ── Symbolic fallback: underdetermined systems ─────────────
 def _symbolic_solve(lhs, rhs, unknowns, subs):
     """Solve each unknown symbolically; for underdetermined systems express
     the first solvable unknown in terms of the remaining ones only."""
@@ -781,11 +826,11 @@ def _symbolic_solve(lhs, rhs, unknowns, subs):
             if sym_sol:
                 chosen = sym_sol[0]
                 chosen_str = fmt_val(chosen)
-                # Only print if it's not a trivial identity like 'x = x'
                 if str(chosen) != str(unk):
-                    print(f"  {ANSI_G}{unk}{ANSI_R} = {ANSI_C}{chosen_str}{ANSI_R}")
+                    note = f"  {ANSI_Y}(imaginary / no real solution){ANSI_R}" if chosen.has(I) else ""
+                    print(f"  {ANSI_G}{unk}{ANSI_R} = {ANSI_C}{chosen_str}{ANSI_R}{note}")
                     printed_any = True
-                    break   # one expression is enough for underdetermined system
+                    break
         except Exception:
             pass
     if not printed_any:
@@ -798,9 +843,13 @@ if sol:
     for sym in unknowns:
         val = solution.get(sym, sym)   # if not in sol, stays symbolic
         val_sub = val.subs(subs)
+        # Suppress redundant identities like 'y = y' when only a subset was solved
+        if val_sub == sym and len(unknowns) > 1 and len(solution) < len(unknowns):
+            continue
         s_name = str(sym)
         s_val  = fmt_val(val_sub)
-        print(f"  {ANSI_G}{s_name}{ANSI_R} = {ANSI_C}{s_val}{ANSI_R}")
+        note   = f"  {ANSI_Y}(imaginary / no real solution){ANSI_R}" if val_sub.has(I) else ""
+        print(f"  {ANSI_G}{s_name}{ANSI_R} = {ANSI_C}{s_val}{ANSI_R}{note}")
     # — known vars (echo back) —
     for sym, val in subs.items():
         s_name = str(sym)
@@ -818,6 +867,7 @@ PYEOF
 
 # Friendly alias
 solve() { slv "$@"; }
+
 
 
 tp(){
