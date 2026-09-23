@@ -394,7 +394,7 @@ CONFIG_ENTRY
 # ============================================================
 
 ssh_kadd() {
-    local input="${1:-}"
+    local input="${1:-$(cb_read)}"
     local auth_file="$HOME/.ssh/authorized_keys"
     local ssh_dir="$HOME/.ssh"
 

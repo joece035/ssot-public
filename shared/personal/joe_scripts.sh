@@ -179,3 +179,19 @@ sync_shared() {
 }
 alias sshare='sync_shared'
 alias ssync='sync_shared'
+# ============================================================
+# ustd_bk — Copy USDT_BEP20_BITKUB to clipboard
+# ============================================================
+usdt_bk(){
+    if [[ -n "$USDT_BEP20_BITKUB" ]]; then
+        cb_copy "$USDT_BEP20_BITKUB"
+        cn lg b "copied "
+        echo "$USDT_BEP20_BITKUB"
+    else
+        local usdt="0x5C7D1Da0862F8865C328c8CDE22B3C1168dA2740"
+        cb_copy "$usdt"
+        cn lg b "copied "
+        echo "$usdt"
+    fi
+}
+alias usdt=usdt_bk
