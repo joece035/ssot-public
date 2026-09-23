@@ -460,6 +460,10 @@ perm(){
     chmod +x "$target" && c 10 bi "ให้สิทธิ์รันไฟล์  ";c 45 b "$(basename "$target")  ";cn 10 bi "เรียบร้อย" 
 }
 
-py(){
-python3 "$@"
+
+
+_b2p(){
+		local f=$1
+		python3 "$SSOTT/codetrans/codetrans.py" "$f" -t python
+
 }
