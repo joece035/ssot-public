@@ -464,6 +464,6 @@ perm(){
 
 _b2p(){
 		local f=$1
-		python3 "$SSOTT/codetrans/codetrans.py" "$f" -t python
+		python3 "$SSOT/codetrans/codetrans.py" "$f" -t python
 
 }
