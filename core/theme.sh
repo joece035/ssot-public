@@ -151,18 +151,18 @@ _set_prompt() {
     fi
     # -- environment / current shell
     local cur_env="${JOE_ENV:-${MY_DEVICE:-WSL2}}"
-    local cur_shell="${_SHELL:-${SHELL##*/}}"
-    local env_tag="< $(psc 198 b "$cur_env") : $(psc ora b "$cur_shell") >"
+    #local cur_shell="${_SHELL:-${SHELL##*/}}"
+    local env_tag="< $(psc 240 d "$cur_env") : $(psc 240 d "$cur_shell") >"
 
     # -- USER@HOST
     local cur_user="${USER:-$(id -un)}"
     local cur_host="${NODE_HOST:-wsl2}"
-    local user_host="$(psc cr b "$cur_user") @ $(psc y b "$cur_host")"
+    #local user_host="$(psc cr b "$cur_user") @ $(psc y b "$cur_host")"
 
     # -- Current Dir & Git
-    local current_dir="$(psc 242 "${PWD/#$HOME/\~}")"
+    local current_dir="$(psc 242 d "${PWD/#$HOME/\~}")"
     local git_info="$(_git_prompt)"
-    local sep="$(psc 54 b '|')"
+    local sep="$(psc 240 d '|')"
 
     # -- 1. รวมเนื้อหาของแถวกลางจริงที่จะแสดงผล
     local prompt_content="${sep} ${last_status} ${env_tag} ${user_host} in ${current_dir}${git_info} ${sep}"
@@ -187,8 +187,8 @@ _set_prompt() {
         _str_t+="${BN_BORDER_CHAR_TOP}"
         _str_b+="${BN_BORDER_CHAR_BOT}"
     done
-    local border_top="$(psc 54 b "${_str_t}")"
-    local border_bot="$(psc 54 b "${_str_b}")"
+    local border_top="$(cn 240 d "${_str_t}")"
+    local border_bot="$(cn 240 d "${_str_b}")"
 
     # -- 3. ประกอบร่าง Dynamic PS1 (Prompt)
     local PS1_=""
