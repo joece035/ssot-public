@@ -17,8 +17,9 @@ theme_switch() {
     unset PS1; clear; source "$file"
 }
 
-theme_switch d
-alias ta='theme_switch a'
+theme_switch default
+
+alias t='theme_switch a'
 alias tb='theme_switch b'
 alias tc='theme_switch c'
 alias td='theme_switch d'

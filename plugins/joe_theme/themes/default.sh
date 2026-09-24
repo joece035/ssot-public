@@ -184,7 +184,8 @@ _set_prompt() {
 
     local lens=$text_len
     (( lens > (term_w - 2) )) && lens=$(( term_w - 2 ))
-    (( lens < 37 )) && lens=$(( term_w - 2 ))
+
+    
 
     local BN_BORDER_CHAR_TOP="${BOT_LINE:-$'\u2581'}"
     local BN_BORDER_CHAR_BOT="${TOP_LINE:-$'\u2594'}"
