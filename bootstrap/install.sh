@@ -744,18 +744,23 @@ log "Stage 4.6: auto detect and install ble"
 
 # Idempotent: quoted "~" never expands, so always test $HOME unquoted.
 # Guarded with || warn (set -e is on — a failed clone must not abort install).
-if [[ ! -f "$HOME/.local/share/blesh/ble.sh" ]]; then
-    if [[ ! -d "$HOME/ble.sh" ]]; then
-        git clone --recursive --depth 1 --shallow-submodules https://github.com/akinomyoga/ble.sh.git "$HOME/ble.sh" 2>/dev/null \
-            || warn "ble.sh clone failed (non-fatal)"
-    fi
-    if [[ -d "$HOME/ble.sh" ]]; then
-        make -C "$HOME/ble.sh" install PREFIX="$HOME/.local" 2>/dev/null \
+if [[ $JOE_ENV != "@(MUMU|USERLAND)" ]]; then
+    if [[ ! -f "$HOME/.local/share/blesh/ble.sh" ]]; then
+        if [[ ! -d "$HOME/ble.sh" ]]; then
+            git clone --recursive --depth 1 --shallow-submodules https://github.com/akinomyoga/ble.sh.git "$HOME/ble.sh" 2>/dev/null \
+                || warn "ble.sh clone failed (non-fatal)"
+        fi
+        if [[ -d "$HOME/ble.sh" ]]; then
+            make -C "$HOME/ble.sh" install PREFIX="$HOME/.local" 2>/dev/null \
             || warn "ble.sh install failed (non-fatal)"
+        fi
+    else
+        ok "ble.sh already installed"
     fi
 else
-    ok "ble.sh already installed"
+    ok "Skipping ble.sh installation (MUMU/USERLAND env)"
 fi
+
 # ============================================================
 # STAGE 4.7 — Broken Symlink Scanner & Cleanup
 # ============================================================

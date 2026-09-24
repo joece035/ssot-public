@@ -11,7 +11,7 @@ this device as an SSOT node member (`bootstrap/nodes/<name>.node.env`):
 
 ```bash
 # Clone first, then install with your device name as $1
-pkg install -y git
+
 git clone https://github.com/joece035/ssot-public.git ~/ssot
 bash ~/ssot/bootstrap/install.sh <device>
 #  e.g. termux | mumu | oppo | wsl | wsl2 | acodex   (Git-Bash auto-detects)

@@ -11,13 +11,7 @@ shopt -s checkwinsize
 
 # ── 2. BASH LINE EDITOR (Source only, no attach yet) ──
 
-# ── Fix ble.sh locale (MUMU has no locale command) ──
-export LANG="en_US.UTF-8"
-export LC_ALL="en_US.UTF-8"
-export LC_CTYPE="en_US.UTF-8"
-if [[ $- == *i* && -f $HOME/.local/share/blesh/ble.sh ]]; then
-    [[ ${BLE_VERSION-} ]] || source $HOME/.local/share/blesh/ble.sh --attach=none
-fi
+
 
 # ── 3. NVM & COMPLETIONS (MUST come BEFORE .env) ──
 # .env reads NVM_DIR to find node path — needs NVM init first
@@ -50,22 +44,10 @@ if [ -f $HOME/ssot/joe.sh ] && grep -qU $'\r' $HOME/ssot/joe.sh 2>/dev/null; the
 fi
 [ -f $HOME/ssot/joe.sh ] && . $HOME/ssot/joe.sh 2>/dev/null
 
-# ── 6. STARSHIP ──
-# if [[ $- == *i* && -z "$STARSHIP_LOADED" ]]; then
-#     eval "$(starship init bash)"
-#     STARSHIP_LOADED=1
-# fi
-
-# ── 8. ATTACH BLE.SH ──
-if [[ $- == *i* && ${BLE_VERSION-} && -z "$BLE_ATTACHED" ]]; then
-    export BLE_ATTACHED=1
-    ble-attach
-fi
 
 
 
-# Added by Antigravity CLI installer
-export PATH="$HOME/.local/bin:$PATH"
+
 
 # pnpm
 export PNPM_HOME="$HOME/.local/share/pnpm"
