@@ -334,7 +334,7 @@ _check_JOE_ENV() {
             _result="WSL"
        		 fi
 				else
-						_result="KALI"
+						_result="USERLAND"
 				fi
     elif [[ -n "${MSYSTEM:-}" ]] || [[ "${OSTYPE:-}" == "msys" ]]; then
         _result="GIT-BASH"

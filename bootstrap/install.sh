@@ -174,7 +174,7 @@ detect_joe_env() {
     elif [[ -n "${MSYSTEM:-}" ]] || [[ "${OSTYPE:-}" == "msys" ]]; then
         echo "GIT-BASH"
     elif command -v apt >/dev/null 2>&1; then
-        echo "KALI"
+        echo "USERLAND"
     else
         echo "UNKNOWN"
     fi
@@ -260,7 +260,7 @@ _install_pkg() {
             WSL|WSL2)
                 sudo apt-get install -y "$pkg" 2>/dev/null || warn "  apt install $pkg failed"
                 ;;
-            KALI)
+            USERLAND )
                 sudo apt install -y "$pkg" 2>/dev/null || warn "  apt install $pkg failed"
                 ;;
             ACODEX)
@@ -284,7 +284,7 @@ case "$JOE_ENV" in
     ACODEX)
         apk update 2>/dev/null || warn "apk update failed (non-fatal)"
         ;;
-    KALI)
+    USERLAND )
         sudo apt update -qq 2>/dev/null || warn "apt update failed (non-fatal)"
         ;;
 esac
@@ -633,8 +633,8 @@ case "$JOE_ENV" in
         PROFILE_DIR="$SSOT/profiles/acodex"
         SHELL_RC="$HOME/.bashrc"
         ;;
-		KALI)
-        PROFILE_DIR="$SSOT/profiles/kali"
+		USERLAND)
+        PROFILE_DIR="$SSOT/profiles/userland"
         SHELL_RC="$HOME/.bashrc"
         ;;
     		
