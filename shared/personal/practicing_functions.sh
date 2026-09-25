@@ -472,8 +472,10 @@ _b2p(){
         cn y bi "file $f not found"
         return 1
     fi
-
-    local out_py="${f%.*}.py"
+		local out_dir="$SSOT/codetrans/output"
+    local out_py="$out_dir/${f%.*}.py"
+		mkdir -p "$out_dir" 
+		
     if [[ -f "$out_py" ]]; then
         cn y bi "file $out_py already exists"
         return 1
