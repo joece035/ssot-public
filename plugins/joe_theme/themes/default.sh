@@ -149,7 +149,7 @@ _set_prompt() {
         return
     fi
 
-    local last_status_raw='(ﾉ◕ヮ◕)ﾉ*:･ﾟ✧'
+    local last_status_raw='(ﾉ◕ .7oEz ◕)ﾉ*:･ﾟ✧'
     local last_status
     if [ $exit_code -eq 0 ]; then
         last_status="$(mc b "$last_status_raw")"

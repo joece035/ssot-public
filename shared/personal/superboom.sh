@@ -67,7 +67,7 @@ bp_(){
 		local _l='│' 
 		local _r='│'
 		local _b='─'
-
+    
 		# -- color configuration
 		local random=1 
 		local _bd_c=240
@@ -202,7 +202,11 @@ winrate_cal(){
         card+=( "$(c 196 b " ⛔ IMPOSSIBLE : 100% requires 0 losses!")" )
     elif (( is_already_achieved )); then
         local losses_allowed
-        losses_allowed=$(mth "FLOOR((100*$w - $winrate_need*$total) / $winrate_need, 0)" 0)
+        # สมการ: (winrate_need - 1.01) / 100 = w / (w + losses_allowed)
+        # → solve for l (losses_allowed)
+        local wr_floor
+        wr_floor=$(awk -v wr="$winrate_need" 'BEGIN{printf "%.4f", (wr - 1.01)/100}')
+        losses_allowed=$(slv "$wr_floor = $w/($w+l)" "w=$w" | grep -oP '(?<== )[\d.]+' | head -1)
         losses_allowed="${losses_allowed%.*}"
         local loss_fmt="$(_comma "$losses_allowed")"
 
@@ -217,26 +221,26 @@ winrate_cal(){
         penalty="${penalty%.*}"
         local pen_fmt="$(_comma "$penalty")"
 
-        # คำนวณ Floor Cushion: แพ้ได้อีกกี่เกมก่อนหลุด % ปัจจุบัน (เช่น หลุด 98% ร่วงไป 97%)
-        local floor_pct
-        floor_pct=$(mth "INT($cur_wr)" 0)
-        floor_pct="${floor_pct%.*}"
-        if (( $(awk -v c="$cur_wr" -v f="$floor_pct" 'BEGIN{print (c == f) ? 1 : 0}') )); then
-            floor_pct=$(( floor_pct - 1 ))
-        fi
+        # คำนวณ losses_allowed: แพ้ได้อีกกี่เกมก่อน WR หลุดต่ำกว่า (winrate_need - 1.01)%
+        # สมการ: threshold/100 = w/(w+losses_allowed)  →  losses_allowed = w*(100-threshold)/threshold
+        local threshold
+        threshold=$(awk -v wn="$winrate_need" 'BEGIN{printf "%.2f", wn - 1.01}')
 
-        local floor_losses=0
-        if (( floor_pct > 0 )); then
-            floor_losses=$(mth "FLOOR((100*$w - $floor_pct*$total) / $floor_pct, 0)" 0)
-            floor_losses="${floor_losses%.*}"
-        fi
-        local floor_fmt="$(_comma "$floor_losses")"
+        local losses_allowed=0
+        losses_allowed=$(awk -v w="$w" -v t="$threshold" \
+            'BEGIN{printf "%d", int(w * (100 - t) / t)}')
+        local floor_fmt="$(_comma "$losses_allowed")"
 
+        local drop_pct
+        drop_pct=$(awk -v wn="$winrate_need" 'BEGIN{printf "%.2f", wn - 1.01}')
         card+=(
             "$(c 245 " 🚀 Wins Needed  : ")$(c 82 b "+$need_fmt")$(c 248 " in a row ")$(c 244 "• 1 loss = ")$(c 214 "+$pen_fmt")"
-            "$(c 245 " 🛡️  Floor Cushion : ")$(c 214 b "+$floor_fmt")$(c 248 " losses (to maintain ≥ $floor_pct%)")"
+            "---"
+            "$(c 245 " 💀 Losses Allowed : ")$(c 214 b "+$floor_fmt")$(c 248 " before dropping below ")$(c 196 "$drop_pct%")"
         )
     fi
 
     box_card --border 240 "${card[@]}"
 }
+
+
