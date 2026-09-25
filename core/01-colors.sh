@@ -381,7 +381,7 @@ random_core() {
     done
 
     # PID-scoped directory: Shared across subshells $(...), isolated per session
-    local state_dir="/tmp_rc/.rc_state_$$"
+    local state_dir="$HOME/tmp_rc/.rc_state_$$"
     [[ ! -d "$state_dir" ]] && mkdir -m 700 -p "$state_dir" 2>/dev/null
 
     local selected=""
