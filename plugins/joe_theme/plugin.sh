@@ -23,3 +23,4 @@ alias ta='theme_switch a'
 alias tb='theme_switch b'
 alias tc='theme_switch c'
 alias td='theme_switch default'
+theme_switch default

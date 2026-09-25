@@ -81,17 +81,20 @@ _sp_nord() {
     fi
 
     # ── border ────────────────────────────────────────────────
+    local content_text=" ${status_str}  ${env_tag}  ${user_host}  in ${dir_str}${git_str} \n"
+    local lens=$(_w "$$content_text" 2>/dev/null)
     local term_w; term_w=$(tput cols 2>/dev/null || echo 80)
-    [[ "$term_w" =~ ^[0-9]+$ ]] || term_w=80
+    (( lens >= term_w )) && lens=$((term_w - 2))
     local line="" line2=""
-    for ((i=0;i<term_w;i++)); do line+="▁"; line2+="▔"; done
+    for ((i=0;i<lens;i++)); do line+="▁"; line2+="▔"; done
     local border_top="${C_POLAR}${D}${line}${RST}"
     local border_bot="${C_POLAR}${D}${line2}${RST}"
+
 
     # ── assemble ──────────────────────────────────────────────
     local PS1_=""
     PS1_+="${border_top}\n"
-    PS1_+=" ${status_str}  ${env_tag}  ${user_host}  in ${dir_str}${git_str} \n"
+    PS1_+=" ${content_text}\n"
     PS1_+="${border_bot}\n"
     PS1_+=" ${C_FROST}${B}-→${RST}  "
 

@@ -424,7 +424,7 @@ do_bet() {
 
 echo
 echo "===== Simulation ====="
-
+balance=1000
 echo "Balance : $balance"
 echo "Mode    : $mode"
 echo "Next Bet: $nextbet"
