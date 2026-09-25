@@ -57,9 +57,9 @@ roll_dice() {
     roll=$(( RANDOM % 10000 ))
 
     if (( roll < threshold )); then
-        echo "win"
+        echo "$roll win"
     else
-        echo "lose"
+        echo "$roll lose"
     fi
 }
 
