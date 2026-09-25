@@ -25,6 +25,8 @@
 # reset
 #\033[0m
 
+
+
 _color_render() {
     local nl="$1"; shift
     local input_color="${1:-""}"
@@ -32,13 +34,18 @@ _color_render() {
     local is_ps=0
     [[ "$nl" == "ps" ]] && is_ps=1
 
-    # 0. Pre-scan: extract --bg <num> and --reset-bg / --rbg from remaining args
+    # 0. Pre-scan: extract --bg <num|rc|rc:slot> and --reset-bg / --rbg from remaining args
     local bg_esc=""
     local reset_bg=0
     local _args_new=()
     local _skip_next=0
     for _a in "$@"; do
         if [[ $_skip_next -eq 1 ]]; then
+            if [[ "$_a" =~ ^(rc|rand)$ ]]; then
+                _a="$(random_core roll default)"
+            elif [[ "$_a" =~ ^(rc|rand): ]]; then
+                _a="$(random_core get "${_a#*:}")"
+            fi
             if [[ "$_a" =~ ^[0-9]+$ && "$_a" -ge 0 && "$_a" -le 255 ]]; then
                 bg_esc="$(_bg "$_a")"
             fi
@@ -75,9 +82,22 @@ _color_render() {
         input_color="${1:-""}"
     fi
 
-    # 1. Resolve color
+    # 1. Resolve color (Keywords, Named slots, & Short names)
     local color_=""
     case "$input_color" in
+        rc|rand)
+            input_color="$(random_core roll default)"
+            ;;
+        rc1|rand1)
+            input_color="$(random_core roll default "$RC_PALETTE_PASTEL")"
+            ;;
+        rc2|rand2)
+            input_color="$(random_core roll default "$RC_PALETTE_NEON")"
+            ;;
+        rc:*|rand:*)
+            local _slot="${input_color#*:}"
+            input_color="$(random_core get "$_slot")"
+            ;;
         r)   color_="$R"   ;;  lr)  color_="$LR"  ;;
         g)   color_="$G"   ;;  lg)  color_="$LG"  ;;
         y)   color_="$Y"   ;;
@@ -307,101 +327,161 @@ lc='\e[38;5;87m'    # light cyan
 y='\e[38;5;226m'    # yellow
 
 # ============================================================
-# RANDOM COLOR PALETTES (V2 — kept, used by Joe's prompts)
+# RANDOM COLOR PALETTES & CORE ENGINE (V3 - Stateful & Decoupled)
 # ============================================================
-_rc_core() {
+
+# random_core — RNG & State Engine (Subshell-safe, Slot-based)
+#   Usage: random_core [flags] [action: roll|get|last] [slot] [palette]
+#   Actions:
+#     roll [slot] [palette] : สุ่มสีใหม่บันทึกลง slot (default: "default")
+#     get  [slot] [palette] : ดึงสีของ slot ปัจจุบัน (ถ้ายังไม่มีจะ roll ให้อัตโนมัติ)
+#     last                  : ดึงสีที่เพิ่งถูกสุ่มไปล่าสุด (sync กับคำสั่งก่อนหน้าทันที)
+#   Flags:
+#     -n / --num (default)  : คืนค่าเป็นตัวเลขสี 256 (เช่น 208)
+#     -e / --esc            : คืนค่าเป็น ANSI escape sequence (\e[38;5;...m)
+#     -p / --ps             : คืนค่าเป็น PS1-safe escape (\[\e[38;5;...m\])
+random_core() {
     [[ -n "${ZSH_VERSION:-}" ]] && emulate -L sh
-    local palette=($1)
 
-    local test_arr=(x)
-    local offset=0
-    if [[ "${test_arr[0]}" != "x" ]]; then offset=1; fi
+    local out_mode="num"
+    local action="get"
+    local slot="default"
+    local palette_str="$RC_PALETTE_DEFAULT"
 
-    local state_dir="/tmp"
-    [[ ! -d "$state_dir" || ! -w "$state_dir" ]] && state_dir="$HOME"
-    local state_file="$state_dir/.rc_last_color_$$"
-    local last_color_num=""
-    local seed_counter=0
-
-    if [[ -f "$state_file" ]]; then
-        { read -r last_color_num; read -r seed_counter; } < "$state_file" 2>/dev/null
-    fi
-
-    if [[ ! "$seed_counter" =~ ^[0-9]+$ ]]; then
-        local initial_seed
-        initial_seed=$(date +%s%N 2>/dev/null | tr -dc '0-9' | tail -c 5)
-        seed_counter=$(( 10#${initial_seed:-$$} ))
-    else
-        seed_counter=$(( seed_counter + 1 ))
-    fi
-    RANDOM=$seed_counter
-
-    local avail=() c
-    for c in "${palette[@]}"; do
-        [[ "$c" != "$last_color_num" ]] && avail+=("$c")
-    done
-    [[ ${#avail[@]} -eq 0 ]] && avail=("${palette[@]}")
-
-    local total=${#avail[@]}
-    local ri=$(( RANDOM % total ))
-    local sc_idx=$(( ri + offset ))
-    local selected="${avail[$sc_idx]}"
-
-    printf "%s\n%s\n" "$selected" "$seed_counter" > "$state_file" 2>/dev/null
-    _c "$selected"
-}
-
-_rc_render() {
-    local palette_str="$1"; shift
-    local input_style=""
-
-    if [[ $# -eq 0 ]]; then
-        :
-    elif [[ -z "$1" ]] || [[ "$1" =~ ^[bdiu]{1,4}$ ]]; then
-        input_style="$1"
-        shift 1
-    fi
-
-    local style="" i char
-    for (( i=0; i<${#input_style}; i++ )); do
-        char="${input_style:$i:1}"
-        case "$char" in
-            b) style+="$(_b)" ;; d) style+="$(_d)" ;;
-            i) style+="$(_i)" ;; u) style+="$(_u)" ;;
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -n|--num) out_mode="num"; shift ;;
+            -e|--esc) out_mode="esc"; shift ;;
+            -p|--ps)  out_mode="ps";  shift ;;
+            roll|get|last) action="$1"; shift ;;
+            *)
+                if [[ "$slot" == "default" ]]; then
+                    slot="$1"
+                else
+                    palette_str="$1"
+                fi
+                shift
+                ;;
         esac
     done
 
-    local sc
-    sc=$(_rc_core "$palette_str")
+    # PID-scoped directory: Shared across subshells $(...), isolated per session
+    local state_dir="/tmp/.rc_state_$$"
+    [[ ! -d "$state_dir" ]] && mkdir -m 700 -p "$state_dir" 2>/dev/null
 
-    local targets=()
-    if [[ $# -gt 0 ]]; then
-        targets=("${@}")
-    else
-        targets=("No text provided")
+    local selected=""
+
+    if [[ "$action" == "last" ]]; then
+        [[ -f "$state_dir/_last" ]] && read -r selected < "$state_dir/_last" 2>/dev/null || true
+        [[ -z "$selected" ]] && action="roll"
+    elif [[ "$action" == "get" ]]; then
+        [[ -f "$state_dir/$slot" ]] && read -r selected < "$state_dir/$slot" 2>/dev/null || true
+        [[ -z "$selected" ]] && action="roll"
     fi
 
-    for text in "${targets[@]}"; do
-        echo -e "${sc}${style}${text}$(_r)"
-    done
+    if [[ "$action" == "roll" ]]; then
+        local -a palette=($palette_str)
+        local offset=0
+        local test_arr=(x)
+        [[ "${test_arr[0]}" != "x" ]] && offset=1
+
+        local last_color=""
+        [[ -f "$state_dir/_last" ]] && read -r last_color < "$state_dir/_last" 2>/dev/null || true
+
+        local avail=() c
+        for c in "${palette[@]}"; do
+            [[ "$c" != "$last_color" ]] && avail+=("$c")
+        done
+        [[ ${#avail[@]} -eq 0 ]] && avail=("${palette[@]}")
+
+        local rand_val
+        rand_val=$(date +%s%N 2>/dev/null | tr -dc '0-9' | tail -c 4)
+        local ri=$(( (10#${rand_val:-$$} + RANDOM) % ${#avail[@]} ))
+        selected="${avail[$(( ri + offset ))]}"
+
+        printf "%s\n" "$selected" > "$state_dir/$slot" 2>/dev/null
+        printf "%s\n" "$selected" > "$state_dir/_last" 2>/dev/null
+    fi
+
+    case "$out_mode" in
+        num) printf "%s" "$selected" ;;
+        esc) _c "$selected" ;;
+        ps)  printf '\[\e[38;5;%sm\]' "$selected" ;;
+    esac
 }
 
+# Legacy wrapper for backward compatibility
+_rc_core() {
+    random_core -e roll default "${1:-$RC_PALETTE_DEFAULT}"
+}
+
+# random_color — Presentation & Rendering Layer
+#   Flags:
+#     -s <slot> / --slot <slot> : ผูกสีกับ slot ที่กำหนด (เช่น -s border)
+#     -k / --keep               : ใช้สีเดิมที่เพิ่งสุ่มไปล่าสุด
+#     -p / --ps                 : PS1-safe render (ไม่มี newline ตกค้าง)
+#     -0                        : No newline (เหมือน c)
+#     --palette <str>           : ระบุชุด palette เฉพาะ
+#     [style]                   : สไตล์ข้อความ (b, d, i, u)
+random_color() {
+    local slot=""
+    local use_last=0
+    local is_ps=0
+    local nl=1
+    local style=""
+    local palette_str="$RC_PALETTE_DEFAULT"
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -s|--slot)    slot="$2"; shift 2 ;;
+            -k|--keep)    use_last=1; shift ;;
+            -p|--ps)      is_ps=1; nl=0; shift ;;
+            -0)           nl=0; shift ;;
+            --palette)    palette_str="$2"; shift 2 ;;
+            b|d|i|u|bd|bi|bu|di|du|iu|bdi|bdu|biu|diu|bdiu)
+                          style="$1"; shift ;;
+            *)            break ;;
+        esac
+    done
+
+    local col_num
+    if [[ $use_last -eq 1 ]]; then
+        col_num=$(random_core last)
+    elif [[ -n "$slot" ]]; then
+        col_num=$(random_core get "$slot" "$palette_str")
+    else
+        col_num=$(random_core roll default "$palette_str")
+    fi
+
+    if [[ $is_ps -eq 1 ]]; then
+        psc "$col_num" "$style" "$@"
+    elif [[ $nl -eq 0 ]]; then
+        c "$col_num" "$style" "$@"
+    else
+        cn "$col_num" "$style" "$@"
+    fi
+}
+
+# ============================================================
+# PALETTE DEFINITIONS
+# ============================================================
+RC_PALETTE_DEFAULT="45 82 190 196 208 201 39 226 129 48 203 141"
+RC_PALETTE_PASTEL="167 173 136 71 68 105 132 178 150 139 174 180"
+RC_PALETTE_NEON="21 10 196 200 225 27 202 123 229 205"
+RC_PALETTE_BDRAW="1 22 17 54 236 64"
 # rc — Vibrant rainbow (12 colors)
 rc() {
-    local palette="45 82 190 196 208 201 39 226 129 48 203 141"
-    _rc_render "$palette" "$@"
+    random_color --palette "$RC_PALETTE_BDRAW" "$@"
 }
 
 # rc1 — Pastel/earthy (12 colors)
 rc1() {
-    local palette="167 173 136 71 68 105 132 178 150 139 174 180"
-    _rc_render "$palette" "$@"
+    random_color --palette "$RC_PALETTE_PASTEL" "$@"
 }
 
 # rc2 — Bold/neon (10 colors)
 rc2() {
-    local palette="21 10 196 200 225 27 202 123 229 205"
-    _rc_render "$palette" "$@"
+    random_color --palette "$RC_PALETTE_NEON" "$@"
 }
 
 # ============================================================

@@ -185,8 +185,6 @@ _set_prompt() {
     local lens=$text_len
     (( lens > (term_w - 2) )) && lens=$(( term_w - 2 ))
 
-    
-
     local BN_BORDER_CHAR_TOP="${BOT_LINE:-$'\u2581'}"
     local BN_BORDER_CHAR_BOT="${TOP_LINE:-$'\u2594'}"
 
@@ -195,8 +193,12 @@ _set_prompt() {
         _str_t+="${BN_BORDER_CHAR_TOP}"
         _str_b+="${BN_BORDER_CHAR_BOT}"
     done
-    local border_top="$(_gr "${_str_t}")"
-    local border_bot="$(_gr "${_str_b}")"
+
+    # Random border color (Single color for both top & bottom)
+    local c_border
+    c_border=$(random_core roll border "$RC_PALETTE_BDRAW")
+    local border_top="$(psc "$c_border" "b" "${_str_t}")"
+    local border_bot="$(psc "$c_border" "b" "${_str_b}")"
 
     # -- 3. ประกอบร่าง Dynamic PS1 (Prompt)
     local PS1_=""
