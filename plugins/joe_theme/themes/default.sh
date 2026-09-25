@@ -196,7 +196,7 @@ _set_prompt() {
 
     # Random border color (Single color for both top & bottom)
     local c_border
-    c_border=$(random_core roll border "$RC_PALETTE_BDRAW")
+    c_border=$(random_core roll border "$RC_PALETTE_DIM")
     local border_top="$(psc "$c_border" "b" "${_str_t}")"
     local border_bot="$(psc "$c_border" "b" "${_str_b}")"
 

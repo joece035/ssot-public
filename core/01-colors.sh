@@ -27,6 +27,15 @@
 
 
 
+# ============================================================
+# PALETTE DEFINITIONS (Single Source of Truth)
+# ============================================================
+RC_PALETTE_DEFAULT="45 82 190 196 208 201 39 226 129 48 203 141"
+RC_PALETTE_PASTEL="167 173 136 71 68 105 132 178 150 139 174 180"
+RC_PALETTE_NEON="21 10 196 200 225 27 202 123 229 205"
+RC_PALETTE_DIM="53 22 23 17 54 58 236 64 61"
+RC_PALETTE_BDRAW="$RC_PALETTE_DIM" # Alias for backward compatibility
+
 _color_render() {
     local nl="$1"; shift
     local input_color="${1:-""}"
@@ -93,6 +102,12 @@ _color_render() {
             ;;
         rc2|rand2)
             input_color="$(random_core roll default "$RC_PALETTE_NEON")"
+            ;;
+        rc3|rand3)
+            input_color="$(random_core roll default "$RC_PALETTE_DIM")"
+            ;;
+        rc4|rand4)
+            input_color="$(random_core roll default "$RC_PALETTE_DIM")"
             ;;
         rc:*|rand:*)
             local _slot="${input_color#*:}"
@@ -380,6 +395,9 @@ random_core() {
     fi
 
     if [[ "$action" == "roll" ]]; then
+        # Safety fallback: Ensure palette_str is never empty
+        [[ -z "$palette_str" ]] && palette_str="${RC_PALETTE_DEFAULT:-45 82 190 196 208 201 39 226 129 48 203 141}"
+
         local -a palette=($palette_str)
         local offset=0
         local test_arr=(x)
@@ -393,6 +411,11 @@ random_core() {
             [[ "$c" != "$last_color" ]] && avail+=("$c")
         done
         [[ ${#avail[@]} -eq 0 ]] && avail=("${palette[@]}")
+
+        # Absolute protection against division by 0
+        if (( ${#avail[@]} == 0 )); then
+            avail=(45)
+        fi
 
         local rand_val
         rand_val=$(date +%s%N 2>/dev/null | tr -dc '0-9' | tail -c 4)
@@ -468,10 +491,10 @@ random_color() {
 RC_PALETTE_DEFAULT="45 82 190 196 208 201 39 226 129 48 203 141"
 RC_PALETTE_PASTEL="167 173 136 71 68 105 132 178 150 139 174 180"
 RC_PALETTE_NEON="21 10 196 200 225 27 202 123 229 205"
-RC_PALETTE_BDRAW="1 22 17 54 236 64"
+RC_PALETTE_DIM="53 22 23 17 54 58 236 64 61"
 # rc — Vibrant rainbow (12 colors)
 rc() {
-    random_color --palette "$RC_PALETTE_BDRAW" "$@"
+    random_color --palette "$RC_PALETTE_DIM" "$@"
 }
 
 # rc1 — Pastel/earthy (12 colors)
@@ -482,6 +505,14 @@ rc1() {
 # rc2 — Bold/neon (10 colors)
 rc2() {
     random_color --palette "$RC_PALETTE_NEON" "$@"
+}
+
+# rc3 / rc4 — Dim/Dark tones
+rc3() {
+    random_color --palette "$RC_PALETTE_DIM" "$@"
+}
+rc4() {
+    random_color --palette "$RC_PALETTE_DIM" "$@"
 }
 
 # ============================================================

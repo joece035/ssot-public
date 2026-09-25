@@ -463,7 +463,34 @@ perm(){
 
 
 _b2p(){
-		local f=$1
-		python3 "$SSOT/codetrans/codetrans.py" "$f" -t python
+    local f="$1"
+    if [[ -z "$f" ]]; then
+        cn y bi "Usage: _b2p <script.sh>"
+        return 1
+    fi
+    if [[ ! -f "$f" ]]; then
+        cn y bi "file $f not found"
+        return 1
+    fi
 
+    local out_py="${f%.*}.py"
+    if [[ -f "$out_py" ]]; then
+        cn y bi "file $out_py already exists"
+        return 1
+    fi
+
+    local ssot_dir="${SSOT:-${SCRIPTS_PATH:-$HOME/ssot}}"
+    local tool="$ssot_dir/codetrans/codetrans.py"
+    if [[ ! -f "$tool" ]]; then
+        cn r bi "tool not found: $tool"
+        return 1
+    fi
+
+    if python3 "$tool" "$f" -t python -o "$out_py"; then
+        chmod +x "$out_py"
+        cn lg bi "save file in $out_py"
+    else
+        cn r bi "codetrans translation failed"
+        return 1
+    fi
 }
