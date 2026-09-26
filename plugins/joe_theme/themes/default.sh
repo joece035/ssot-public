@@ -169,7 +169,11 @@ _set_prompt() {
     # -- Current Dir & Git
     local current_dir="$(psc 242 d "${PWD/#$HOME/\~}")"
     local git_info="$(_git_prompt)"
-    local sep="$(_gr '|')"
+
+		# ---ปิดแถวหัวท้ายทาสีเดียวกับขอบบนล่าง
+		local c_box
+    c_box=$(random_core roll border "$RC_PALETTE_DIM")
+    local sep="$(psc "$c_box" "b" '|')"
 
     # -- 1. รวมเนื้อหาของแถวกลางจริงที่จะแสดงผล
     local prompt_content="${sep} ${last_status} ${env_tag} ${user_host} in ${current_dir}${git_info} ${sep}"
@@ -195,10 +199,9 @@ _set_prompt() {
     done
 
     # Random border color (Single color for both top & bottom)
-    local c_border
-    c_border=$(random_core roll border "$RC_PALETTE_DIM")
-    local border_top="$(psc "$c_border" "b" "${_str_t}")"
-    local border_bot="$(psc "$c_border" "b" "${_str_b}")"
+    
+    local border_top="$(psc "$c_box" "b" "${_str_t}")"
+    local border_bot="$(psc "$c_box" "b" "${_str_b}")"
 
     # -- 3. ประกอบร่าง Dynamic PS1 (Prompt)
     local PS1_=""
