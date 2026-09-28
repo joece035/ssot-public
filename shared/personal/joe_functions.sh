@@ -140,34 +140,84 @@ pwd(){
 }
 
 _b2p(){
-    local f="$1"
+    local f="${1:-}"
     if [[ -z "$f" ]]; then
-        cn y bi "Usage: _b2p <script.sh>"
+        cn y bi "Usage: _b2p <file> [.<ext>] [--clean|--no-notes]"
+        cn y bi "  ext: .py | .ps1 | .sh  (default .py)"
+        cn y bi "  ex: _b2p demo.sh .ps1 | _b2p demo.ps1 .sh | _b2p demo.py .sh"
         return 1
     fi
     if [[ ! -f "$f" ]]; then
         cn y bi "file $f not found"
         return 1
     fi
-		local out_dir="$SSOT/codetrans/output"
-    local out_py="$out_dir/${f%.*}.py"
-		mkdir -p "$out_dir" 
-		
-    if [[ -f "$out_py" ]]; then
-        cn y bi "file $out_py already exists"
+    shift
+
+    # --- parse: ext ปลายทาง (รับ .py หรือ py) + flags ส่งต่อให้ codetrans ---
+    local ext=".py" flags=()
+    local a
+    for a in "$@"; do
+        case "$a" in
+            --clean|--no-notes) flags+=("$a");;
+            .py|.ps1|.psm1|.sh|.bash|py|ps1|psm1|sh|bash)
+                ext=".${a#.}";;
+            *)
+                cn y bi "unknown arg: $a (want .py/.ps1/.sh or --clean/--no-notes)"
+                return 1;;
+        esac
+    done
+
+    local dst=""
+    case "$ext" in
+        .py) dst="python";;
+        .ps1|.psm1) dst="powershell";;
+        .sh|.bash) dst="bash";;
+    esac
+
+    # --- ภาษาต้นทาง: ดูจากนามสกุลก่อน, ไม่รู้จักค่อยดม shebang ---
+    local src=""
+    case ".${f##*.}" in
+        .sh|.bash|.zsh) src="bash";;
+        .py) src="python";;
+        .ps1|.psm1) src="powershell";;
+        *)
+            local head1=""; head1=$(head -n 1 "$f" 2>/dev/null)
+            case "$head1" in
+                *python*) src="python";;
+                *pwsh*|*powershell*) src="powershell";;
+                *bash*|*zsh*|*/sh) src="bash";;
+            esac
+            ;;
+    esac
+    if [[ -z "$src" ]]; then
+        cn y bi "cannot detect source language of $f (rename to .sh/.py/.ps1 or add shebang)"
+        return 1
+    fi
+    if [[ "$src" == "$dst" ]]; then
+        cn y bi "same language ($src) — nothing to convert"
         return 1
     fi
 
     local ssot_dir="${SSOT:-${SCRIPTS_PATH:-$HOME/ssot}}"
-    local tool="$ssot_dir/codetrans/codetrans.py"
+    local tool="$ssot_dir/bash_to_python/codetrans.py"
+    [[ -f "$tool" ]] || tool="$ssot_dir/codetrans/codetrans.py"  # fallback path เดิม
     if [[ ! -f "$tool" ]]; then
         cn r bi "tool not found: $tool"
         return 1
     fi
 
-    if python3 "$tool" "$f" -t python -o "$out_py"; then
-        chmod +x "$out_py"
-        cn lg bi "save file in $out_py"
+    local out_dir="$ssot_dir/bash_to_python/output"
+    local out="$out_dir/$(basename "${f%.*}")$ext"
+    mkdir -p "$out_dir"
+
+    if [[ -f "$out" ]]; then
+        cn y bi "file $out already exists"
+        return 1
+    fi
+
+    if python3 "$tool" "$f" -f "$src" -t "$dst" -o "$out" "${flags[@]}"; then
+        chmod +x "$out"
+        cn lg bi "save file in $out ($src -> $dst)"
     else
         cn r bi "codetrans translation failed"
         return 1

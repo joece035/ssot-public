@@ -187,6 +187,6 @@ p() {
 }
 
 imma_jump_to_the_fucking_god_damn_windows_path_from_wsl_by_typing_only_fuckin_j() {
-   cdc "$(p)"
+   cd "$(p)"
 }
 alias j='imma_jump_to_the_fucking_god_damn_windows_path_from_wsl_by_typing_only_fuckin_j'
