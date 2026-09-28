@@ -4,7 +4,7 @@
 # MARTINGALE DICE SIMULATOR — Guideline / Template
 # ============================================================
 # Strategy:
-#   - lose -> bet x2
+#   - lose -> bet x dynamic recovering multiplier 
 #   - win  -> reset to BASE_BET
 # ============================================================
 source $HOME/.bashrc
@@ -79,7 +79,7 @@ roll_dice() {
     if (( roll < threshold )); then
 				result=win
 				win_amount=$(mth "$BASE_BET*$payout" 8 d)
-        echo "$roll $result $win_amouny"
+        echo "$roll $result $win_amount"
 				balance=$(mth "$balance+$win_amount" 8 d )
     else
         echo "$roll lose"
