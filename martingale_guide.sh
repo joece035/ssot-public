@@ -4,7 +4,7 @@
 # MARTINGALE DICE SIMULATOR — Guideline / Template
 # ============================================================
 # Strategy:
-#   - lose -> bet x dynamic recovering multiplier 
+#   - lose -> bet x dynamic recovering multiplier (LOSEMUL)
 #   - win  -> reset to BASE_BET
 # ============================================================
 source $HOME/.bashrc
@@ -13,19 +13,24 @@ set -u
 # ─────────────────────────────────────────
 # [1] CONFIGURATION
 # ─────────────────────────────────────────
-HE=1
+HE=1                    # house edge %
 START_BALANCE=1000      # starting balance
 BASE_BET=1              # base bet amount
-WIN_CHANCE="49.5"     # win probability %
+WIN_CHANCE="49.5"       # win probability %
 MAX_ROUNDS=200          # simulation rounds
 MAX_LOSS_STREAK=10      # safety stop: max consecutive losses
-payout=$(mth "(1-($HE/100))/($WIN_CHANCE/100)" 2 d)
-LOSEMUL=$(mth "(1+(1/$payout)+(0.05/$payout))")
+
+# Payout multiplier: (1 - HE/100) / (WIN_CHANCE/100)
+payout=$(mth "(1-($HE/100))/($WIN_CHANCE/100)" 4 d)
+
+# Multiplier ทบเมื่อแพ้:
+# - Classic Martingale (กำไรคงที่เท่ากับไม้แรกเสมอ): 1 + (1 / (payout - 1))
+# - Exponential Profit (กำไรโตตามสตรีค เช่น 5%): 1 + (1.05 / (payout - 1))
+LOSEMUL=$(mth "1 + (1 / ($payout - 1))" 4 d)
 
 # ─────────────────────────────────────────
 # [2] GLOBAL STATE
 # ─────────────────────────────────────────
-
 balance=$START_BALANCE
 current_bet=$BASE_BET
 round=0
@@ -33,54 +38,49 @@ win_count=0
 lose_count=0
 loss_streak=0
 max_loss_streak=0
+last_roll=0
 
-
-
+# ─────────────────────────────────────────
+# [3] MATH HELPERS
+# ─────────────────────────────────────────
 fadd() {
-		mth "$1+$2" 8 d
-    #awk -v a="$1" -v b="$2" 'BEGIN { printf "%.8f", a + b }'
+    mth "$1+$2" 8 d
 }
 
 fsub() {
-		mth "$1-$2" 8 d
-   #awk -v a="$1" -v b="$2" 'BEGIN { printf "%.8f", a - b }'
+    mth "$1-$2" 8 d
 }
 
 fmul() {
-		mth "$1*$2" 8 d
-    #awk -v a="$1" -v b="$2" 'BEGIN { printf "%.8f", a * b }'
+    mth "$1*$2" 8 d
 }
 
 float_div() {
-		mth "$1/$2" 8 d
-   #awk -v a="$1" -v b="$2" 'BEGIN { printf "%.8f", a / b }'
+    mth "$1/$2" 8 d
 }
 
 fgt() {
-		#mth "ROUND($1+$2),8"
+    awk -v a="$1" -v b="$2" 'BEGIN { exit !(a > b) }'
+}
+
+fgte() {
     awk -v a="$1" -v b="$2" 'BEGIN { exit !(a >= b) }'
 }
 
 # ─────────────────────────────────────────
 # [4] ROLL DICE
 # Simulate win/lose based on WIN_CHANCE
+# Returns: "<roll_value> <win|lose>"
 # ─────────────────────────────────────────
-
 roll_dice() {
-    # สุ่ม 0-9999 เทียบกับ threshold
-    # WIN_CHANCE=49.5  ->  threshold=4950
-    # ถ้า roll < threshold = win
     local threshold
-    threshold=$(mth "$WIN_CHANCE*100" 0 d )
+    threshold=$(mth "$WIN_CHANCE*100" 0 d)
 
     local roll
     roll=$(( RANDOM % 10000 ))
 
     if (( roll < threshold )); then
-				result=win
-				win_amount=$(mth "$BASE_BET*$payout" 8 d)
-        echo "$roll $result $win_amount"
-				balance=$(mth "$balance+$win_amount" 8 d )
+        echo "$roll win"
     else
         echo "$roll lose"
     fi
@@ -89,22 +89,22 @@ roll_dice() {
 # ─────────────────────────────────────────
 # [5] MARTINGALE LOGIC
 # ─────────────────────────────────────────
-
 apply_martingale() {
     local result="$1"   # win | lose
     local bet="$2"      # bet amount this round
 
     if [[ "$result" == "win" ]]; then
-        # WIN: เพิ่ม balance, reset bet กลับ base
-        balance=$(fadd "$balance" "$bet")
+        # WIN: กำไรสุทธิ = bet * (payout - 1)
+        local net_profit
+        net_profit=$(fmul "$bet" "$(fsub "$payout" 1)")
+        balance=$(fadd "$balance" "$net_profit")
         current_bet=$BASE_BET
         loss_streak=0
         ((win_count++))
-
     else
-        # LOSE: ลด balance, double bet
+        # LOSE: เสียเงินเดิมพัน, ทบเงินด้วย LOSEMUL
         balance=$(fsub "$balance" "$bet")
-        current_bet=$(fmul "$current_bet" 2)
+        current_bet=$(fmul "$current_bet" "$LOSEMUL")
         ((loss_streak++))
         ((lose_count++))
 
@@ -117,7 +117,6 @@ apply_martingale() {
 # ─────────────────────────────────────────
 # [6] STOP CONDITIONS
 # ─────────────────────────────────────────
-
 should_stop() {
     # (a) balance หมด
     if ! fgt "$balance" 0; then
@@ -129,7 +128,7 @@ should_stop() {
         echo "MAX_STREAK: $loss_streak consecutive losses"
         return 0
     fi
-    # (c) next bet > balance (ไม่มีเงินพอเล่น)
+    # (c) next bet > balance (ไม่มีเงินพอเดิมพันตาต่อไป)
     if fgt "$current_bet" "$balance"; then
         echo "BET_GT_BAL: bet=$current_bet balance=$balance"
         return 0
@@ -140,57 +139,56 @@ should_stop() {
 # ─────────────────────────────────────────
 # [7] PRINT ROUND
 # ─────────────────────────────────────────
-
 print_round() {
-    local result="$1"
-    local bet="$2"
+    local roll="$1"
+    local result="$2"
+    local bet="$3"
     local icon="WIN"
     [[ "$result" == "lose" ]] && icon="LOS"
 
-    printf "Round %3d | %s | Bet: %10.2f | Balance: %12.2f | Streak: %d\n" \
-        "$round" "$icon" "$bet" "$balance" "$loss_streak"
+    printf "Round %3d | Roll: %4d | %s | Bet: %10.2f | Balance: %12.2f | Streak: %d\n" \
+        "$round" "$roll" "$icon" "$bet" "$balance" "$loss_streak"
 }
 
 # ─────────────────────────────────────────
 # [8] MAIN LOOP
 # ─────────────────────────────────────────
-
-echo "======================================"
+echo "=========================================================================="
 echo "  MARTINGALE DICE SIMULATOR"
-echo "======================================"
-printf "  Start: %.2f | BaseBet: %.2f | Win: %.2f percent\n" \
-    "$START_BALANCE" "$BASE_BET" "$WIN_CHANCE"
-echo "======================================"
+echo "=========================================================================="
+printf "  Start: %.2f | BaseBet: %.2f | WinChance: %.2f%% | Payout: %.4fx | LoseMul: %.4fx\n" \
+    "$START_BALANCE" "$BASE_BET" "$WIN_CHANCE" "$payout" "$LOSEMUL"
+echo "=========================================================================="
 
 stop_reason=""
 
 while (( round < MAX_ROUNDS )); do
     ((round++))
 
-    # ตรวจ stop ก่อน bet
+    # ตรวจสอบเงื่อนไขหยุดก่อนเดิมพัน
     if stop_reason=$(should_stop); then
         break
     fi
 
-    # --- roll ---
-    result=$(roll_dice)
     bet_this_round=$current_bet
+
+    # --- roll dice ---
+    read -r last_roll result <<< "$(roll_dice)"
 
     # --- apply martingale ---
     apply_martingale "$result" "$bet_this_round"
 
-    # --- print ---
-    print_round "$result" "$bet_this_round"
+    # --- print round ---
+    print_round "$last_roll" "$result" "$bet_this_round"
 done
 
 # ─────────────────────────────────────────
 # [9] SESSION SUMMARY
 # ─────────────────────────────────────────
-
 echo
-echo "======================================"
+echo "=========================================================================="
 echo "  SESSION SUMMARY"
-echo "======================================"
+echo "=========================================================================="
 printf "  Rounds: %d  W: %d  L: %d  MaxStreak: %d\n" \
     "$round" "$win_count" "$lose_count" "$max_loss_streak"
 
@@ -207,4 +205,4 @@ else
 fi
 
 [[ -n "$stop_reason" ]] && echo "  Stop Reason: $stop_reason"
-echo "======================================"
+echo "=========================================================================="
