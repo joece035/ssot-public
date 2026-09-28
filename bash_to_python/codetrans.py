@@ -167,10 +167,11 @@ def _split_comment(line: str) -> tuple[str, str]:
 
 
 def _words(text: str) -> list[str]:
-    """Split on whitespace outside quotes, keeping quote characters."""
+    """Split on whitespace outside quotes/subshells, keeping quote characters."""
     out: list[str] = []
     buf: list[str] = []
     q = None
+    paren_depth = 0  # track $( ) and $(( )) depth so spaces inside don't split
     i, n = 0, len(text)
     while i < n:
         c = text[i]
@@ -189,7 +190,23 @@ def _words(text: str) -> list[str]:
             buf.append(c)
             i += 1
             continue
-        if c.isspace():
+        # Track $( or $(( depth so inner spaces are kept
+        if c == '$' and i + 1 < n and text[i + 1] == '(':
+            paren_depth += 1
+            buf.append(c)
+            i += 1
+            continue
+        if c == '(' and paren_depth > 0:
+            buf.append(c)
+            i += 1
+            continue
+        if c == ')':
+            if paren_depth > 0:
+                paren_depth -= 1
+                buf.append(c)
+                i += 1
+                continue
+        if c.isspace() and paren_depth == 0:
             if buf:
                 out.append("".join(buf))
                 buf = []
@@ -239,8 +256,73 @@ _PY_HELPERS = {
 }
 
 
+def _parse_param_exp(inner: str) -> dict | None:
+    """Parses bash parameter expansion inner content from ${...}."""
+    if not inner:
+        return None
+    # ${#var}
+    if inner.startswith("#") and len(inner) > 1 and re.fullmatch(r"[A-Za-z_]\w*|\d+|[@*]", inner[1:]):
+        return {"type": "len", "var": inner[1:]}
+    # ${var^^}, ${var^}, ${var,,}, ${var,}
+    m = re.fullmatch(r"([A-Za-z_]\w*)(\^\^|\^|,,|,)", inner)
+    if m:
+        return {"type": "case", "var": m.group(1), "op": m.group(2)}
+    # ${var:offset} or ${var:offset:length}
+    m = re.fullmatch(r"([A-Za-z_]\w*):(-?\d+)(?::(-?\d+))?", inner)
+    if m:
+        return {"type": "slice", "var": m.group(1), "offset": m.group(2), "length": m.group(3)}
+    # ${var:-default} or ${var-default}
+    m = re.fullmatch(r"([A-Za-z_]\w*|\d+)(:?-)(.*)", inner, re.S)
+    if m:
+        return {"type": "default", "var": m.group(1), "dflt": m.group(3)}
+    # ${var:=default} or ${var=default}
+    m = re.fullmatch(r"([A-Za-z_]\w*)(:?=)(.*)", inner, re.S)
+    if m:
+        return {"type": "assign", "var": m.group(1), "dflt": m.group(3)}
+    # ${var:+alt} or ${var+alt}
+    m = re.fullmatch(r"([A-Za-z_]\w*|\d+)(:?\+)(.*)", inner, re.S)
+    if m:
+        return {"type": "alt", "var": m.group(1), "alt": m.group(3)}
+    # Pattern replacement: ${var/pat/repl}, ${var//pat/repl}, ${var/#pat/repl}, ${var/%pat/repl}
+    m = re.match(r"^([A-Za-z_]\w*)/", inner)
+    if m:
+        var = m.group(1)
+        rest = inner[len(var) + 1 :]
+        mode = ""
+        if rest.startswith(("/", "#", "%")):
+            mode = rest[0]
+            rest = rest[1:]
+        parts = []
+        buf = []
+        esc = False
+        for ch in rest:
+            if esc:
+                buf.append(ch)
+                esc = False
+            elif ch == "\\":
+                buf.append(ch)
+                esc = True
+            elif ch == "/":
+                parts.append("".join(buf))
+                buf = []
+            else:
+                buf.append(ch)
+        parts.append("".join(buf))
+        pat = parts[0]
+        repl = parts[1] if len(parts) > 1 else ""
+        return {"type": "replace", "var": var, "mode": mode, "pat": pat, "repl": repl}
+    # Pattern removal: ${var#pattern}, ${var##pattern}, ${var%pattern}, ${var%%pattern}
+    m = re.match(r"^([A-Za-z_]\w*)(##|#|%%|%)(.*)$", inner, re.S)
+    if m:
+        return {"type": "strip", "var": m.group(1), "mode": m.group(2), "pat": m.group(3)}
+    # Simple variable: ${var}
+    if re.fullmatch(r"[A-Za-z_]\w*|\d+|[@*#?$!0]", inner):
+        return {"type": "simple", "var": inner}
+    return None
+
+
 def _tokens(text: str, keep_quotes: bool) -> list[tuple[str, str]]:
-    """Tokenize: ('lit'|'var'|'code'|'arith', value)"""
+    """Tokenize: ('lit'|'var'|'code'|'arith'|'param_exp', value)"""
     toks: list[tuple[str, str]] = []
     buf: list[str] = []
     q = None
@@ -295,6 +377,19 @@ def _tokens(text: str, keep_quotes: bool) -> list[tuple[str, str]]:
                 toks.append(("arith", text[i + 3 : close]))
                 i = close + 2
                 continue
+        if text.startswith("${", i):
+            close = text.find("}", i + 2)
+            if close != -1:
+                inner = text[i + 2 : close]
+                pe = _parse_param_exp(inner)
+                if pe is not None:
+                    flush()
+                    if pe["type"] == "simple":
+                        toks.append(("var", pe["var"]))
+                    else:
+                        toks.append(("param_exp", inner))
+                    i = close + 1
+                    continue
         if text.startswith("$(", i):
             depth, j, sq = 1, i + 2, None
             while j < n and depth:
@@ -314,17 +409,11 @@ def _tokens(text: str, keep_quotes: bool) -> list[tuple[str, str]]:
                 toks.append(("code", "_sh(" + json.dumps(text[i + 2 : j - 1]) + ")"))
                 i = j
                 continue
-        m = _VAR_RE.match(text, i)
-        if m:
+        # Special params must come BEFORE _VAR_RE (which would eat digits as var names)
+        if text.startswith("$$", i):
             flush()
-            toks.append(("var", m.group(1) or m.group(2)))
-            i = m.end()
-            continue
-        m = _ARG_RE.match(text, i)
-        if m:
-            flush()
-            toks.append(("code", f"sys.argv[{m.group(1)}]"))
-            i = m.end()
+            toks.append(("code", "os.getpid()"))
+            i += 2
             continue
         if text.startswith("$@", i) or text.startswith("$*", i):
             flush()
@@ -335,6 +424,23 @@ def _tokens(text: str, keep_quotes: bool) -> list[tuple[str, str]]:
             flush()
             toks.append(("code", "len(sys.argv) - 1"))
             i += 2
+            continue
+        if text.startswith("$0", i) and (i + 2 >= n or not text[i + 2].isdigit()):
+            flush()
+            toks.append(("code", "sys.argv[0]"))
+            i += 2
+            continue
+        m = _ARG_RE.match(text, i)
+        if m:
+            flush()
+            toks.append(("code", f"sys.argv[{m.group(1)}]"))
+            i = m.end()
+            continue
+        m = _VAR_RE.match(text, i)
+        if m:
+            flush()
+            toks.append(("var", m.group(1) or m.group(2)))
+            i = m.end()
             continue
         buf.append(c)
         i += 1
@@ -362,6 +468,8 @@ def _join_expr(toks: list[tuple[str, str]]) -> str:
             return val
         if kind == "arith":
             return "(" + _arith_to_py(val) + ")"
+        if kind == "param_exp":
+            return _param_to_py(_parse_param_exp(val))
     non_lit = [t for t in toks if t[0] != "lit"]
     if all(k == "var" for k, _ in non_lit) and all(
         "\\" not in v and "{" not in v and "}" not in v and '"' not in v
@@ -377,6 +485,8 @@ def _join_expr(toks: list[tuple[str, str]]) -> str:
             parts.append("str(" + v + ")")
         elif k == "arith":
             parts.append("(" + _arith_to_py(v) + ")")
+        elif k == "param_exp":
+            parts.append("str(" + _param_to_py(_parse_param_exp(v)) + ")")
         else:
             parts.append("(" + v + ")")
     return " + ".join(parts)
@@ -408,6 +518,53 @@ def _word_expr(word: str, split: bool = False) -> str:
     if split and (len(toks) > 1 or toks[0][0] in ("var", "code")):
         expr += ".split()"
     return expr
+
+
+def _param_to_py(pe: dict | None) -> str:
+    if pe is None:
+        return '""'
+    t = pe["type"]
+    var = pe["var"]
+    if t == "simple":
+        return var
+    if t == "len":
+        return f"len({var})"
+    if t == "case":
+        if pe["op"] in ("^^", "^"):
+            return f"{var}.upper()"
+        return f"{var}.lower()"
+    if t == "slice":
+        off = int(pe["offset"])
+        if pe.get("length"):
+            return f"{var}[{off}:{off + int(pe['length'])}]"
+        return f"{var}[{off}:]"
+    if t == "default":
+        dflt_expr = _word_expr(pe["dflt"])
+        return f"({var} or {dflt_expr})"
+    if t == "alt":
+        alt_expr = _word_expr(pe["alt"])
+        return f"({alt_expr} if {var} else '')"
+    if t == "replace":
+        mode = pe["mode"]
+        pat = pe["pat"]
+        repl = pe["repl"].replace(r"\~", "~").replace(r"\/", "/")
+        pat_expr = _word_expr(pat)
+        repl_expr = _word_expr(repl)
+        if mode == "#":
+            return f"({repl_expr} + {var}[len({pat_expr}):] if {var}.startswith({pat_expr}) else {var})"
+        if mode == "%":
+            return f"({var}[:-len({pat_expr})] + {repl_expr} if {var}.endswith({pat_expr}) else {var})"
+        if mode == "/":
+            return f"{var}.replace({pat_expr}, {repl_expr})"
+        return f"{var}.replace({pat_expr}, {repl_expr}, 1)"
+    if t == "strip":
+        mode = pe["mode"]
+        pat = pe["pat"]
+        pat_expr = _word_expr(pat)
+        if mode in ("#", "##"):
+            return f"({var}[len({pat_expr}):] if {var}.startswith({pat_expr}) else {var})"
+        return f"({var}[:-len({pat_expr})] if {var}.endswith({pat_expr}) else {var})"
+    return var
 
 
 def _lit_content(word: str) -> str | None:
@@ -462,9 +619,12 @@ def _test_expr(inner: str) -> str | None:
     if len(words) == 3:
         l, op, r = words
         if op in ("=", "=="):
-            # bash เทียบเป็น string เสมอ
+            if any(ch in r for ch in _GLOB_CHARS):
+                return f"fnmatch.fnmatch({_as_str(_word_expr(l))}, {_as_str(_word_expr(r))})"
             return f"{_as_str(_word_expr(l))} == {_as_str(_word_expr(r))}"
         if op == "!=":
+            if any(ch in r for ch in _GLOB_CHARS):
+                return f"not fnmatch.fnmatch({_as_str(_word_expr(l))}, {_as_str(_word_expr(r))})"
             return f"{_as_str(_word_expr(l))} != {_as_str(_word_expr(r))}"
         num = {"-eq": "==", "-ne": "!=", "-lt": "<", "-le": "<=", "-gt": ">", "-ge": ">="}
         if op in num:
@@ -487,6 +647,9 @@ def _cond_atom(a: str) -> str:
         inner = inner[2:-2].strip()
     elif inner.startswith("[") and inner.endswith("]"):
         inner = inner[1:-1].strip()
+    while inner.startswith("!") and (len(inner) == 1 or inner[1].isspace()):
+        neg = not neg
+        inner = inner[1:].strip()
     py = _test_expr(inner)
     if py is None:
         py = "_ok(" + _cmd_expr(inner) + ")"
@@ -567,7 +730,9 @@ def _printf_py(args_text: str) -> str:
     if fmt is None:
         return _echo_py(args_text)
     fmt = (
-        fmt.replace("\\\\", "\x00")
+        fmt.replace(r'\"', '"')
+        .replace(r"\'", "'")
+        .replace("\\\\", "\x00")
         .replace("\\n", "\n")
         .replace("\\t", "\t")
         .replace("\\r", "\r")
@@ -881,10 +1046,23 @@ def bash_to_python(code: str, headers: bool = True, notes: bool = True) -> str:
             continue
         pending_header = line if headers else None
 
-        for idx, stmt in enumerate(_split_top(code_part, (";",))):
-            s = stmt.strip()
+        queue = _split_stmts(code_part)
+        while queue:
+            s = queue.pop(0).strip()
             if not s:
                 continue
+
+            # then/do ต่อด้วยคำสั่งในบรรทัดเดียว
+            mtd = re.match(r"^(then|do)(?=\s)(.*)$", s, re.S)
+            if mtd and pending:
+                kind = mtd.group(1)
+                if kind == "then" or pending[0] in ("while", "for", "forarith"):
+                    flush_open(*pending)
+                    pending = None
+                    rest = mtd.group(2).strip()
+                    if rest:
+                        queue.insert(0, rest)
+                    continue
 
             # เงื่อนไขข้ามบรรทัด (รอ then/do)
             if pending and s not in ("then", "do") and not s.startswith(("elif ", "fi", "done", "esac")):
@@ -957,12 +1135,15 @@ def bash_to_python(code: str, headers: bool = True, notes: bool = True) -> str:
                 continue
 
             # function / block
-            m = re.match(r"^(?:function\s+)?([A-Za-z_]\w*)\s*\(\s*\)\s*\{$", s) or re.match(
-                r"^function\s+([A-Za-z_]\w*)\s*\{$", s
+            m = re.match(r"^(?:function\s+)?([A-Za-z_]\w*)\s*\(\s*\)\s*\{(.*)$", s) or re.match(
+                r"^function\s+([A-Za-z_]\w*)\s*\{(.*)$", s
             )
             if m:
                 emit(attach(f"def {m.group(1)}():", "ฟังก์ชัน bash -> def name():"))
                 depth += 1
+                rest = m.group(2).strip()
+                if rest:
+                    queue.insert(0, rest)
                 continue
             if s == "{":
                 emit(attach("if True:  # bash { }", "group { } -> block ของ python"))
@@ -1009,11 +1190,23 @@ def _add_python_header(body: str, keep_shebang: bool = True) -> str:
         ("shutil.", "shutil"),
         ("sys.", "sys"),
         ("glob.", "glob"),
-        ("re.search", "re"),
+        ("re.", "re"),
         ("fnmatch.", "fnmatch"),
     ]:
         if needle in body:
             mods.append(mod)
+    env_inits: list[str] = []
+    code_lines = [ln for ln in body.splitlines() if not ln.strip().startswith("#")]
+    code_text = "\n".join(code_lines)
+    if re.search(r"\bHOME\b", code_text) and not re.search(r"^\s*HOME\s*=", code_text, re.M):
+        if "os" not in mods:
+            mods.append("os")
+        env_inits.append('HOME = os.environ.get("HOME", os.path.expanduser("~"))')
+    if re.search(r"\bUSER\b", code_text) and not re.search(r"^\s*USER\s*=", code_text, re.M):
+        if "os" not in mods:
+            mods.append("os")
+        env_inits.append('USER = os.environ.get("USER", os.environ.get("USERNAME", ""))')
+
     helpers = [h for h in _PY_HELPERS if re.search(rf"\b{h}\(", body)]
     for h in helpers:
         if h == "_run" or h == "_sh" or h == "_ok":
@@ -1028,6 +1221,8 @@ def _add_python_header(body: str, keep_shebang: bool = True) -> str:
     parts = []
     if mods:
         parts.append("\n".join(f"import {m}" for m in sorted(mods)))
+    if env_inits:
+        parts.append("\n".join(env_inits))
     if helpers:
         parts.append("\n\n".join(_PY_HELPERS[h] for h in helpers))
     chunks = [c for c in (shebang, *parts, body) if c]
@@ -1061,7 +1256,7 @@ def _sh_word(expr: str) -> str:
     e = expr.strip()
     if not e:
         return "''"
-    if e.startswith('f"') and e.endswith('"'):
+    if (e.startswith('f"') and e.endswith('"')) or (e.startswith("f'") and e.endswith("'")):
         return '"' + _fstring_to_sh(e[2:-1]) + '"'
     if e.startswith('"') and e.endswith('"') and e.count('"') == 2:
         return e
@@ -1104,7 +1299,7 @@ def _concat_to_sh(e: str) -> str:
     parts = _split_top(e, ("+",))
     if len(parts) > 1:
         return "".join(_concat_to_sh(p) for p in parts)
-    if e.startswith('f"') and e.endswith('"'):
+    if (e.startswith('f"') and e.endswith('"')) or (e.startswith("f'") and e.endswith("'")):
         return _fstring_to_sh(e[2:-1])
     m = re.fullmatch(r'"((?:[^"\\]|\\.)*)"', e, re.S)
     if m:
@@ -1305,6 +1500,10 @@ def _py_stmt_to_sh(s: str) -> str | None:
         am = re.fullmatch(r"\((.+)\)", val)
         if am and re.fullmatch(r"[\w\s+\-*/%()]+", am.group(1)):
             return f"{name}=$(({am.group(1)}))"
+        if re.fullmatch(r"[\w\s+\-*/%()]+", val) and any(c in val for c in ("+", "-", "*", "/", "%")):
+            toks_val = re.findall(r"[A-Za-z_]\w*|\d+|[+\-*/%()]", val)
+            if any(t in ("+", "-", "*", "/", "%") for t in toks_val):
+                return f"{name}=$(({val.replace('//', '/')}))"
         return f"{name}={_sh_value(val)}"
 
     if s.startswith("print(") and s.endswith(")"):
@@ -1688,28 +1887,23 @@ def _ps_frags(word: str) -> list[tuple[str, str]]:
                     i += 1
                     continue
                 inner = word[i + 2 : close]
-                if buf:
-                    frags.append(("lit", "".join(buf)))
-                    buf = []
-                if re.fullmatch(r"[A-Za-z_]\w*", inner):
-                    frags.append(("var", inner))
-                    i = close + 1
-                    continue
-                md = re.fullmatch(r"(\d+):-(.*)", inner, re.S)
-                if md:
-                    dflt = _ps_join_words(_words(md.group(2)) or [md.group(2)])
-                    frags.append(("argdef", md.group(1) + "\x00" + dflt))
-                    i = close + 1
-                    continue
-                md = re.fullmatch(r"([A-Za-z_]\w*):?-(.*)", inner, re.S)
-                if md:
-                    dflt = _ps_join_words(_words(md.group(2)) or [md.group(2)])
-                    frags.append(("vardef", md.group(1) + "\x00" + dflt))
-                    i = close + 1
-                    continue
-                md = re.fullmatch(r"#([A-Za-z_]\w*)", inner)
-                if md:
-                    frags.append(("varlen", md.group(1)))
+                pe = _parse_param_exp(inner)
+                if pe is not None:
+                    if buf:
+                        frags.append(("lit", "".join(buf)))
+                        buf = []
+                    if pe["type"] == "simple":
+                        frags.append(("var", pe["var"]))
+                    elif pe["type"] == "len":
+                        frags.append(("varlen", pe["var"]))
+                    elif pe["type"] == "default":
+                        dflt = _ps_join_words(_words(pe["dflt"]) or [pe["dflt"]])
+                        if pe["var"].isdigit():
+                            frags.append(("argdef", pe["var"] + "\x00" + dflt))
+                        else:
+                            frags.append(("vardef", pe["var"] + "\x00" + dflt))
+                    else:
+                        frags.append(("param_exp", inner))
                     i = close + 1
                     continue
                 frags.append(("raw", word[i : close + 1]))
@@ -1820,6 +2014,8 @@ def _ps_atom(k: str, v: str) -> str:
         return "$PID"
     if k == "prog":
         return "$PSCommandPath"
+    if k == "param_exp":
+        return _param_to_ps(_parse_param_exp(v))
     return v  # raw — ส่งผ่านพร้อม note ให้ตรวจเอง
 
 
@@ -1877,6 +2073,9 @@ def _ps_build(frags: list[tuple[str, str]], interpret: bool = False) -> str:
             body.append("$PID")
         elif k == "prog":
             body.append("$PSCommandPath")
+        elif k == "param_exp":
+            pv = _param_to_ps(_parse_param_exp(v))
+            body.append("$(" + pv + ")" if not (pv.startswith("$(") and pv.endswith(")")) else pv)
         else:
             body.append(esc_lit(v))
     return '"' + "".join(body) + '"'
@@ -1900,6 +2099,60 @@ def _ps_join_words(words: list[str], interpret: bool = False) -> str:
             combo.append(("lit", " "))
         combo.extend(_ps_frags(w))
     return _ps_build(combo, interpret=interpret)
+
+
+def _param_to_ps(pe: dict | None) -> str:
+    if pe is None:
+        return "''"
+    t = pe["type"]
+    var = pe["var"]
+    pvar = f"${var}"
+    if t == "simple":
+        return pvar
+    if t == "len":
+        return f"({pvar}.Length)"
+    if t == "case":
+        if pe["op"] in ("^^", "^"):
+            return f"({pvar}.ToUpper())"
+        return f"({pvar}.ToLower())"
+    if t == "slice":
+        off = pe["offset"]
+        if pe.get("length"):
+            return f"({pvar}.Substring({off}, {pe['length']}))"
+        return f"({pvar}.Substring({off}))"
+    if t == "default":
+        dflt_code = _ps_join_words(_words(pe["dflt"]) or [pe["dflt"]])
+        return f"({pvar} ?? {dflt_code})"
+    if t == "alt":
+        alt_code = _ps_join_words(_words(pe["alt"]) or [pe["alt"]])
+        return f"($(if ({pvar}) {{ {alt_code} }} else {{ '' }}))"
+    if t == "replace":
+        mode = pe["mode"]
+        pat = pe["pat"]
+        repl = pe["repl"].replace(r"\~", "~").replace(r"\/", "/")
+        if pat.startswith("$") and re.fullmatch(r"\$[A-Za-z_]\w*", pat):
+            pat_code = pat
+        else:
+            pat_code = _ps_word(pat)
+        repl_code = _ps_word(repl)
+        if mode == "#":
+            return f"({pvar} -replace ('^' + [regex]::Escape({pat_code})), {repl_code})"
+        if mode == "%":
+            return f"({pvar} -replace ([regex]::Escape({pat_code}) + '$'), {repl_code})"
+        if mode == "/":
+            return f"({pvar} -replace [regex]::Escape({pat_code}), {repl_code})"
+        return f"([regex]::new([regex]::Escape({pat_code})).Replace({pvar}, {repl_code}, 1))"
+    if t == "strip":
+        mode = pe["mode"]
+        pat = pe["pat"]
+        if pat.startswith("$") and re.fullmatch(r"\$[A-Za-z_]\w*", pat):
+            pat_code = pat
+        else:
+            pat_code = _ps_word(pat)
+        if mode in ("#", "##"):
+            return f"({pvar} -replace ('^' + [regex]::Escape({pat_code})), '')"
+        return f"({pvar} -replace ([regex]::Escape({pat_code}) + '$'), '')"
+    return pvar
 
 
 def _ps_has_raw(word: str) -> bool:
@@ -1941,8 +2194,12 @@ def _ps_test_expr(inner: str) -> str | None:
     if len(words) == 3:
         l, op, r = words
         if op in ("=", "=="):
+            if any(ch in r for ch in "*?["):
+                return "%s -like %s" % (_ps_word(l), _ps_word(r))
             return "%s -eq %s" % (_ps_word(l), _ps_word(r))
         if op == "!=":
+            if any(ch in r for ch in "*?["):
+                return "%s -notlike %s" % (_ps_word(l), _ps_word(r))
             return "%s -ne %s" % (_ps_word(l), _ps_word(r))
         if op in ("-eq", "-ne", "-lt", "-le", "-gt", "-ge"):
             # โชคดี: pwsh ใช้ operator ตัวเลขชุดเดียวกับ test ของ bash
@@ -1970,6 +2227,9 @@ def _ps_cond_atom(a: str) -> tuple[str, bool]:
         inner = inner[1:-1].strip()
     elif inner == "test" or inner.startswith("test "):
         inner = inner[4:].strip()
+    while inner.startswith("!") and (len(inner) == 1 or inner[1].isspace()):
+        neg = not neg
+        inner = inner[1:].strip()
     m = re.fullmatch(r"\(\((.*)\)\)", inner, re.S)
     if m:
         expr = "(" + _arith_to_ps(m.group(1)) + ")"
@@ -2092,7 +2352,8 @@ def _ps_printf(args_text: str) -> tuple[str, str] | None:
     args = words[1:]
     if fmt_lit is None:
         return None  # fmt มี expansion — ให้ caller ส่งผ่านพร้อม note
-    f = fmt_lit.replace("`", "``").replace('"', '`"')
+    f = fmt_lit.replace(r'\"', '"').replace(r"\'", "'")
+    f = f.replace("`", "``").replace('"', '`"')
     f = (
         f.replace("\\\\", "\x00")
         .replace("\\n", "`n")
@@ -2773,13 +3034,16 @@ def bash_to_pwsh(code: str, headers: bool = True, notes: bool = True) -> str:
                     continue
 
             # function / block
-            m = re.match(r"^(?:function\s+)?([A-Za-z_]\w*)\s*\(\s*\)\s*\{$", s) or re.match(
-                r"^function\s+([A-Za-z_]\w*)\s*\{$", s
+            m = re.match(r"^(?:function\s+)?([A-Za-z_]\w*)\s*\(\s*\)\s*\{(.*)$", s) or re.match(
+                r"^function\s+([A-Za-z_]\w*)\s*\{(.*)$", s
             )
             if m:
                 emit(attach("function %s {" % m.group(1), "ฟังก์ชัน bash -> function name {"))
                 stack.append("func")
                 depth += 1
+                rest = m.group(2).strip()
+                if rest:
+                    queue.insert(0, rest)
                 continue
             if s == "{":
                 emit(attach("& {", "group { } -> & { } (script block แล้วรัน)"))
@@ -3056,7 +3320,7 @@ def _ps_catom_to_bash(a: str) -> tuple[str, bool]:
                     cond = "! " + cond
             elif op in ("-like", "-notlike"):
                 l2 = _ps_to_bash_vars(l)[0]
-                r2 = _ps_to_bash_vars(r)[0]
+                r2 = _ps_to_bash_vars(r)[0].strip("\"'")
                 cond = "[[ %s == %s ]]" % (l2, r2)
                 if op == "-notlike":
                     cond = "! " + cond
@@ -3117,6 +3381,24 @@ def _ps_val_to_bash(expr: str) -> tuple[str, str]:
     m = re.fullmatch(r"\(\$([A-Za-z_]\w*)\.Length\)", e)
     if m:
         return "${#%s}" % m.group(1), "${#VAR} (ความยาว string)"
+    # -replace -> ${var/#pat/repl}, ${var/%pat/repl}, ${var//pat/repl}
+    rm = re.fullmatch(r"\(\$([A-Za-z_]\w*)\s+-replace\s+(.*?),\s*(.*?)\)", e, re.S)
+    if rm:
+        vname, pat_raw, repl_raw = rm.group(1), rm.group(2).strip(), rm.group(3).strip()
+        repl_val = repl_raw.strip("'\"")
+        repl_sh = r"\~" if repl_val == "~" else repl_val
+        pm = re.fullmatch(r"\('\^'\s*\+\s*\[regex\]::Escape\((\$?[A-Za-z_]\w*|'.*?'|\".*?\")\)\)", pat_raw)
+        if pm:
+            pat_arg = pm.group(1).strip("'\"")
+            return f"${{{vname}/#{pat_arg}/{repl_sh}}}", f"-replace ^... -> ${{{vname}/#...}}"
+        pm = re.fullmatch(r"\(\[regex\]::Escape\((\$?[A-Za-z_]\w*|'.*?'|\".*?\")\)\s*\+\s*'\$'\)", pat_raw)
+        if pm:
+            pat_arg = pm.group(1).strip("'\"")
+            return f"${{{vname}/%{pat_arg}/{repl_sh}}}", f"-replace ...$ -> ${{{vname}/%...}}"
+        pm = re.fullmatch(r"\[regex\]::Escape\((\$?[A-Za-z_]\w*|'.*?'|\".*?\")\)", pat_raw)
+        if pm:
+            pat_arg = pm.group(1).strip("'\"")
+            return f"${{{vname}//{pat_arg}/{repl_sh}}}", f"-replace ... -> ${{{vname}//...}}"
     m = re.fullmatch(r"(-?\d+)\.\.(-?\d+)", e)
     if m:
         return "$(seq %s %s)" % (m.group(1), m.group(2)), "range A..B -> $(seq A B)"
@@ -3137,6 +3419,52 @@ def _ps_val_to_bash(expr: str) -> tuple[str, str]:
     return v, note
 
 
+def _split_args_paren(text: str) -> list[str]:
+    """Split on comma outside quotes and outside parentheses."""
+    parts = []
+    buf = []
+    i, n = 0, len(text)
+    q = None
+    depth = 0
+    while i < n:
+        c = text[i]
+        if q:
+            buf.append(c)
+            if c == "`" and q == '"' and i + 1 < n:
+                buf.append(text[i + 1])
+                i += 2
+                continue
+            if c == q:
+                q = None
+            i += 1
+            continue
+        if c in "'\"":
+            q = c
+            buf.append(c)
+            i += 1
+            continue
+        if c == "(":
+            depth += 1
+            buf.append(c)
+            i += 1
+            continue
+        if c == ")":
+            depth = max(depth - 1, 0)
+            buf.append(c)
+            i += 1
+            continue
+        if c == "," and depth == 0:
+            parts.append("".join(buf).strip())
+            buf = []
+            i += 1
+            continue
+        buf.append(c)
+        i += 1
+    if buf:
+        parts.append("".join(buf).strip())
+    return [p for p in parts if p]
+
+
 def _ps_write_to_bash(s: str) -> tuple[str, str] | None:
     m = re.match(r"^(Write-Output|Write-Host|echo)\s*(.*)$", s, re.S)
     if not m:
@@ -3154,9 +3482,18 @@ def _ps_write_to_bash(s: str) -> tuple[str, str] | None:
     # ("fmt" -f a, b) -> printf
     fm = re.fullmatch(r'\("(.*)"\s+-f\s+(.*)\)', rest, re.S)
     if fm:
-        fmt = re.sub(r"\{(\d+)\}", "%s", fm.group(1))
-        args = [a.strip() for a in _split_top(fm.group(2), (",",)) if a.strip()]
-        parts = [_ps_val_to_bash(a)[0] for a in args]
+        fmt_str = fm.group(1)
+        fmt_str = (
+            fmt_str.replace("`n", "\\n")
+            .replace("`t", "\\t")
+            .replace("`r", "\\r")
+            .replace('`"', '\\"')
+            .replace("`$", "$")
+            .replace("``", "`")
+        )
+        fmt = re.sub(r"\{(\d+)\}", "%s", fmt_str)
+        args = _split_args_paren(fm.group(2))
+        parts = ['"%s"' % _ps_val_to_bash(a)[0] if _ps_val_to_bash(a)[0].startswith("${") else _ps_val_to_bash(a)[0] for a in args]
         body = "printf '%s' %s" % (fmt, " ".join(parts)) if parts else "printf '%s'" % fmt
         return body, '("..." -f ...) -> printf \'...\' ({0} กลับเป็น %s)'
     if not rest:
@@ -3304,6 +3641,10 @@ def _ps_stmt_to_bash(s: str) -> tuple[str, str] | None:
                 p, _n = _ps_val_to_bash(pm.group(1))
                 return "read -p %s %s" % (p, name), "Read-Host -> read -p"
             return "read %s" % name, "Read-Host -> read"
+        arith_m = re.fullmatch(r"[\$\w\s+\-*/%()]+", val)
+        if arith_m and any(c in val for c in ("+", "-", "*", "/", "%")) and not val.startswith('"') and not val.startswith("'"):
+            conv = re.sub(r"\$([A-Za-z_]\w*)", r"\1", val)
+            return "%s=$((%s))" % (name, conv.strip()), "คำนวณตัวเลข -> $(( ... ))"
         v, n = _ps_val_to_bash(val)
         if op == "+=":
             return "%s+=%s" % (name, v), _merge_notes("+= เหมือนกัน ($ หายไป)", n)
