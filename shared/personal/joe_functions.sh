@@ -127,6 +127,9 @@ pwd(){
         -d|--dirname)
         dirname "$(builtin pwd)"
         ;;
+        -s|--short) 
+            echo "${PWD/#$HOME/\~}"
+        ;;
         -a|--absolute)
         realpath "$(builtin pwd)"
         ;;
