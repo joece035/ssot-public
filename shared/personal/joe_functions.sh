@@ -225,5 +225,4 @@ _b2p(){
     else
         cn r bi "codetrans translation failed"
         return 1
-    fi
-}
+    
