@@ -88,9 +88,11 @@ pathx() {
 # Drop into ~/.bashrc / ~/.zshrc (WSL / Git Bash)
 # ─────────────────────────────────────────────
 
-# ── p() v3 — JOE_ENV-aware, handles Windows + WSL UNC paths ──
+# ── p() v4 — JOE_ENV-aware, handles Windows + WSL UNC paths (all devices) ──
+# Supports: \\wsl.localhost\Distro\..., //wsl.localhost/..., C:\..., /mnt/c/..., /home/...
 
-WSL_DISTRO="Ubuntu"   # ← Default distro fallback
+# Auto-detect current WSL distro name (falls back to Ubuntu-22.04 → Ubuntu)
+WSL_DISTRO="${WSL_DISTRO_NAME:-${WSL_DISTRO:-Ubuntu-22.04}}"
 
 p() {
   if ! command -v cb_read >/dev/null 2>&1; then
@@ -103,27 +105,35 @@ p() {
   local raw converted drive rest distro
 
   # 1. Input: $1 หรือ clipboard
-  raw="${1:-$(cb_read)}"
+  raw="${1:-$(cb_read 2>/dev/null)}"
 
   [[ -z "$raw" ]] && { echo "[p] No input." >&2; return 1; }
 
-  # 2. Normalize whitespace, quotes, and backslashes (avoid echo to prevent Zsh escape corruption)
+  # 2. Normalize: strip CR, trim whitespace, remove quotes
   raw="$(printf '%s' "$raw" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
-  raw="${raw//\"/}"   # ลบ double quote
-  raw="${raw//\'/}"   # ลบ single quote
-  raw="$(printf '%s' "$raw" | tr '\\' '/')"  # normalize backslash → forward slash
+  raw="${raw//\"/}"
+  raw="${raw//\'/}"
 
-  # Normalize WSL UNC prefix: //wsl.localhost/ or //wsl$/ or /wsl.localhost/ or wsl.localhost/ or wsl$/
-  raw="$(printf '%s' "$raw" | sed -E 's#^/*(wsl\.localhost|wsl\$)/#//wsl.localhost/#')"
+  # Stage 2a: normalize all backslashes → forward slash
+  raw="$(printf '%s' "$raw" | tr '\\' '/')"
+
+  # Stage 2b: collapse leading slashes and normalize WSL UNC prefixes
+  # Handles: //wsl.localhost/  /wsl.localhost/  wsl.localhost/  wsl$/  //wsl$/
+  raw="$(printf '%s' "$raw" | sed -E \
+    -e 's#^/*(wsl\.localhost|wsl\$)/#//wsl.localhost/#' \
+    -e 's#^/+wsl\.localhost/#//wsl.localhost/#')"
+
+  # Stage 2c: normalize Windows drive path with no leading slash after colon
+  # e.g. C:Users → C:/Users (shouldn't happen but defensive)
+  raw="$(printf '%s' "$raw" | sed -E 's#^([A-Za-z]):([^/])#\1:/\2#')"
 
   # 3. Detect + convert
-  # ── Case A: WSL UNC path  //wsl.localhost/Ubuntu/home/... ──
-  if [[ "$raw" =~ ^//wsl\.localhost/([^/]+)(/.*)$ ]]; then
-    # Portable regex match extraction (bash: BASH_REMATCH, zsh: match, fallback: parameter expansion)
+  # ── Case A: WSL UNC path  //wsl.localhost/Distro/path/... ──
+  if [[ "$raw" =~ ^//wsl\.localhost/([^/]+)(/.+)$ ]]; then
     if [[ -n "${BASH_REMATCH[1]:-}" ]]; then
       distro="${BASH_REMATCH[1]}"
       rest="${BASH_REMATCH[2]}"
-    elif [[ -n "${match[1]:-}" ]]; then
+    elif [[ -n "${match[1]:-}" ]]; then   # zsh
       distro="${match[1]}"
       rest="${match[2]}"
     else
@@ -144,7 +154,7 @@ p() {
     if [[ -n "${BASH_REMATCH[1]:-}" ]]; then
       drive="${BASH_REMATCH[1]}"
       rest="${BASH_REMATCH[2]}"
-    elif [[ -n "${match[1]:-}" ]]; then
+    elif [[ -n "${match[1]:-}" ]]; then   # zsh
       drive="${match[1]}"
       rest="${match[2]}"
     else
@@ -160,7 +170,7 @@ p() {
       *)        converted="/mnt/${drive}${rest}" ;;
     esac
 
-  # ── Case C: Already a valid Linux/WSL /home or /mnt or / path ──
+  # ── Case C: Already a valid POSIX path (/home/..., /mnt/..., etc.) ──
   elif [[ "$raw" =~ ^/ ]]; then
     converted="$raw"
 
