@@ -1552,6 +1552,2159 @@ def python_to_bash(code: str, headers: bool = True, notes: bool = True) -> str:
 
 
 # ==========================================================================
+# bash <-> powershell
+# ==========================================================================
+# หมายเหตุ: pwsh เป็น shell เหมือน bash คำสั่ง native (ls/grep/git/...)
+# รันได้ตรงๆ จึงส่งผ่าน (pass-through) ได้เลย ต่างจาก python ที่ต้องห่อ _run()
+
+_PS_SHEBANG = "#!/usr/bin/env pwsh"
+
+
+def _ps_sq(s: str) -> str:
+    """สตริง literal ของ pwsh แบบ quote เดี่ยว (ไม่มี expansion เหมือน bash '...')."""
+    return "'" + s.replace("'", "''") + "'"
+
+
+def _ps_dq_escape(s: str) -> str:
+    """escape ข้อความ literal สำหรับใส่ใน "..." ของ pwsh.
+
+    ยุบ escape คู่ของ bash ใน "..." ก่อน (\\" -> \\, \\" -> ", \\$ -> $ literal)
+    เหลือ \\n/\\t แบบ literal (bash ไม่ตีความถ้าไม่ใช่ -e/printf — pwsh ก็ไม่ตีความ)
+    """
+    s = re.sub(r"(?<!`)`(?!`)", "\x02", s)  # ` เดี่ยวๆ ของ bash -> placeholder
+    s = (
+        s.replace("\\\\", "\x00")
+        .replace('\\"', '"')
+        .replace("\\$", "\x01")
+        .replace("\\`", "``")
+    )
+    s = s.replace("\x00", "\\")
+    s = s.replace('"', '`"').replace("$", "`$")
+    return s.replace("\x02", "``").replace("\x01", "`$")
+
+
+def _ps_dq_esc_interp(v: str) -> str:
+    """escape สำหรับโหมดตีความ (echo -e): \\n -> `n ของ pwsh ก่อน แล้วค่อย escape."""
+    v = re.sub(r"(?<!`)`(?!`)", "\x02", v)
+    v = v.replace("\\\\", "\x00").replace("\\`", "``")
+    v = v.replace("\\n", "`n").replace("\\t", "`t").replace("\\r", "`r")
+    v = v.replace("\x00", "\\")
+    v = v.replace('"', '`"').replace("$", "`$")
+    return v.replace("\x02", "``")
+
+
+def _ps_frags(word: str) -> list[tuple[str, str]]:
+    """แยก word ของ bash เป็นชิ้นส่วนสำหรับประกอบเป็น powershell.
+
+    kinds: lit/var/cmd/arith/arg/args/argc/status/pid/prog/raw
+    (escape คู่แบบ \\n เก็บไว้ทั้งคู่ ให้ caller ตัดสินใจทีหลังว่าจะตีความหรือไม่)
+    """
+    frags: list[tuple[str, str]] = []
+    buf: list[str] = []
+    i, n = 0, len(word)
+    q = None  # None | "'" | '"'
+    while i < n:
+        c = word[i]
+        if q == "'":
+            if c == "'":
+                q = None
+                i += 1
+                continue
+            buf.append(c)
+            i += 1
+            continue
+        if q is None and c == "'":
+            q = "'"
+            i += 1
+            continue
+        if c == '"' and q is None:
+            q = '"'
+            i += 1
+            continue
+        if c == '"' and q == '"':
+            q = None
+            i += 1
+            continue
+        if c == "\\" and q != "'":
+            if i + 1 < n:
+                buf.append(word[i : i + 2])
+                i += 2
+                continue
+            i += 1
+            continue
+        if c == "`" and q != "'":
+            j = word.find("`", i + 1)
+            if j == -1:
+                buf.append(c)
+                i += 1
+                continue
+            if buf:
+                frags.append(("lit", "".join(buf)))
+                buf = []
+            frags.append(("cmd", word[i + 1 : j]))
+            i = j + 1
+            continue
+        if c == "$" and q != "'":
+            if word.startswith("$((", i):
+                close = word.find("))", i + 3)
+                if close == -1:
+                    buf.append(c)
+                    i += 1
+                    continue
+                if buf:
+                    frags.append(("lit", "".join(buf)))
+                    buf = []
+                frags.append(("arith", word[i + 3 : close]))
+                i = close + 2
+                continue
+            if word.startswith("$(", i):
+                depth, j, sq = 1, i + 2, None
+                while j < n and depth:
+                    ch = word[j]
+                    if sq:
+                        if ch == sq and word[j - 1] != "\\":
+                            sq = None
+                    elif ch in "'\"":
+                        sq = ch
+                    elif ch == "(":
+                        depth += 1
+                    elif ch == ")":
+                        depth -= 1
+                    j += 1
+                if depth == 0:
+                    if buf:
+                        frags.append(("lit", "".join(buf)))
+                        buf = []
+                    frags.append(("cmd", word[i + 2 : j - 1]))
+                    i = j
+                    continue
+                buf.append(c)
+                i += 1
+                continue
+            if i + 1 < n and word[i + 1] == "{":
+                close = word.find("}", i + 2)
+                if close == -1:
+                    buf.append(c)
+                    i += 1
+                    continue
+                inner = word[i + 2 : close]
+                if buf:
+                    frags.append(("lit", "".join(buf)))
+                    buf = []
+                if re.fullmatch(r"[A-Za-z_]\w*", inner):
+                    frags.append(("var", inner))
+                    i = close + 1
+                    continue
+                md = re.fullmatch(r"(\d+):-(.*)", inner, re.S)
+                if md:
+                    dflt = _ps_join_words(_words(md.group(2)) or [md.group(2)])
+                    frags.append(("argdef", md.group(1) + "\x00" + dflt))
+                    i = close + 1
+                    continue
+                md = re.fullmatch(r"([A-Za-z_]\w*):?-(.*)", inner, re.S)
+                if md:
+                    dflt = _ps_join_words(_words(md.group(2)) or [md.group(2)])
+                    frags.append(("vardef", md.group(1) + "\x00" + dflt))
+                    i = close + 1
+                    continue
+                md = re.fullmatch(r"#([A-Za-z_]\w*)", inner)
+                if md:
+                    frags.append(("varlen", md.group(1)))
+                    i = close + 1
+                    continue
+                frags.append(("raw", word[i : close + 1]))
+                i = close + 1
+                continue
+            m = re.match(r"\$(\d+)", word[i:])
+            if m:
+                if buf:
+                    frags.append(("lit", "".join(buf)))
+                    buf = []
+                if m.group(1) == "0":
+                    frags.append(("prog", ""))
+                else:
+                    frags.append(("arg", m.group(1)))
+                i += len(m.group(0))
+                continue
+            m = re.match(r"\$([A-Za-z_]\w*)", word[i:])
+            if m:
+                if buf:
+                    frags.append(("lit", "".join(buf)))
+                    buf = []
+                frags.append(("var", m.group(1)))
+                i += len(m.group(0))
+                continue
+            nxt = word[i + 1] if i + 1 < n else ""
+            if nxt in "@*":
+                if buf:
+                    frags.append(("lit", "".join(buf)))
+                    buf = []
+                frags.append(("args", ""))
+                i += 2
+                continue
+            if nxt == "#":
+                if buf:
+                    frags.append(("lit", "".join(buf)))
+                    buf = []
+                frags.append(("argc", ""))
+                i += 2
+                continue
+            if nxt == "?":
+                if buf:
+                    frags.append(("lit", "".join(buf)))
+                    buf = []
+                frags.append(("status", ""))
+                i += 2
+                continue
+            if nxt == "$":
+                if buf:
+                    frags.append(("lit", "".join(buf)))
+                    buf = []
+                frags.append(("pid", ""))
+                i += 2
+                continue
+            if nxt == "!":
+                if buf:
+                    frags.append(("lit", "".join(buf)))
+                    buf = []
+                frags.append(("raw", "$!"))
+                i += 2
+                continue
+            buf.append(c)
+            i += 1
+            continue
+        buf.append(c)
+        i += 1
+    if buf:
+        frags.append(("lit", "".join(buf)))
+    return frags
+
+
+def _arith_to_ps(expr: str) -> str:
+    """$((a+1)) ของ bash -> ($a + 1) ของ pwsh (เติม $ ให้ชื่อตัวแปรเปลือย)."""
+    e = re.sub(r"\$\{([A-Za-z_]\w*)\}", r"$\1", expr)
+
+    def _pre(m: re.Match) -> str:
+        if m.group(0) in ("true", "false"):
+            return m.group(0)
+        return "$" + m.group(0)
+
+    return re.sub(r"(?<![$\w])([A-Za-z_]\w*)(?!\s*\()", _pre, e)
+
+
+def _ps_atom(k: str, v: str) -> str:
+    """ชิ้นเดียวทั้ง word (นอก string) — ใช้รูป bare ได้เลย."""
+    if k == "var":
+        return "$" + v
+    if k == "cmd":
+        return "$(" + v + ")"
+    if k == "arith":
+        return "(" + _arith_to_ps(v) + ")"
+    if k == "arg":
+        return "$args[%d]" % (int(v) - 1)
+    if k == "argdef":
+        num, _, dflt = v.partition("\x00")
+        return "($args[%d] ?? %s)" % (int(num) - 1, dflt)
+    if k == "vardef":
+        name, _, dflt = v.partition("\x00")
+        return "($%s ?? %s)" % (name, dflt)
+    if k == "varlen":
+        return "($%s.Length)" % v
+    if k == "args":
+        return "$args"
+    if k == "argc":
+        return "$args.Count"
+    if k == "status":
+        return "$?"
+    if k == "pid":
+        return "$PID"
+    if k == "prog":
+        return "$PSCommandPath"
+    return v  # raw — ส่งผ่านพร้อม note ให้ตรวจเอง
+
+
+def _ps_build(frags: list[tuple[str, str]], interpret: bool = False) -> str:
+    """ประกอบชิ้นส่วนเป็นนิพจน์ pwsh (ผสม -> "..." แบบ double-quote).
+
+    interpret=True (echo -e): บังคับ "..." เสมอ และแปลง \\n -> `n ของ pwsh
+    (ห้ามคืนสตริงที่มี newline จริง — จะทำให้เลขบรรทัด/attach note พัง)
+    """
+    if not frags:
+        return "''"
+    if len(frags) == 1 and not interpret:
+        k, v = frags[0]
+        if k == "lit":
+            if re.fullmatch(r"-?\d+(?:\.\d+)?", v):
+                return v
+            return _ps_sq(v)
+        return _ps_atom(k, v)
+
+    def esc_lit(v: str) -> str:
+        return _ps_dq_esc_interp(v) if interpret else _ps_dq_escape(v)
+
+    # ชิ้นเดียว + interpret -> "..." เสมอ (ไม่ใช้ _ps_sq เพราะ escape ต้องเป็น `n)
+    if len(frags) == 1 and frags[0][0] == "lit":
+        return '"' + esc_lit(frags[0][1]) + '"'
+    body: list[str] = []
+    for k, v in frags:
+        if k == "lit":
+            body.append(esc_lit(v))
+        elif k == "var":
+            body.append("$" + v)
+        elif k == "cmd":
+            body.append("$(" + v + ")")
+        elif k == "arith":
+            # ใน "..." ต้องใช้ $(...) (subexpression) ถึงจะคำนวณ
+            body.append("$(" + _arith_to_ps(v) + ")")
+        elif k == "arg":
+            # $args[0] ใน "..." ไม่ expand index ต้องห่อ $()
+            body.append("$($args[%d])" % (int(v) - 1))
+        elif k == "argdef":
+            num, _, dflt = v.partition("\x00")
+            body.append("$(($args[%d] ?? %s))" % (int(num) - 1, dflt))
+        elif k == "vardef":
+            name, _, dflt = v.partition("\x00")
+            body.append("$(($%s ?? %s))" % (name, dflt))
+        elif k == "varlen":
+            body.append("$($%s.Length)" % v)
+        elif k == "args":
+            body.append("$($args)")
+        elif k == "argc":
+            body.append("$($args.Count)")
+        elif k == "status":
+            body.append("$?")
+        elif k == "pid":
+            body.append("$PID")
+        elif k == "prog":
+            body.append("$PSCommandPath")
+        else:
+            body.append(esc_lit(v))
+    return '"' + "".join(body) + '"'
+
+
+def _ps_word(word: str) -> str:
+    if word[:1] not in "\"'" and re.fullmatch(r"-?\d+(?:\.\d+)?", word):
+        return word
+    return _ps_build(_ps_frags(word))
+
+
+def _ps_join_words(words: list[str], interpret: bool = False) -> str:
+    """รวมหลาย word ด้วยช่องว่างเป็นสตริงเดียว (แบบ echo ที่ join ด้วย space)."""
+    if not words:
+        return "''"
+    if len(words) == 1 and not interpret:
+        return _ps_word(words[0])
+    combo: list[tuple[str, str]] = []
+    for idx, w in enumerate(words):
+        if idx:
+            combo.append(("lit", " "))
+        combo.extend(_ps_frags(w))
+    return _ps_build(combo, interpret=interpret)
+
+
+def _ps_has_raw(word: str) -> bool:
+    return any(k == "raw" for k, _ in _ps_frags(word))
+
+
+def _ps_test_expr(inner: str) -> str | None:
+    """[ ... ] / [[ ... ]] ของ bash -> นิพจน์ pwsh (None = ไม่รู้จัก ส่งผ่านตรง)."""
+    words = _words(inner)
+    if words and words[0] == "test":
+        words = words[1:]
+    if not words:
+        return None
+    if len(words) == 1:
+        w = words[0]
+        if w == "true":
+            return "$true"
+        if w == "false":
+            return "$false"
+        frags = _ps_frags(w)
+        if all(k == "lit" for k, _ in frags):
+            return "$true" if "".join(v for _, v in frags) else "$false"
+        return "-not [string]::IsNullOrEmpty(%s)" % _ps_word(w)
+    if len(words) == 2 and words[0] in ("-z", "-n"):
+        e = _ps_word(words[1])
+        if words[0] == "-z":
+            return "[string]::IsNullOrEmpty(%s)" % e
+        return "-not [string]::IsNullOrEmpty(%s)" % e
+    if len(words) == 2 and words[0] == "-f":
+        return "Test-Path %s -PathType Leaf" % _ps_word(words[1])
+    if len(words) == 2 and words[0] == "-e":
+        return "Test-Path %s" % _ps_word(words[1])
+    if len(words) == 2 and words[0] == "-d":
+        return "Test-Path %s -PathType Container" % _ps_word(words[1])
+    if len(words) == 2 and words[0] == "-s":
+        return "(Get-Item %s).Length -gt 0" % _ps_word(words[1])
+    if len(words) == 2 and words[0] in ("-L", "-h"):
+        return "(Get-Item %s).LinkType" % _ps_word(words[1])
+    if len(words) == 3:
+        l, op, r = words
+        if op in ("=", "=="):
+            return "%s -eq %s" % (_ps_word(l), _ps_word(r))
+        if op == "!=":
+            return "%s -ne %s" % (_ps_word(l), _ps_word(r))
+        if op in ("-eq", "-ne", "-lt", "-le", "-gt", "-ge"):
+            # โชคดี: pwsh ใช้ operator ตัวเลขชุดเดียวกับ test ของ bash
+            return "%s %s %s" % (_ps_word(l), op, _ps_word(r))
+        if op == "=~":
+            return "%s -match %s" % (_ps_word(l), _ps_word(r))
+    return None
+
+
+def _ps_cond_atom(a: str) -> tuple[str, bool]:
+    """คืน (นิพจน์ pwsh, is_raw) — is_raw=True คือเงื่อนไขเป็นคำสั่ง ต้องดู $?.exit code เอง."""
+    t = a.strip()
+    if t == "true":
+        return "$true", False
+    if t == "false":
+        return "$false", False
+    neg = False
+    while t.startswith("!"):
+        neg = not neg
+        t = t[1:].strip()
+    inner = t
+    if inner.startswith("[[") and inner.endswith("]]"):
+        inner = inner[2:-2].strip()
+    elif inner.startswith("[") and inner.endswith("]"):
+        inner = inner[1:-1].strip()
+    elif inner == "test" or inner.startswith("test "):
+        inner = inner[4:].strip()
+    m = re.fullmatch(r"\(\((.*)\)\)", inner, re.S)
+    if m:
+        expr = "(" + _arith_to_ps(m.group(1)) + ")"
+        return (("(-not %s)" % expr) if neg else expr), False
+    conv = _ps_test_expr(inner)
+    if conv is None:
+        expr = ("-not (%s)" % inner) if neg else inner
+        return expr, True
+    if neg:
+        conv = "-not (%s)" % conv
+    return conv, False
+
+
+def _ps_cond(text: str) -> tuple[str, bool]:
+    groups = _split_top(text.strip(), ("||",))
+    rendered = []
+    raw_any = False
+    for g in groups:
+        atoms = [x for x in _split_top(g, ("&&",)) if x.strip()]
+        parts = []
+        for x in atoms:
+            e, r = _ps_cond_atom(x)
+            raw_any = raw_any or r
+            parts.append(e)
+        rendered.append(("(" + " -and ".join(parts) + ")") if len(parts) > 1 else parts[0])
+    return " -or ".join(rendered), raw_any
+
+
+def _ps_for_line(rest: str) -> tuple[str, str]:
+    m = re.match(r"^(\w+)\s+in\s+(.*)$", rest.strip(), re.S)
+    if not m:
+        return "foreach ($_ in @()) {", "TODO: แปลง for แบบนี้ไม่ได้"
+    var, items = m.group(1), m.group(2).strip()
+    pv = "$" + var
+    sm = re.fullmatch(r"\$\(\s*seq\s+([^)]+)\)", items)
+    if sm:
+        nums = sm.group(1).split()
+        if len(nums) == 1 and re.fullmatch(r"-?\d+", nums[0]):
+            return "foreach (%s in 1..%s) {" % (pv, nums[0]), "$(seq N) -> 1..N (range ของ pwsh)"
+        if len(nums) == 2 and all(re.fullmatch(r"-?\d+", x) for x in nums):
+            return "foreach (%s in %s..%s) {" % (pv, nums[0], nums[1]), "$(seq A B) -> A..B"
+        return "foreach (%s in $(%s)) {" % (pv, items), "seq แบบมี step ซับซ้อน — ตรวจเอง"
+    bm = re.fullmatch(r"\{(-?\d+)\.\.(-?\d+)\}", items)
+    if bm:
+        return "foreach (%s in %s..%s) {" % (pv, bm.group(1), bm.group(2)), "{A..B} -> A..B (ไวยากรณ์เดียวกัน)"
+    words = _words(items)
+    if not words:
+        return "foreach (%s in @()) {" % pv, ""
+    exprs = []
+    for w in words:
+        e = _ps_word(w)
+        if any(ch in v for k, v in _ps_frags(w) if k == "lit" for ch in "*?["):
+            e = "(Get-ChildItem %s)" % e
+        exprs.append(e)
+    if len(exprs) == 1:
+        return "foreach (%s in %s) {" % (pv, exprs[0]), "for..in -> foreach"
+    return "foreach (%s in %s) {" % (pv, ", ".join(exprs)), "for..in -> foreach (array ของ pwsh คั่นด้วย ,)"
+
+
+def _ps_arith_for(rest: str) -> tuple[str, str]:
+    m = re.match(r"^\(\((.*)\)\)$", rest.strip(), re.S)
+    if not m:
+        return "foreach ($_ in @()) {", "TODO: for แบบ arithmetic"
+    pieces = [_x.strip() for _x in _split_top(m.group(1), (";",))]
+    if len(pieces) != 3:
+        return "foreach ($_ in @()) {", "TODO: for แบบ arithmetic"
+    init, cond, step = pieces
+    im = re.match(r"^([A-Za-z_]\w*)\s*=\s*(.+)$", init)
+    i_txt = ("$%s = %s" % (im.group(1), _arith_to_ps(im.group(2)))) if im else None
+    cm = re.match(r"^(.+?)\s*(<=|>=|==|!=|<|>)\s*(.+)$", cond)
+    ops = {"<": "-lt", "<=": "-le", ">": "-gt", ">=": "-ge", "==": "-eq", "!=": "-ne"}
+    c_txt = (
+        "%s %s %s" % (_arith_to_ps(cm.group(1)), ops[cm.group(2)], _arith_to_ps(cm.group(3)))
+        if cm
+        else None
+    )
+    sm = re.match(r"^([A-Za-z_]\w*)\s*(\+\+|--)$", step)
+    if sm:
+        s_txt: str | None = "$%s%s" % (sm.group(1), sm.group(2))
+    else:
+        am = re.match(r"^([A-Za-z_]\w*)\s*([+\-*/%])=\s*(.+)$", step)
+        s_txt = ("$%s %s= %s" % (am.group(1), am.group(2), _arith_to_ps(am.group(3)))) if am else None
+    if not (i_txt and c_txt and s_txt):
+        return "foreach ($_ in @()) {", "TODO: for แบบ arithmetic"
+    return "for (%s; %s; %s) {" % (i_txt, c_txt, s_txt), "for ((;;)) -> for (;;) (< เป็น -lt)"
+
+
+def _ps_echo(args_text: str) -> tuple[str, str]:
+    words = _words(args_text)
+    nl, interp = True, False
+    while words and words[0] in ("-n", "-e", "-E", "--"):
+        if words[0] == "-n":
+            nl = False
+        if words[0] == "-e":
+            interp = True
+        words.pop(0)
+    if not words:
+        return 'Write-Output ""', ""
+    combined = _ps_join_words(words, interpret=interp)
+    notes = []
+    if interp:
+        notes.append("echo -e ตีความ \\n -> `n ของ pwsh")
+    if nl:
+        base = "Write-Output %s" % combined
+        notes.append("echo -> Write-Output")
+    else:
+        base = "Write-Host -NoNewline %s" % combined
+        notes.append("echo -n -> Write-Host -NoNewline (Write-Output ไม่มี -NoNewline)")
+    return base, "; ".join(notes)
+
+
+_PRINTF_FMT_RE = re.compile(r"%([-+0-9.]*)([sdiufc%])")
+
+
+def _ps_printf(args_text: str) -> tuple[str, str] | None:
+    words = _words(args_text)
+    if not words:
+        return 'Write-Output ""', ""
+    fmt_lit = _lit_content(words[0])
+    args = words[1:]
+    if fmt_lit is None:
+        return None  # fmt มี expansion — ให้ caller ส่งผ่านพร้อม note
+    f = fmt_lit.replace("`", "``").replace('"', '`"')
+    f = (
+        f.replace("\\\\", "\x00")
+        .replace("\\n", "`n")
+        .replace("\\t", "`t")
+        .replace("\\r", "`r")
+        .replace("\x00", "\\")
+    )
+    idx = [0]
+
+    def _sub(m: re.Match) -> str:
+        if m.group(2) == "%":
+            return "%"
+        out = "{%d}" % idx[0]
+        idx[0] += 1
+        return out
+
+    f2, nsub = _PRINTF_FMT_RE.subn(_sub, f)
+    notes = ["printf -> Write-Host -NoNewline + -f ({0} แทน %s)", "\\n -> `n"]
+    if "%" in f2:
+        notes.append("เหลือ % แบบที่แปลงไม่ได้ (%q/%x/...) — ตรวจเอง")
+    if args and len(args) != nsub:
+        notes.append("bash printf วน fmt ซ้ำได้ แต่ pwsh -f ต้องให้ครบ — ตรวจเอง")
+    dq = '"' + f2.replace("$", "`$") + '"'
+    if not args:
+        return "Write-Host -NoNewline %s" % dq, "; ".join(notes)
+    return "Write-Host -NoNewline (%s -f %s)" % (dq, ", ".join(_ps_word(w) for w in args)), "; ".join(notes)
+
+
+def _ps_simple_cmd(s: str) -> tuple[str, str] | None:
+    """คำสั่งเดี่ยว bash -> pwsh (None = ไม่รู้จัก ให้ส่งผ่านตรง)."""
+    words = _words(s)
+    if not words:
+        return None
+    cmd, rest = words[0], s[len(words[0]) :].strip()
+
+    if cmd == "echo":
+        return _ps_echo(rest)
+    if cmd == "printf":
+        conv = _ps_printf(rest)
+        if conv is not None:
+            return conv
+        return None
+    if cmd == "pwd":
+        return "Get-Location", "pwd -> Get-Location"
+    if cmd == "cd":
+        targets = _words(rest)
+        if not targets:
+            return "Set-Location ~", "cd (ไม่มี arg) -> Set-Location ~ (home)"
+        if len(targets) == 1 and targets[0] == "-":
+            return 'Set-Location -', "cd - -> Set-Location - (กลับที่เดิม)"
+        return "Set-Location %s" % _ps_word(targets[0]), "cd -> Set-Location"
+    if cmd == "cat" and rest and not rest.startswith("-"):
+        ops = _words(rest)
+        if len(ops) == 1:
+            return "Get-Content %s" % _ps_word(ops[0]), "cat -> Get-Content (ไฟล์ใหญ่เติม -Raw)"
+    if cmd == "cp":
+        flags, ops = _shell_words(rest)
+        if len(ops) == 2:
+            rec = any("r" in f.lstrip("-") or "a" in f.lstrip("-") for f in flags)
+            a, b = (_ps_word(x) for x in ops)
+            if rec:
+                return "Copy-Item -Recurse %s %s" % (a, b), "cp -r -> Copy-Item -Recurse"
+            return "Copy-Item %s %s" % (a, b), "cp -> Copy-Item"
+    if cmd == "mv":
+        _flags, ops = _shell_words(rest)
+        if len(ops) == 2:
+            a, b = (_ps_word(x) for x in ops)
+            return "Move-Item %s %s" % (a, b), "mv -> Move-Item"
+    if cmd == "rm":
+        flags, ops = _shell_words(rest)
+        if ops:
+            rec = any("r" in f.lstrip("-") for f in flags)
+            force = any("f" in f.lstrip("-") for f in flags)
+            extra = "".join([" -Recurse" if rec else "", " -Force" if force else ""])
+            return "Remove-Item%s %s" % (extra, " ".join(_ps_word(t) for t in ops)), \
+                "rm -> Remove-Item (-r=-Recurse, -f=-Force)"
+    if cmd == "mkdir":
+        flags, ops = _shell_words(rest)
+        if ops:
+            force = " -Force" if ("p" in "".join(flags) or "-p" in flags) else ""
+            calls = ["New-Item -ItemType Directory%s %s" % (force, _ps_word(t)) for t in ops]
+            return "; ".join(calls), "mkdir -p -> New-Item -ItemType Directory -Force"
+    if cmd == "touch":
+        _flags, ops = _shell_words(rest)
+        if ops:
+            calls = ["New-Item -ItemType File %s" % _ps_word(t) for t in ops]
+            return "; ".join(calls), "touch -> New-Item -ItemType File"
+    if cmd == "which":
+        _flags, ops = _shell_words(rest)
+        if len(ops) == 1:
+            return "Get-Command %s" % _ps_word(ops[0]), "which -> Get-Command"
+    if cmd in ("ls", "ll", "la"):
+        return None  # Get-ChildItem ก็ได้ แต่ alias ls มีใน pwsh อยู่แล้ว ส่งผ่านตรง
+    if cmd == "exit":
+        args = _words(rest)
+        if not args:
+            return "exit", "exit เหมือนกัน"
+        return "exit %s" % _ps_word(args[0]), "exit เหมือนกัน"
+    if cmd == "return":
+        args = _words(rest)
+        if not args:
+            return "return", "return เหมือนกัน"
+        return "return %s" % _ps_word(args[0]), "return เหมือนกัน"
+    if cmd in ("break", "continue"):
+        return cmd, "ชื่อเหมือนกันใน pwsh"
+    if cmd == "true":
+        return "$true", "true -> $true"
+    if cmd == "false":
+        return "$false", "false -> $false"
+    if cmd in ("source", "."):
+        args = _words(rest)
+        if len(args) == 1:
+            return ". %s" % _ps_word(args[0]), "source -> . (dot-sourcing เหมือนกัน)"
+    if cmd == "read":
+        args = _words(rest)
+        prompt = ""
+        names: list[str] = []
+        skip = False
+        for w in args:
+            if skip:
+                skip = False
+                continue
+            if w == "-p":
+                skip = True
+                continue
+            if w.startswith("-"):
+                continue
+            if w == "-p":
+                continue
+            names.append(w)
+        # ดึง prompt แบบง่าย: read -p "msg" var
+        pm = re.search(r'-p\s+("[^"]*"|\'[^\']*\'|\S+)', rest)
+        if pm:
+            prompt = " %s" % _ps_word(pm.group(1))
+        if len(names) == 1 and re.fullmatch(r"[A-Za-z_]\w*", names[0]):
+            return "$%s = Read-Host%s" % (names[0], prompt), "read -> Read-Host"
+        return None
+    if cmd == "let":
+        body = rest.strip().strip('"').strip("'")
+        if "=" in body:
+            k, _, v = body.partition("=")
+            k = k.strip()
+            if re.fullmatch(r"[A-Za-z_]\w*", k):
+                return "$%s = %s" % (k, _arith_to_ps(_VAR_RE.sub(lambda m: m.group(1) or m.group(2), v))), \
+                    "let -> $x = (...) (คำนวณ)"
+        return None
+    if cmd == "test":
+        conv = _ps_test_expr(rest)
+        if conv is not None:
+            return conv, "test ... -> นิพจน์ pwsh (Test-Path/-eq/...) ตรงๆ"
+        return None
+    if cmd == "export":
+        m = _ASSIGN_RE.match(rest)
+        if m and m.group(2) == "=":
+            return "$env:%s = %s" % (m.group(1), _ps_word(m.group(3).strip())), \
+                "export -> $env:VAR (ตัวแปรสภาพแวดล้อมของ pwsh)"
+        if re.fullmatch(r"[A-Za-z_]\w*", rest.strip()):
+            return "# TODO: 'export %s' ไม่มีค่าใหม่ — pwsh ใช้ $env:%s (มีอยู่แล้ว)" % (rest.strip(), rest.strip()), ""
+        return None
+    if cmd == "unset":
+        args = _words(rest)
+        if len(args) == 1 and re.fullmatch(r"[A-Za-z_]\w*", args[0]):
+            return "Remove-Variable %s -ErrorAction SilentlyContinue" % args[0], \
+                "unset -> Remove-Variable"
+        return None
+    if cmd == "set":
+        flags = rest.strip()
+        if flags in ("-e", "-o pipefail"):
+            return '$ErrorActionPreference = "Stop"', "set -e -> $ErrorActionPreference = 'Stop'"
+        if flags == "-u":
+            return "Set-StrictMode -Version Latest", "set -u -> Set-StrictMode (ใช้ตัวแปรก่อนกำหนดแล้ว error)"
+        if flags == "-x":
+            return "Set-PSDebug -Trace 1", "set -x -> Set-PSDebug -Trace 1"
+        if flags in ("+e", "+u", "+x"):
+            return "# TODO: '%s' ปิด strict/debug — pwsh เปิดแล้วปิดยาก (%s)" % (rest, rest), ""
+        return "# TODO: 'set %s' ไม่มีใน pwsh ตรงตัว: %s" % (flags, s), ""
+    if cmd in ("trap", "shift", "ulimit", "umask", "alias", "unalias", "shopt", "bind", "history"):
+        return "# TODO: '%s' ไม่มีใน pwsh ตรงตัว: %s" % (cmd, s), ""
+    if cmd == "select":
+        return "# TODO: 'select' เมนูของ bash ไม่มีใน pwsh ตรงตัว (ใช้ Read-Host + switch): %s" % s, ""
+    return None
+
+
+def _ps_stmt(s: str) -> tuple[str, str]:
+    """bash 1 statement -> (โค้ด pwsh, note) — โค้ดอาจมีหลายบรรทัด (\\n) ได้."""
+    t = s.strip()
+    if not t:
+        return "", ""
+    if t.startswith("#"):
+        return t, ""
+
+    m = re.match(r"^(?:local|declare|readonly|export)\s+(.*)$", t)
+    prefix = ""
+    if m:
+        prefix, t = t.split(None, 1)[0], m.group(1).strip()
+
+    # ((i++)) / ((a = b + 1))
+    m = re.fullmatch(r"\(\((.*)\)\)", t, re.S)
+    if m:
+        body = m.group(1).strip()
+        mm = re.match(r"^(\w+)\s*(\+\+|--)$", body)
+        if mm:
+            return "$%s%s" % (mm.group(1), mm.group(2)), "((i++)) -> $i++ (เหมือนกัน)"
+        mm = re.match(r"^(\w+)\s*([+\-*/%])=\s*(.+)$", body)
+        if mm:
+            return "$%s %s= %s" % (mm.group(1), mm.group(2), _arith_to_ps(mm.group(3))), \
+                "((x += 1)) -> $x += 1"
+        mm = re.match(r"^(\w+)\s*=\s*(.+)$", body)
+        if mm:
+            return "$%s = %s" % (mm.group(1), _arith_to_ps(mm.group(2))), "((x = ...)) -> $x = ..."
+        return t, "TODO: นิพจน์ ((...)) แบบนี้ต้องตรวจเอง"
+
+    # assignment (รวม export/local ที่ปอก prefix แล้ว)
+    m = _ASSIGN_RE.match(t)
+    if m and m.group(1) not in ("true", "false"):
+        name, op, value = m.group(1), m.group(2), m.group(3).strip()
+        expr = _ps_word(value)
+        notes = []
+        if prefix == "export":
+            left = "$env:%s" % name
+            notes.append("export -> $env:VAR")
+        elif prefix == "readonly":
+            left = "$%s" % name
+            notes.append("readonly ไม่มีตรงตัว — ตรวจว่าห้ามแก้เอง (pwsh: Set-Variable -Option ReadOnly)")
+        elif prefix == "local":
+            left = "$%s" % name
+            notes.append("local -> $var (ในฟังก์ชัน pwsh แยก scope ให้อยู่แล้ว)")
+        else:
+            left = "$%s" % name
+            notes.append("กำหนดค่าตัวแปร (bash x=.. -> pwsh $x=..)")
+        if op == "+=":
+            code = "%s += %s" % (left, expr)
+        else:
+            code = "%s = %s" % (left, expr)
+        if _ps_has_raw(value):
+            notes.append("${..:-..} / $! แบบซับซ้อนต้องแปลงเอง")
+        if "${#" in value:
+            notes.append("${#VAR} -> ($VAR.Length)")
+        if "??" in expr:
+            notes.append("${..:-def} -> ?? (null-coalescing ของ PS 7+)")
+        if "**" in value:
+            notes.append("** (ยกกำลัง) pwsh ไม่รองรับตรงๆ — ใช้ [math]::Pow()")
+        return code, "; ".join(notes)
+
+    # pipe / redirect / && || / background
+    ops = _top_ops(t, (">>", ">", "<", "|", "&&", "||", "&"))
+    if ops:
+        wm = re.match(r"^(echo|printf)\s+(.*?)\s*(>>?)\s*(\S+)$", t, re.S)
+        if wm and set(ops) <= {">", ">>"}:
+            mode = ">>" if wm.group(3) == ">>" else ">"
+            if wm.group(1) == "echo":
+                body, _n = _ps_echo(wm.group(2))
+                bm = re.match(r"^(Write-Output|Write-Host -NoNewline)\s+(.*)$", body, re.S)
+                inner = bm.group(2) if bm else _ps_join_words(_words(wm.group(2)))
+            else:
+                conv = _ps_printf(wm.group(2))
+                inner = conv[0].split(None, 1)[1] if conv and " " in conv[0] else _ps_join_words(_words(wm.group(2)))
+            return "Write-Output %s %s %s" % (inner, mode, _ps_word(wm.group(4))), \
+                "redirect >/>> เหมือน bash (แต่ pwsh เขียนเป็น UTF-8 — ตรวจ encoding เอง)"
+        notes = []
+        if "<" in ops:
+            notes.append("pwsh ไม่มี < (input redirect) — ใช้ Get-Content file | cmd แทน")
+        if ">" in ops or ">>" in ops:
+            notes.append(">/>> รูปเดียวกัน แต่ pwsh เขียนเป็น UTF-8 — ตรวจ encoding เอง")
+        if "&&" in ops or "||" in ops:
+            notes.append("&&/|| ใช้ได้บน PowerShell 7+ (5.1 ใช้ ; if ($?) แทน)")
+        if t.rstrip().endswith("&") and not t.rstrip().endswith("&&"):
+            notes.append("background (&) ของ bash -> pwsh ใช้ Start-Job -ScriptBlock {...}")
+        if re.search(r"\$\d|\$[@*#]", t):
+            notes.append("$1/$@/$# -> $args[0]/$args/$args.Count")
+        if "$!" in t:
+            notes.append("$! (pid job ล่าสุด) ไม่มีตรงตัว — ตรวจเอง")
+        notes.append("คำสั่ง native ส่งผ่านตรง (pwsh รัน ls/grep/git/... ได้)")
+        return t, "; ".join(notes)
+
+    simple = _ps_simple_cmd(t)
+    if simple is not None:
+        return simple
+    # ไม่รู้จัก -> ส่งผ่านตรง (pwsh เป็น shell รัน native ได้)
+    notes = ["ส่งผ่านตรง (pwsh รันคำสั่ง native ได้)"]
+    if re.search(r"\$\d|\$[@*#]", t):
+        notes.append("$1/$@/$# -> $args[0]/$args/$args.Count")
+    if ";;" in t:
+        notes.append(";; เป็นของ case — อยู่นอก case ต้องเอาออก")
+    return t, "; ".join(notes)
+
+
+def _merge_notes(*parts: str) -> str:
+    segs: list[str] = []
+    for p in parts:
+        for seg in p.split("; "):
+            seg = seg.strip()
+            if seg and seg not in segs:
+                segs.append(seg)
+    return "; ".join(segs)
+
+
+_PS_STMT_NOTES: list[tuple[re.Pattern, str]] = [
+    (re.compile(r"^select\b"), "select ไม่มีใน pwsh ตรงตัว"),
+]
+
+_PS_STRUCT_NOTES = {
+    "then": "then -> {",
+    "do": "do -> {",
+    "else": "else -> } else {",
+    "fi": "จบ if — pwsh ปิดด้วย } แทน fi",
+    "done": "จบ loop — pwsh ปิดด้วย } แทน done",
+    "func_end": "จบฟังก์ชัน — pwsh ปิดด้วย } แทน } (รูปเดียวกัน)",
+    "esac": "จบ case — pwsh ปิด switch ด้วย } แทน esac",
+}
+
+
+def _ps_bash_var_note(s: str) -> str:
+    """note ตัวแปรเฉพาะ bash ($USER/$RANDOM/...) — เช็คเสมอกันพลาด."""
+    for vm in re.finditer(r"\$(?:\{)?([A-Za-z_]\w*)\}?", s):
+        if vm.group(1) in _PS_BASH_ONLY_VARS:
+            return "bash $%s ไม่มีใน pwsh ตรงๆ — ใช้ %s" % (vm.group(1), _PS_BASH_ONLY_VARS[vm.group(1)])
+    return ""
+
+
+def _ps_note_for_stmt(s: str, ps: str) -> str:
+    notes: list[str] = []
+    for rx, txt in _PS_STMT_NOTES:
+        if rx.search(s):
+            notes.append(txt)
+            break
+    if "$args" in ps and re.search(r"\$\d|\$[@*#]", s):
+        notes.append("$1/$@/$# -> $args[0]/$args/$args.Count")
+    if "Get-ChildItem" in ps:
+        notes.append("glob -> Get-ChildItem")
+    if ".." in ps and ("seq" in s or ".." in s):
+        notes.append("seq/{A..B} -> range A..B")
+    return "; ".join(notes)
+
+
+def _split_stmts(code_part: str) -> list[str]:
+    """split `;` ระดับบน แต่ข้าม `;` ที่อยู่ใน $((...)) / $(...) (เช่น for ((i=0; i<3; i++)))."""
+    buf: list[str] = []
+    i, n = 0, len(code_part)
+    q = None
+    while i < n:
+        c = code_part[i]
+        if q:
+            buf.append(c)
+            if c == "\\" and q == '"' and i + 1 < n:
+                buf.append(code_part[i + 1])
+                i += 2
+                continue
+            if c == q:
+                q = None
+            i += 1
+            continue
+        if c in "'\"":
+            q = c
+            buf.append(c)
+            i += 1
+            continue
+        if code_part.startswith("$((", i):
+            j = code_part.find("))", i + 3)
+            if j == -1:
+                buf.append(c)
+                i += 1
+                continue
+            buf.append(code_part[i : j + 2].replace(";", "\x01"))
+            i = j + 2
+            continue
+        if code_part.startswith("((", i):
+            # arithmetic/command group เปลือย เช่น for ((i=0; i<3; i++))
+            j = code_part.find("))", i + 2)
+            if j == -1:
+                buf.append(c)
+                i += 1
+                continue
+            buf.append(code_part[i : j + 2].replace(";", "\x01"))
+            i = j + 2
+            continue
+        if code_part.startswith("$(", i):
+            depth, j, sq = 1, i + 2, None
+            while j < n and depth:
+                ch = code_part[j]
+                if sq:
+                    if ch == sq and code_part[j - 1] != "\\":
+                        sq = None
+                elif ch in "'\"":
+                    sq = ch
+                elif ch == "(":
+                    depth += 1
+                elif ch == ")":
+                    depth -= 1
+                j += 1
+            if depth == 0:
+                buf.append(code_part[i:j].replace(";", "\x01"))
+                i = j
+                continue
+            buf.append(c)
+            i += 1
+            continue
+        buf.append(c)
+        i += 1
+    return [p.replace("\x01", ";") for p in _split_top("".join(buf), (";",))]
+
+
+_PS_BASH_ONLY_VARS = {
+    "USER": "$env:USERNAME",
+    "HOSTNAME": "$(hostname)",
+    "UID": "ไม่มีตรงตัว (ใช้ id -u)",
+    "EUID": "ไม่มีตรงตัว (ใช้ id -u)",
+    "RANDOM": "Get-Random",
+    "OSTYPE": "$PSVersionTable.OS",
+    "MACHTYPE": "ไม่มีตรงตัว",
+    "BASH_VERSION": "$PSVersionTable.PSVersion",
+    "FUNCNAME": "$MyInvocation.MyCommand.Name",
+    "OLDPWD": "ไม่มีตรงตัว (ใช้ Get-Location -Stack)",
+}
+
+
+@register("bash", "powershell")
+def bash_to_pwsh(code: str, headers: bool = True, notes: bool = True) -> str:
+    out: list[str] = []
+    depth = 0
+    pending: tuple[str, str] | None = None
+    stack: list[str] = []
+    case_subj: str | None = None
+    case_base: int | None = None
+    branch_body = False  # มีคำสั่งใน branch ปัจจุบันของ switch แล้วหรือยัง
+    branch_fall = False  # branch นี้ตั้งใจ fallthrough (; &) — ไม่ต้อง break
+    pending_header: str | None = None
+
+    def emit(text: str):
+        nonlocal pending_header
+        if pending_header is not None:
+            out.append("    " * depth + "# bash: " + pending_header.strip())
+            pending_header = None
+        out.append("    " * depth + text)
+
+    def emit_raw(text: str, d: int):
+        out.append("    " * d + text)
+
+    def emit_note(text: str):
+        if notes and text:
+            emit("# -> " + text)
+
+    def attach(ps: str, note: str) -> str:
+        if notes and note:
+            first, _, rest = ps.partition("\n")
+            first = first + "  # " + note
+            return first + (("\n" + rest) if rest else "")
+        return ps
+
+    def emit_stmt(ps: str, note: str):
+        for i, ln in enumerate(ps.split("\n")):
+            emit(attach(ln, note) if i == 0 else ln)
+
+    def close_branch():
+        """ปิด branch ของ switch: break (แทน ;;) + } ปิด { ของ branch."""
+        nonlocal branch_body, branch_fall, pending_header, depth
+        if case_base is None:
+            branch_body = False
+            branch_fall = False
+            return
+        if branch_body:
+            if not branch_fall:
+                saved, pending_header = pending_header, None
+                emit_raw("break" + ("  # ;; ของ bash -> break (switch ของ pwsh ไม่หยุดเอง)" if notes else ""), depth)
+                pending_header = saved
+            emit_raw("}", case_base)  # ปิด { ของ "pattern" {
+            depth = case_base
+        branch_body = False
+        branch_fall = False
+        branch_body = False
+        branch_fall = False
+
+    def flush_open(kind: str, text: str):
+        nonlocal depth
+        if kind == "if":
+            cond, raw = _ps_cond(text)
+            note = "if ...; then -> if (...) {"
+            if raw:
+                note += "; เงื่อนไขเป็นคำสั่ง — bash เช็ค exit code แต่ pwsh เช็คค่าบูลีน/ต้องดู $? เอง"
+            emit(attach("if (%s) {" % cond, note))
+            stack.append("if")
+        elif kind == "elif":
+            depth = max(depth - 1, 0)
+            cond, raw = _ps_cond(text)
+            note = "elif ...; then -> } elseif (...) {"
+            if raw:
+                note += "; เงื่อนไขเป็นคำสั่ง — ดู $? เอง"
+            emit(attach("} elseif (%s) {" % cond, note))
+            depth += 1
+            return
+        elif kind == "while":
+            cond, raw = _ps_cond(text)
+            note = "while ...; do -> while (...) {"
+            if raw:
+                note += "; เงื่อนไขเป็นคำสั่ง — ดู $? เอง"
+            emit(attach("while (%s) {" % cond, note))
+            stack.append("while")
+        elif kind == "until":
+            cond, raw = _ps_cond(text)
+            note = "until ...; do -> while (-not (...)) { (pwsh ไม่มี until)"
+            if raw:
+                note += "; เงื่อนไขเป็นคำสั่ง — ดู $? เอง"
+            emit(attach("while (-not (%s)) {" % cond, note))
+            stack.append("while")
+        elif kind == "for":
+            line, note = _ps_for_line(text)
+            emit(attach(line, note))
+            stack.append("for")
+        elif kind == "forarith":
+            line, note = _ps_arith_for(text)
+            emit(attach(line, note))
+            stack.append("for")
+        depth += 1
+
+    # logical lines (join "\")
+    logical: list[str] = []
+    buf = ""
+    for raw in code.splitlines():
+        line = raw.rstrip()
+        if line.endswith("\\"):
+            buf += line[:-1] + " "
+            continue
+        logical.append(buf + line)
+        buf = ""
+    if buf:
+        logical.append(buf)
+
+    for line in logical:
+        if not line.strip():
+            pending_header = None
+            out.append("")
+            continue
+        code_part, _inline = _split_comment(line)
+        if not code_part.strip():
+            stripped = line.strip()
+            if re.match(r"^#!.*\b(bash|sh|zsh)\b", stripped):
+                if headers:
+                    out.append("    " * depth + "# bash: " + stripped)
+                emit(_PS_SHEBANG)
+                continue
+            pending_header = None
+            emit(stripped)
+            continue
+        pending_header = line if headers else None
+
+        queue = _split_stmts(code_part)
+        while queue:
+            s = queue.pop(0).strip()
+            if not s:
+                continue
+
+            # then/do ต่อด้วยคำสั่งในบรรทัดเดียว (do echo hi; done ถูก bash)
+            mtd = re.match(r"^(then|do)(?=\s)(.*)$", s, re.S)
+            if mtd and pending:
+                kind = mtd.group(1)
+                if kind == "then" or pending[0] in ("while", "until", "for", "forarith"):
+                    flush_open(*pending)
+                    pending = None
+                    rest = mtd.group(2).strip()
+                    if rest:
+                        queue.insert(0, rest)
+                    continue
+
+            if pending and s not in ("then", "do") and not s.startswith(("elif ", "fi", "done", "esac")):
+                pending = (pending[0], pending[1] + " " + s)
+                continue
+
+            if s == "then":
+                if pending:
+                    flush_open(*pending)
+                    pending = None
+                continue
+            if s == "do":
+                if pending and pending[0] in ("while", "until", "for", "forarith"):
+                    flush_open(*pending)
+                    pending = None
+                continue
+
+            m = re.match(r"^(if|elif)\s+(.*)$", s, re.S)
+            if m:
+                pending = (m.group(1), m.group(2))
+                continue
+            m = re.match(r"^while\s+(.*)$", s, re.S)
+            if m:
+                pending = ("while", m.group(1))
+                continue
+            m = re.match(r"^until\s+(.*)$", s, re.S)
+            if m:
+                pending = ("until", m.group(1))
+                continue
+            m = re.match(r"^for\s+(.*)$", s, re.S)
+            if m:
+                pending = ("forarith" if m.group(1).strip().startswith("((") else "for", m.group(1))
+                continue
+            if s == "else":
+                depth = max(depth - 1, 0)
+                emit(attach("} else {", _PS_STRUCT_NOTES["else"]))
+                depth += 1
+                continue
+            if s == "fi":
+                depth = max(depth - 1, 0)
+                if stack and stack[-1] == "if":
+                    stack.pop()
+                emit_note(_PS_STRUCT_NOTES["fi"])
+                emit("}")
+                continue
+            if s == "done":
+                depth = max(depth - 1, 0)
+                if stack and stack[-1] in ("while", "for"):
+                    stack.pop()
+                emit_note(_PS_STRUCT_NOTES["done"])
+                emit("}")
+                continue
+            if s == "esac":
+                close_branch()
+                depth = max(case_base - 1, 0) if case_base is not None else max(depth - 1, 0)
+                if stack and stack[-1] == "switch":
+                    stack.pop()
+                case_subj = None
+                case_base = None
+                emit_note(_PS_STRUCT_NOTES["esac"])
+                emit("}")
+                continue
+
+            # case
+            m = re.match(r"^case\s+(.*)\s+in$", s, re.S)
+            if m:
+                case_subj = _ps_word(m.group(1))
+                emit(attach("switch -Wildcard (%s) {" % case_subj,
+                            "case -> switch -Wildcard (glob * ใช้ได้เลย)"))
+                stack.append("switch")
+                case_base = depth + 1
+                depth = case_base
+                branch_body = False
+                branch_fall = False
+                continue
+            m = re.match(r"^([^\s()]+)\)\s*(.*)$", s, re.S)
+            if m and case_subj is not None:
+                close_branch()
+                base = case_base if case_base is not None else depth
+                depth = base
+                pats_text, rest = m.group(1), m.group(2).strip()
+                pats = [p.strip() for p in pats_text.split("|")]
+                if pats == ["*"]:
+                    emit(attach("default {", "*) -> default"))
+                elif len(pats) == 1:
+                    emit(attach("%s {" % _ps_word(pats[0]), "pattern) -> \"...\" {"))
+                else:
+                    cond = " -or ".join("$_ -eq %s" % _ps_word(p) for p in pats)
+                    emit(attach("{ %s } {" % cond, "a|b) -> { $_ -eq ... } (pwsh ไม่มี | ใน case)"))
+                depth = base + 1
+                branch_body = False
+                branch_fall = False
+                if rest:
+                    for ender in (";;&", ";&", ";;"):
+                        if rest.endswith(ender):
+                            rest = rest[: -len(ender)].strip()
+                            if ender != ";;":
+                                branch_fall = True
+                            break
+                    if rest:
+                        ps, note = _ps_stmt(rest)
+                        if ps and not ps.startswith("# TODO"):
+                            branch_body = True
+                        if not note or "ส่งผ่านตรง" in note or ps.startswith("# TODO"):
+                            extra = _ps_note_for_stmt(rest, ps)
+                        else:
+                            extra = ""
+                        emit_stmt(ps, _merge_notes(note, extra, _ps_bash_var_note(rest)))
+                continue
+            if s in (";;", ";&", ";;&"):
+                if case_subj is not None:
+                    if s != ";;":
+                        branch_fall = True
+                    pending_header = None
+                    if s != ";;" and notes:
+                        emit("# -> %s ตั้งใจ fallthrough — pwsh ไม่ต้อง break" % s)
+                    continue
+
+            # function / block
+            m = re.match(r"^(?:function\s+)?([A-Za-z_]\w*)\s*\(\s*\)\s*\{$", s) or re.match(
+                r"^function\s+([A-Za-z_]\w*)\s*\{$", s
+            )
+            if m:
+                emit(attach("function %s {" % m.group(1), "ฟังก์ชัน bash -> function name {"))
+                stack.append("func")
+                depth += 1
+                continue
+            if s == "{":
+                emit(attach("& {", "group { } -> & { } (script block แล้วรัน)"))
+                stack.append("group")
+                depth += 1
+                continue
+            if s == "}":
+                depth = max(depth - 1, 0)
+                if stack and stack[-1] in ("func", "group"):
+                    stack.pop()
+                emit_note(_PS_STRUCT_NOTES["func_end"])
+                emit("}")
+                continue
+
+            ps, note = _ps_stmt(s)
+            if not ps:
+                continue
+            if case_subj is not None and case_base is not None and depth >= case_base + 1:
+                if ps and not ps.startswith("# TODO") and not ps.startswith("# bash"):
+                    branch_body = True
+            if not note or "ส่งผ่านตรง" in note or ps.startswith("# TODO"):
+                extra = _ps_note_for_stmt(s, ps)
+            else:
+                extra = ""
+            emit_stmt(ps, _merge_notes(note, extra, _ps_bash_var_note(s)))
+
+    body = "\n".join(out)
+    if not headers:
+        body = "\n".join(ln for ln in body.splitlines()
+                         if not ln.strip().startswith("# bash: "))
+    if not any(ln.startswith("#!") for ln in body.splitlines()[:3]):
+        body = _PS_SHEBANG + "\n" + body
+    return body + "\n"
+
+
+# ==========================================================================
+# powershell -> bash
+# ==========================================================================
+
+def _ps_split_comment(line: str) -> tuple[str, str]:
+    """แยก comment (#) ของ pwsh — # ใน '...' / "..." ไม่ใช่ comment."""
+    i, n = 0, len(line)
+    q = None
+    while i < n:
+        c = line[i]
+        if q:
+            if c == "`" and q == '"' and i + 1 < n:
+                i += 2
+                continue
+            if c == q:
+                q = None
+            i += 1
+            continue
+        if c in "'\"":
+            q = c
+            i += 1
+            continue
+        if c == "#":
+            return line[:i].rstrip(), line[i:]
+        i += 1
+    return line, ""
+
+
+def _ps_to_bash_vars(line: str) -> tuple[str, bool]:
+    """แปลง $ ตัวแปร pwsh -> bash นอก '...' (คืน text, มี $_ ที่ต้องตรวจเองไหม)."""
+    out: list[str] = []
+    has_us = False
+    i, n = 0, len(line)
+    q = None
+    while i < n:
+        c = line[i]
+        if q == "'":
+            if c == "'":
+                if line.startswith("''", i):
+                    out.append("''")
+                    i += 2
+                    continue
+                q = None
+            out.append(c)
+            i += 1
+            continue
+        if q is None and c == "'":
+            q = "'"
+            out.append(c)
+            i += 1
+            continue
+        if c == '"' and q is None:
+            q = '"'
+            out.append(c)
+            i += 1
+            continue
+        if c == '"' and q == '"':
+            q = None
+            out.append(c)
+            i += 1
+            continue
+        if c == "`" and q == '"':
+            # escape ใน "..." ของ pwsh -> escape ของ bash "..."
+            nxt = line[i + 1] if i + 1 < n else ""
+            conv = {"n": "\\n", "t": "\\t", "r": "\\r", "`": "`", '"': '\\"', "$": "\\$"}
+            if nxt in conv:
+                out.append(conv[nxt])
+                i += 2
+                continue
+            if nxt == "\n":
+                i += 2  # continuations: ตัดทิ้ง
+                continue
+            out.append(c)
+            i += 1
+            continue
+        if c == "$":
+            m = re.match(r"\$args\[(\d+)\]", line[i:])
+            if m:
+                out.append("$%d" % (int(m.group(1)) + 1))
+                i += len(m.group(0))
+                continue
+            if line.startswith("$args.Count", i):
+                out.append("$#")
+                i += len("$args.Count")
+                continue
+            if re.match(r"\$args(?![\w.])", line[i:]):
+                out.append("$@")
+                i += len("$args")
+                continue
+            m = re.match(r"\$env:([A-Za-z_]\w*)", line[i:])
+            if m:
+                name = m.group(1)
+                out.append("$USER" if name == "USERNAME" else "$" + name)
+                i += len(m.group(0))
+                continue
+            m = re.match(r"\$\{env:([^}]*)\}", line[i:])
+            if m:
+                out.append("$" + m.group(1))
+                i += len(m.group(0))
+                continue
+            for pw, ba in (("$PSCommandPath", "$0"), ("$PSScriptRoot", "$0"),
+                           ("$LASTEXITCODE", "$?"), ("$PID", "$$"),
+                           ("$PSVersionTable", "$BASH_VERSION")):
+                if line.startswith(pw, i):
+                    out.append(ba)
+                    i += len(pw)
+                    break
+            else:
+                if line.startswith("$null", i) and not re.match(r"\$null[\w]", line[i:]):
+                    out.append('""')
+                    i += len("$null")
+                    continue
+                if line.startswith("$_", i) and not re.match(r"\$_[\w]", line[i:]):
+                    has_us = True
+                    out.append("$_")
+                    i += 2
+                    continue
+                out.append(c)
+                i += 1
+                continue
+            continue
+        out.append(c)
+        i += 1
+    return "".join(out), has_us
+
+
+def _ps_strip_outer_parens(t: str) -> str:
+    t = t.strip()
+    while len(t) >= 2 and t.startswith("(") and t.endswith(")"):
+        depth, ok = 0, True
+        q = None
+        for idx, ch in enumerate(t):
+            if q:
+                if ch == q:
+                    q = None
+                continue
+            if ch in "'\"":
+                q = ch
+            elif ch == "(":
+                depth += 1
+            elif ch == ")":
+                depth -= 1
+                if depth == 0 and idx != len(t) - 1:
+                    ok = False
+                    break
+        if not ok or depth != 0:
+            break
+        t = t[1:-1].strip()
+    return t
+
+
+def _ps_split_bool(text: str) -> list[tuple[str, str | None]]:
+    """split -or / -and ระดับบน (case-insensitive, นอก quote)."""
+    parts: list[tuple[str, str | None]] = []
+    buf: list[str] = []
+    i, n = 0, len(text)
+    q = None
+    while i < n:
+        c = text[i]
+        if q:
+            buf.append(c)
+            if c == "`" and i + 1 < n:
+                buf.append(text[i + 1])
+                i += 2
+                continue
+            if c == q:
+                q = None
+            i += 1
+            continue
+        if c in "'\"":
+            q = c
+            buf.append(c)
+            i += 1
+            continue
+        m = re.match(r"\s+-(or|and)\s+", text[i:], re.I)
+        if m:
+            parts.append(("".join(buf), m.group(1).lower()))
+            buf = []
+            i += m.end()
+            continue
+        buf.append(c)
+        i += 1
+    parts.append(("".join(buf), None))
+    return parts
+
+
+_PS_CMP_SPLIT = ("-eq", "-ne", "-lt", "-le", "-gt", "-ge", "-match", "-notmatch", "-like", "-notlike")
+
+
+def _ps_catom_to_bash(a: str) -> tuple[str, bool]:
+    """atom เงื่อนไข pwsh -> bash (คืน text, is_raw)."""
+    t = a.strip()
+    neg = False
+    while True:
+        if t.startswith("!"):
+            neg = not neg
+            t = t[1:].strip()
+            continue
+        if re.match(r"(?i)^-not\b", t):
+            neg = not neg
+            t = re.sub(r"(?i)^-not\b", "", t, count=1).strip()
+            continue
+        break
+    t = _ps_strip_outer_parens(t)
+    if t == "$true":
+        return ("! true" if neg else "true"), False
+    if t == "$false":
+        return ("! false" if neg else "false"), False
+
+    m = re.match(r"(?i)^Test-Path\s+(.*)$", t, re.S)
+    if m:
+        arg = m.group(1).strip()
+        is_dir = bool(re.search(r"(?i)-PathType\s+(Container|Directory)\b", arg))
+        is_file = bool(re.search(r"(?i)-PathType\s+Leaf\b", arg))
+        arg = re.sub(r"(?i)\s*-PathType\s+\w+", "", arg).strip()
+        arg = _ps_to_bash_vars(arg)[0]
+        op = "-d" if is_dir else ("-f" if is_file else "-e")
+        cond = "[ %s %s ]" % (op, arg)
+        return (("! %s" % cond) if neg else cond), False
+
+    m = re.fullmatch(r"\[string\]::IsNullOrEmpty\((.*)\)", t, re.S)
+    if m:
+        arg = _ps_to_bash_vars(m.group(1).strip())[0]
+        cond = '[ -z "%s" ]' % arg if not arg.startswith('"') else "[ -z %s ]" % arg
+        if neg:
+            cond = cond.replace("-z", "-n", 1)
+        return cond, False
+
+    for op in _PS_CMP_SPLIT:
+        # split นอก quote และต้องมีช่องว่างขนาบ (กัน -order ฯลฯ) + รับตัวพิมพ์ใหญ่
+        use = [p for p in _split_top(t, (" " + op + " ", " " + op.upper() + " ")) if p.strip()]
+        if len(use) == 2 and all(p.strip() for p in use):
+            l, r = (x.strip() for x in use)
+            if op in ("-match", "-notmatch"):
+                l2 = _ps_to_bash_vars(l)[0]
+                r2 = _ps_to_bash_vars(r)[0].strip("\"'")
+                cond = "[[ %s =~ %s ]]" % (l2, r2)
+                if op == "-notmatch":
+                    cond = "! " + cond
+            elif op in ("-like", "-notlike"):
+                l2 = _ps_to_bash_vars(l)[0]
+                r2 = _ps_to_bash_vars(r)[0]
+                cond = "[[ %s == %s ]]" % (l2, r2)
+                if op == "-notlike":
+                    cond = "! " + cond
+            else:
+                l2 = _ps_to_bash_vars(l)[0]
+                r2 = _ps_to_bash_vars(r)[0]
+                if re.fullmatch(r'\$null|""|\'\'', r.strip()):
+                    cond = '[ -z "%s" ]' % l2 if op == "-eq" else '[ -n "%s" ]' % l2
+                else:
+                    cond = "[ %s %s %s ]" % (l2, op, r2)
+            return (("! %s" % cond) if neg else cond), False
+
+    if re.fullmatch(r"\$[A-Za-z_]\w*(\[\d+\])?", t):
+        arg = _ps_to_bash_vars(t)[0]
+        cond = '[ -n "%s" ]' % arg
+        return (("! %s" % cond) if neg else cond), False
+    if re.fullmatch(r'"(?:[^"\\]|\\.)*"', t) or re.fullmatch(r"'(?:[^']|'')*'", t):
+        arg = _ps_to_bash_vars(t)[0]
+        cond = "[ -n %s ]" % arg
+        return (("! %s" % cond) if neg else cond), False
+
+    raw, has_us = _ps_to_bash_vars(t)
+    cond = '[ -n "$(%s)" ]' % raw
+    return (("! %s" % cond) if neg else cond), True
+
+
+def _ps_cond_to_bash(text: str) -> tuple[str, bool]:
+    parts = _ps_split_bool(text.strip())
+    rendered = []
+    raw_any = False
+    for expr, op in parts:
+        c, r = _ps_catom_to_bash(expr)
+        raw_any = raw_any or r
+        rendered.append((c, op))
+    out = rendered[0][0]
+    for idx in range(len(rendered) - 1):
+        out += (" && " if rendered[idx][1] == "and" else " || ") + rendered[idx + 1][0]
+    if re.search(r"\$[A-Za-z_]\w*\.", out):
+        raw_any = True  # $obj.prop ไม่มีใน bash — ให้ note เตือน
+    return out, raw_any
+
+
+def _ps_val_to_bash(expr: str) -> tuple[str, str]:
+    """ค่า pwsh -> bash (คืน text, note)."""
+    e = expr.strip()
+    if e == "$null":
+        return '""', ""
+    if e in ("$true", "$false"):
+        return ("true" if e == "$true" else "false"), "บูลีน pwsh -> string ใน bash"
+    m = re.fullmatch(r"\(\$args\[(\d+)\]\s*\?\?\s*(.*)\)", e, re.S)
+    if m:
+        d, n = _ps_val_to_bash(m.group(2))
+        return "${%d:-%s}" % (int(m.group(1)) + 1, d), n
+    m = re.fullmatch(r"\(\$([A-Za-z_]\w*)\s*\?\?\s*(.*)\)", e, re.S)
+    if m:
+        d, n = _ps_val_to_bash(m.group(2))
+        return "${%s:-%s}" % (m.group(1), d), n
+    m = re.fullmatch(r"\(\$([A-Za-z_]\w*)\.Length\)", e)
+    if m:
+        return "${#%s}" % m.group(1), "${#VAR} (ความยาว string)"
+    m = re.fullmatch(r"(-?\d+)\.\.(-?\d+)", e)
+    if m:
+        return "$(seq %s %s)" % (m.group(1), m.group(2)), "range A..B -> $(seq A B)"
+    m = re.fullmatch(r"\((.*)\)", e, re.S)
+    if m and not e.startswith("$("):
+        inner = m.group(1)
+        tmp = re.sub(r"\$args\[\d+\]|\$[A-Za-z_]\w*|-?\d+(?:\.\d+)?|[\s+\-*/%().]", "", inner)
+        if tmp == "":
+            conv = re.sub(r"\$args\[(\d+)\]", lambda mm: "$%d" % (int(mm.group(1)) + 1), inner)
+            conv = re.sub(r"\$([A-Za-z_]\w*)", r"\1", conv)
+            return "$((%s))" % conv.strip(), "$((...)) คำนวณจำนวนเต็มเหมือน bash"
+    v, has_us = _ps_to_bash_vars(e)
+    note = ""
+    if has_us:
+        note = "$_ (pipeline) ไม่มีใน bash ตรงตัว — ตรวจเอง"
+    if v in ("$@", "$*"):
+        v = '"$@"'
+    return v, note
+
+
+def _ps_write_to_bash(s: str) -> tuple[str, str] | None:
+    m = re.match(r"^(Write-Output|Write-Host|echo)\s*(.*)$", s, re.S)
+    if not m:
+        return None
+    cmd, rest = m.group(1), m.group(2).strip()
+    no_nl = False
+    if cmd == "Write-Host":
+        fm = re.match(r"^-NoNewline\s+(.*)$", rest, re.S)
+        if fm:
+            no_nl = True
+            rest = fm.group(1).strip()
+        else:
+            # Write-Host ธรรมดาลงจอ ไม่ใช่ stdout — เทียบ echo ได้หยาบๆ
+            pass
+    # ("fmt" -f a, b) -> printf
+    fm = re.fullmatch(r'\("(.*)"\s+-f\s+(.*)\)', rest, re.S)
+    if fm:
+        fmt = re.sub(r"\{(\d+)\}", "%s", fm.group(1))
+        args = [a.strip() for a in _split_top(fm.group(2), (",",)) if a.strip()]
+        parts = [_ps_val_to_bash(a)[0] for a in args]
+        body = "printf '%s' %s" % (fmt, " ".join(parts)) if parts else "printf '%s'" % fmt
+        return body, '("..." -f ...) -> printf \'...\' ({0} กลับเป็น %s)'
+    if not rest:
+        return "echo", "Write-Output ว่าง -> echo (บรรทัดเปล่า)"
+    args = [a.strip() for a in _split_top(rest, (" ",)) if a.strip()]
+    cleaned = []
+    for a in args:
+        if a.endswith(",") and not (a.startswith("'") or a.startswith('"')):
+            a = a[:-1]
+        cleaned.append(a)
+    parts = [_ps_val_to_bash(a)[0] for a in cleaned if a]
+    prefix = "echo -n" if no_nl else "echo"
+    return "%s %s" % (prefix, " ".join(parts)), \
+        "%s -> %s" % ("Write-Host -NoNewline" if no_nl else "Write-Output", prefix)
+
+
+def _ps_stmt_to_bash(s: str) -> tuple[str, str] | None:
+    """statement pwsh -> bash (None = ไม่รู้จัก ให้ส่งผ่านพร้อมแปลง $)."""
+    t = s.strip()
+    if not t:
+        return None
+    if t.startswith("#"):
+        return t, ""
+
+    w = _ps_write_to_bash(t)
+    if w is not None:
+        return w
+
+    m = re.match(r"^([A-Za-z_][\w.-]*)\s*(.*)$", t, re.S)
+    cmd = (m.group(1) if m else t).split()[0] if t else ""
+    rest = (m.group(2).strip() if m else t[len(cmd):].strip()) if t else ""
+    first = cmd.split(".")[-1] if "." in cmd and not cmd.startswith(".") else cmd
+
+    if first == "Get-Location" and not rest:
+        return "pwd", "Get-Location -> pwd"
+    if first == "Set-Location":
+        args = [a for a in _split_top(rest, (" ",)) if a.strip()]
+        args = [a for a in args if not a.startswith("-") or a == "-"]
+        if not args:
+            return "cd ~", "Set-Location (ไม่มี arg) -> cd ~"
+        v, n = _ps_val_to_bash(args[0])
+        return "cd %s" % v, _merge_notes("Set-Location -> cd", n)
+    if first == "Get-Content":
+        args = [a for a in _split_top(rest, (" ",)) if a.strip() and not a.startswith("-")]
+        if len(args) == 1:
+            v, n = _ps_val_to_bash(args[0])
+            return "cat %s" % v, _merge_notes("Get-Content -> cat", n)
+    if first in ("Copy-Item", "cp"):
+        flags = rest
+        rec = bool(re.search(r"(?i)-Recurse\b", flags))
+        args = [a for a in _split_top(re.sub(r"(?i)-Recurse\b", "", rest), (" ",)) if a.strip()]
+        if len(args) == 2:
+            a, _n1 = _ps_val_to_bash(args[0])
+            b, _n2 = _ps_val_to_bash(args[1])
+            return "%s %s %s" % ("cp -r" if rec else "cp", a, b), \
+                "Copy-Item -Recurse -> cp -r" if rec else "Copy-Item -> cp"
+    if first in ("Move-Item", "mv"):
+        args = [a for a in _split_top(rest, (" ",)) if a.strip()]
+        if len(args) == 2:
+            a, _n1 = _ps_val_to_bash(args[0])
+            b, _n2 = _ps_val_to_bash(args[1])
+            return "mv %s %s" % (a, b), "Move-Item -> mv"
+    if first in ("Remove-Item", "rm"):
+        rec = bool(re.search(r"(?i)-Recurse\b", rest))
+        force = bool(re.search(r"(?i)-Force\b", rest))
+        tmp = re.sub(r"(?i)-(Recurse|Force)\b", "", rest)
+        args = [a for a in _split_top(tmp, (" ",)) if a.strip()]
+        if args:
+            vals = [_ps_val_to_bash(a)[0] for a in args]
+            flags = "".join(["r" if rec else "", "f" if force else ""])
+            flags = ("-" + flags + " ") if flags else ""
+            return "rm %s%s" % (flags, " ".join(vals)), \
+                "Remove-Item -> rm (-Recurse/-Force เป็น -r/-f)"
+    if first == "New-Item":
+        mt = re.search(r"(?i)-ItemType\s+(Directory|File)\b", rest)
+        if mt:
+            kind = mt.group(1).lower()
+            tmp = re.sub(r"(?i)-ItemType\s+\w+|-Force\b|-Path\b", "", rest)
+            args = [a.strip() for a in _split_top(tmp, (",",)) if a.strip()]
+            vals = [_ps_val_to_bash(a)[0] for a in args]
+            if kind == "directory":
+                return "mkdir -p %s" % " ".join(vals), "New-Item -ItemType Directory -> mkdir -p"
+            return "touch %s" % " ".join(vals), "New-Item -ItemType File -> touch"
+    if first == "Get-Command":
+        args = [a for a in _split_top(rest, (" ",)) if a.strip()]
+        if len(args) == 1:
+            v, n = _ps_val_to_bash(args[0])
+            return "which %s" % v, _merge_notes("Get-Command -> which", n)
+    if first == "Get-ChildItem":
+        args = [a for a in _split_top(rest, (" ",)) if a.strip() and not a.startswith("-")]
+        if not args:
+            return "ls", "Get-ChildItem -> ls"
+        if len(args) == 1:
+            v, n = _ps_val_to_bash(args[0])
+            return "ls %s" % v, _merge_notes("Get-ChildItem -> ls", n)
+    if first == "Get-Date" and not rest:
+        return "date", "Get-Date -> date"
+    if first == "Start-Sleep":
+        args = [a for a in _split_top(rest, (" ",)) if a.strip()]
+        if args:
+            v, n = _ps_val_to_bash(args[-1])
+            return "sleep %s" % v, _merge_notes("Start-Sleep -> sleep", n)
+    if first == "Clear-Host" and not rest:
+        return "clear", "Clear-Host -> clear"
+    if first == "Write-Error":
+        args = [a for a in _split_top(rest, (" ",)) if a.strip()]
+        if args:
+            v, n = _ps_val_to_bash(args[0])
+            return "echo %s >&2" % v, _merge_notes("Write-Error -> echo ... >&2", n)
+    if first in ("exit", "return", "break", "continue"):
+        return t, "ชื่อเหมือนกันใน bash"
+    if t in ("$true", "$false"):
+        return ("true" if t == "$true" else "false"), "$true/$false -> true/false"
+    if first == "." and rest:
+        v, n = _ps_val_to_bash(rest)
+        return "source %s" % v, _merge_notes(". (dot-source) -> source (เหมือนกัน)", n)
+    if first == "Remove-Variable":
+        args = [a for a in _split_top(rest, (" ",)) if a.strip() and not a.startswith("-")]
+        if len(args) == 1:
+            return "unset %s" % args[0], "Remove-Variable -> unset"
+    if first == "Set-StrictMode":
+        return "set -u", "Set-StrictMode -> set -u (เช็คตัวแปรก่อนกำหนด)"
+    if first == "Set-PSDebug":
+        return "set -x", "Set-PSDebug -Trace 1 -> set -x"
+    if t == "param" or t.startswith("param(") or t.startswith("param ("):
+        return "# TODO: param (...) ของ pwsh = $1, $2, ... ใน bash: %s" % t, ""
+    if t.startswith("[") and (t.endswith(")]") or re.match(r"^\[\w[\w.]*\(\s*\)\]", t)):
+        return "# TODO: attribute pwsh ไม่มีใน bash: %s" % t, ""
+
+    # $env:X = val -> export X=val
+    m = re.match(r"^\$env:([A-Za-z_]\w*)\s*=\s*(.*)$", t, re.S)
+    if m:
+        v, n = _ps_val_to_bash(m.group(2))
+        return "export %s=%s" % (m.group(1), v), _merge_notes("$env:VAR -> export VAR=...", n)
+    # $ErrorActionPreference = "Stop" -> set -e
+    if re.match(r'^\$ErrorActionPreference\s*=\s*"Stop"', t):
+        return "set -e", "$ErrorActionPreference = 'Stop' -> set -e"
+    # $x = val
+    m = re.match(r"^\$([A-Za-z_]\w*)\s*(\+?=|-?=)\s*(.*)$", t, re.S)
+    if m:
+        name, op, val = m.group(1), m.group(2), m.group(3).strip()
+        if val == "Read-Host" or val.startswith("Read-Host ") or val.startswith("Read-Host("):
+            pm = re.search(r'Read-Host\s+("[^"]*"|\'[^\']*\'|\S+)', val)
+            if pm:
+                p, _n = _ps_val_to_bash(pm.group(1))
+                return "read -p %s %s" % (p, name), "Read-Host -> read -p"
+            return "read %s" % name, "Read-Host -> read"
+        v, n = _ps_val_to_bash(val)
+        if op == "+=":
+            return "%s+=%s" % (name, v), _merge_notes("+= เหมือนกัน ($ หายไป)", n)
+        return "%s=%s" % (name, v), _merge_notes("pwsh $x=.. -> bash x=.. (เอา $ ออก)", n)
+    # $x++ / $x-- / $x += 2
+    m = re.fullmatch(r"\$([A-Za-z_]\w*)\s*(\+\+|--)", t)
+    if m:
+        return "((%s%s))" % (m.group(1), m.group(2)), "$i++ -> ((i++))"
+    m = re.fullmatch(r"\$([A-Za-z_]\w*)\s*([+\-*/%])=\s*(.+)", t, re.S)
+    if m:
+        v, n = _ps_val_to_bash(m.group(3))
+        return "((%s %s= %s))" % (m.group(1), m.group(2), v), _merge_notes("$x += 1 -> ((x += 1))", n)
+    return None
+
+
+def _ps_foreach_items_to_bash(y: str) -> tuple[str, str]:
+    t = _ps_strip_outer_parens(y.strip()) if y.strip().startswith("(") else y.strip()
+    m = re.fullmatch(r"(-?\d+)\.\.(-?\d+)", t)
+    if m:
+        return "$(seq %s %s)" % (m.group(1), m.group(2)), "range A..B -> $(seq A B)"
+    m = re.fullmatch(r"(.+)\.\.(.+)", t)
+    if m:
+        a, _n1 = _ps_val_to_bash(m.group(1))
+        b, _n2 = _ps_val_to_bash(m.group(2))
+        return "$(seq %s %s)" % (a, b), "range A..B -> $(seq A B)"
+    m = re.fullmatch(r"Get-ChildItem\s+(.*)", t, re.S)
+    if m:
+        v, _n = _ps_val_to_bash(m.group(1).strip())
+        return v, "Get-ChildItem (glob) -> pattern ตรงๆ"
+    if t == "@()":
+        return '""', "@() ว่าง -> \"\" (bash ไม่มี array ว่างแบบนี้)"
+    if "," in t:
+        words = [w.strip() for w in _split_top(t, (",",)) if w.strip()]
+        return " ".join(_ps_val_to_bash(w)[0] for w in words), "array คั่น , -> คั่น space"
+    v, n = _ps_val_to_bash(t)
+    return v, n
+
+
+def _ps_for_paren_to_bash(paren: str) -> tuple[str, str]:
+    inner = _ps_strip_outer_parens(paren.strip())
+    pieces = [p.strip() for p in _split_top(inner, (";",)) if p.strip()]
+    if len(pieces) != 3:
+        v, _ = _ps_val_to_bash(paren)
+        return "((" + v + "))", "for แบบนี้ซับซ้อน — ตรวจเอง"
+    init, cond, step = pieces
+    im = re.match(r"^\$([A-Za-z_]\w*)\s*=\s*(.*)$", init, re.S)
+    i_txt = ("%s=%s" % (im.group(1), _ps_val_to_bash(im.group(2))[0])) if im else _ps_to_bash_vars(init)[0].replace("$", "")
+    ops = {"-lt": "<", "-le": "<=", "-gt": ">", "-ge": ">=", "-eq": "==", "-ne": "!="}
+    c_txt = _ps_to_bash_vars(cond)[0].replace("$", "")
+    for pw, ba in ops.items():
+        c_txt = re.sub(r"\s*%s\s*" % pw, ba, c_txt, flags=re.I)
+        c_txt = re.sub(r"\s*%s\s*" % pw.upper(), ba, c_txt)
+    sm = re.match(r"^\$([A-Za-z_]\w*)\s*(\+\+|--)$", step)
+    if sm:
+        s_txt = "%s%s" % (sm.group(1), sm.group(2))
+    else:
+        am = re.match(r"^\$([A-Za-z_]\w*)\s*([+\-*/%])=\s*(.*)$", step, re.S)
+        s_txt = ("%s%s=%s" % (am.group(1), am.group(2), _ps_val_to_bash(am.group(3))[0])) if am else \
+            _ps_to_bash_vars(step)[0].replace("$", "")
+    return "((%s; %s; %s))" % (i_txt, c_txt, s_txt), "for (;;) -> for ((;;)); do (< กลับเป็น <)"
+
+
+@register("powershell", "bash")
+def powershell_to_bash(code: str, headers: bool = True, notes: bool = True) -> str:
+    out: list[str] = []
+    stack: list = []  # str kind | {"kind":"switch","base":int,"branch":bool}
+    depth = 0
+    pending_header: str | None = None
+
+    def emit(text: str, d: int | None = None):
+        nonlocal pending_header
+        dd = depth if d is None else d
+        if pending_header is not None:
+            out.append("    " * dd + "# powershell: " + pending_header.strip())
+            pending_header = None
+        out.append("    " * dd + text)
+
+    def attach(line: str, note: str) -> str:
+        if notes and note:
+            return line + "  # " + note
+        return line
+
+    def emit_stmt(line: str, note: str):
+        for i, ln in enumerate(line.split("\n")):
+            emit(attach(ln, note) if i == 0 else ln)
+
+    def emit_note(text: str):
+        if notes and text:
+            emit("# -> " + text)
+
+    def sw_ctx():
+        if stack and isinstance(stack[-1], dict) and stack[-1].get("kind") == "switch":
+            return stack[-1]
+        return None
+
+    def in_switch_branch() -> bool:
+        ctx = sw_ctx()
+        return bool(ctx and ctx.get("branch"))
+
+    def close_curly(nxt_word: str):
+        nonlocal depth, pending_header
+        if not stack:
+            depth = max(depth - 1, 0)
+            emit("}")
+            return
+        top = stack[-1]
+        kind = top.get("kind") if isinstance(top, dict) else top
+        if kind == "switch":
+            if top.get("branch"):
+                top["branch"] = False
+                emit(";;")
+                depth = top["base"]
+            else:
+                stack.pop()
+                depth = top["base"] - 1
+                emit("esac")
+            return
+        if kind == "if" and nxt_word in ("elseif", "else"):
+            stack.pop()
+            depth = max(depth - 1, 0)
+            return  # เก็บ header ไว้ให้บรรทัด elseif/else
+        stack.pop()
+        if kind in ("brace", "try", "catch", "paren"):
+            pending_header = None  # } ของ hashtable/try — ทิ้ง header กันเปื้อน
+            depth = max(depth - 1, 0)
+            return
+        depth = max(depth - 1, 0)
+        if kind == "if":
+            emit("fi")
+        elif kind in ("while", "for"):
+            emit("done")
+        elif kind == "func":
+            emit("}")
+        else:
+            emit("}")
+
+    def silent() -> bool:
+        """อยู่ใน hashtable/scriptblock ที่ bash ไม่มี — เนื้อในออกเป็น comment กันพัง."""
+        return bool(stack) and stack[-1] in ("brace", "paren")
+
+    def do_block_stmts(inner: str):
+        for st in _split_stmts(inner):
+            st = st.strip()
+            if not st:
+                continue
+            conv = _ps_stmt_to_bash(st)
+            if conv is None:
+                v, has_us = _ps_to_bash_vars(st)
+                n = "ส่งผ่านตรง (native ใน bash ได้)" + ("; $_ ไม่มีใน bash — ตรวจเอง" if has_us else "")
+                if silent():
+                    emit("# " + v)
+                else:
+                    emit_stmt(v, n)
+            elif conv[0].startswith("#"):
+                emit(conv[0])
+            else:
+                if silent():
+                    emit("# " + conv[0])
+                else:
+                    emit_stmt(conv[0], conv[1])
+
+    def open_block(kind: str, bash_open: str, note: str, trailer: str):
+        """เปิดบล็อก + จัดการ trailer (single-line { cmd } หรือเปิดค้าง)."""
+        nonlocal depth
+        tr = trailer.strip()
+        if tr and tr.endswith("}"):
+            emit(attach(bash_open, note))
+            depth += 1
+            stack.append(kind)
+            do_block_stmts(tr[:-1])
+            close_curly("")
+        elif tr:
+            emit(attach(bash_open, note + "; ต่อท้าย { มีของแปลก — ตรวจเอง"))
+            depth += 1
+            stack.append(kind)
+            do_block_stmts(tr)
+        else:
+            emit(attach(bash_open, note))
+            depth += 1
+            stack.append(kind)
+
+    # logical lines (join ` ท้ายบรรทัดแบบ pwsh)
+    logical: list[str] = []
+    buf = ""
+    for raw in code.splitlines():
+        line = raw.rstrip()
+        cp, _ = _ps_split_comment(line)
+        if cp.rstrip().endswith("`") and not cp.rstrip().endswith("``"):
+            buf += cp.rstrip()[:-1] + " "
+            continue
+        logical.append(buf + line)
+        buf = ""
+    if buf:
+        logical.append(buf)
+
+    for line in logical:
+        if not line.strip():
+            pending_header = None
+            out.append("")
+            continue
+        code_part, _inline = _ps_split_comment(line)
+        if not code_part.strip():
+            s = line.strip()
+            if re.match(r"^#!.*\b(pwsh|powershell)\b", s):
+                if headers:
+                    out.append("    " * depth + "# powershell: " + s)
+                emit("#!/usr/bin/env bash")
+                continue
+            pending_header = None
+            emit(s)
+            continue
+        pending_header = line if headers else None
+        rest = code_part.strip()
+
+        while rest.startswith("}"):
+            after = rest[1:].strip()
+            nxt = after.split(None, 1)[0] if after else ""
+            close_curly(nxt.rstrip("{").lower())
+            rest = after
+            if not rest:
+                break
+        if not rest:
+            continue
+
+        # --- switch branch (ต้องมาก่อน opener ทั่วไป) ---
+        ctx = sw_ctx()
+        if ctx is not None and depth == ctx["base"]:
+            bm = re.match(r"^(default)\s*\{(.*)$", rest, re.S | re.I)
+            if bm:
+                _trailer = bm.group(2).strip()
+                emit(attach("*)", "default -> *)"))
+                depth = ctx["base"] + 1
+                ctx["branch"] = True
+                if _trailer:
+                    if _trailer.endswith("}"):
+                        do_block_stmts(_trailer[:-1])
+                        close_curly("")
+                    else:
+                        do_block_stmts(_trailer)
+                continue
+            bm = re.match(r"^(\{.*?\})\s*\{(.*)$", rest, re.S)
+            if bm and bm.group(1).strip().startswith("{"):
+                # { $_ -eq ... } { (รูป multi-pattern ที่เราสร้าง)
+                cond = bm.group(1).strip()[1:-1].strip() if bm.group(1).strip().endswith("}") else bm.group(1).strip()
+                _trailer = bm.group(2).strip()
+                pats = sorted(set(re.findall(r"-eq\s+('[^']*'|\"[^\"]*\"|\S+)", cond)))
+                pats = [p.strip("'\"") for p in pats] or ["*"]
+                emit(attach("%s)" % "|".join(pats), "{ $_ -eq ... } -> a|b)"))
+                depth = ctx["base"] + 1
+                ctx["branch"] = True
+                if _trailer:
+                    if _trailer.endswith("}"):
+                        do_block_stmts(_trailer[:-1])
+                        close_curly("")
+                    else:
+                        do_block_stmts(_trailer)
+                continue
+            bm = re.match(r"^('[^']*'|\"[^\"]*\"|\S+?)\s*\{(.*)$", rest, re.S)
+            if bm:
+                pat = bm.group(1).strip().strip("'\"")
+                _trailer = bm.group(2).strip()
+                emit(attach("%s)" % pat, "\"...\" { -> pattern)"))
+                depth = ctx["base"] + 1
+                ctx["branch"] = True
+                if _trailer:
+                    if _trailer.endswith("}"):
+                        do_block_stmts(_trailer[:-1])
+                        close_curly("")
+                    else:
+                        do_block_stmts(_trailer)
+                continue
+
+        # --- openers ---
+        m = re.match(r"^(if|elseif|while)\s+(\(.*\))\s*\{(.*)$", rest, re.S | re.I)
+        if m:
+            kw, paren, trailer = m.group(1).lower(), m.group(2), m.group(3)
+            cond = _ps_strip_outer_parens(paren)
+            if kw == "while" and re.match(r"(?i)^-not\b", cond.strip()):
+                inner = re.sub(r"(?i)^-not\b", "", cond.strip(), count=1).strip()
+                c, raw = _ps_cond_to_bash(_ps_strip_outer_parens(inner))
+                note = "while (-not (...)) -> until ...; do"
+                if raw:
+                    note += "; เงื่อนไขมีของที่ bash ไม่มีตรงตัว — ตรวจเอง"
+                open_block("while", "until %s; do" % c, note, trailer)
+            else:
+                c, raw = _ps_cond_to_bash(cond)
+                base = "if %s; then" % c if kw == "if" else ("elif %s; then" % c if kw == "elseif" else "while %s; do" % c)
+                note = {"if": "if (...) { -> if ...; then",
+                        "elseif": "} elseif (...) { -> elif ...; then",
+                        "while": "while (...) { -> while ...; do"}[kw]
+                if raw:
+                    note += "; เงื่อนไขมีของที่ bash ไม่มีตรงตัว — ตรวจเอง ([ -n \"$(...)\" ] คือเช็ค output แทน exit code)"
+                open_block("if" if kw in ("if", "elseif") else "while", base, note, trailer)
+            continue
+        m = re.match(r"^else\s*\{(.*)$", rest, re.S | re.I)
+        if m:
+            open_block("if", "else", "} else { -> else", m.group(1))
+            continue
+        m = re.match(r"^foreach\s*\(\s*(.*?)\s+in\s+(.*?)\s*\)\s*\{(.*)$", rest, re.S | re.I)
+        if m:
+            var = m.group(1).strip().lstrip("$")
+            items, n = _ps_foreach_items_to_bash(m.group(2))
+            open_block("for", "for %s in %s; do" % (var, items),
+                       _merge_notes("foreach -> for ...; do", n), m.group(3))
+            continue
+        m = re.match(r"^for\s*\(\s*(.*?)\s*;\s*(.*?)\s*;\s*(.*?)\s*\)\s*\{(.*)$", rest, re.S | re.I)
+        if m:
+            arith, n = _ps_for_paren_to_bash("(%s; %s; %s)" % (m.group(1), m.group(2), m.group(3)))
+            open_block("for", "for %s; do" % arith, _merge_notes(n), m.group(4))
+            continue
+        m = re.match(r"^switch\s+(.*?)\s*(\(.*\))\s*\{(.*)$", rest, re.S | re.I)
+        if m:
+            flags, paren, trailer = m.group(1), m.group(2), m.group(3)
+            subj, n = _ps_val_to_bash(_ps_strip_outer_parens(paren))
+            note = "switch (...) { -> case ... in"
+            if re.search(r"(?i)-Wildcard", flags):
+                note += " (-Wildcard ตรงกับ glob ของ case)"
+            if re.search(r"(?i)-Regex", flags):
+                note += " (-Regex ไม่มีใน case ตรงตัว — ตรวจ pattern เอง)"
+            emit(attach("case %s in" % subj, _merge_notes(note, n)))
+            depth += 1
+            stack.append({"kind": "switch", "base": depth, "branch": False})
+            if trailer.strip():
+                do_block_stmts(trailer)  # switch บรรทัดเดียว — พยายามต่อ (อาจต้องตรวจเอง)
+            continue
+        m = re.match(r"^function\s+(\w+)\s*(\(.*\))?\s*\{(.*)$", rest, re.S | re.I)
+        if m:
+            extra = "; (parameter pwsh = $1, $2, ... ใน bash)" if m.group(2) else ""
+            open_block("func", "%s() {" % m.group(1),
+                       "function name { -> name() {%s" % extra, m.group(3))
+            continue
+        m = re.match(r"^&\s*\{(.*)$", rest, re.S)
+        if m:
+            open_block("brace", "{", "& { (script block) -> { } group", m.group(1))
+            continue
+        m = re.match(r"^try\s*\{(.*)$", rest, re.S | re.I)
+        if m:
+            emit("# TODO: try/catch ของ pwsh ไม่มีใน bash")
+            depth += 1
+            stack.append("try")
+            if m.group(1).strip():
+                do_block_stmts(m.group(1))
+            continue
+        m = re.match(r"^catch\b.*?\{(.*)$", rest, re.S | re.I)
+        if m:
+            emit("# TODO: catch ของ pwsh ไม่มีใน bash")
+            depth += 1
+            stack.append("catch")
+            if m.group(1).strip():
+                do_block_stmts(m.group(1))
+            continue
+        m = re.match(r"^finally\s*\{(.*)$", rest, re.S | re.I)
+        if m:
+            emit("# TODO: finally ของ pwsh ไม่มีใน bash")
+            depth += 1
+            stack.append("catch")
+            if m.group(1).strip():
+                do_block_stmts(m.group(1))
+            continue
+        if rest == "{" or re.search(r"@\{\s*$", rest) or rest.endswith("{"):
+            # { เปลือย / hashtable @{ / scriptblock ที่ไม่รู้จัก — เก็บเงียบ กัน stack เพี้ยน
+            if rest != "{":
+                emit_note("บล็อก { ... } แบบนี้ (hashtable/scriptblock/...) ไม่มีใน bash ตรงตัว — เนื้อในเป็น comment")
+            depth += 1
+            stack.append("brace")
+            continue
+
+        # --- statements ---
+        if rest == "break" and in_switch_branch():
+            emit("# -> break ของ switch ไม่ต้องมีใน bash (ใช้ ;; แทน)")
+            continue
+        for st in _split_stmts(rest):
+            st = st.strip()
+            if not st:
+                continue
+            conv = _ps_stmt_to_bash(st)
+            if conv is None:
+                v, has_us = _ps_to_bash_vars(st)
+                n = "ส่งผ่านตรง (native ใน bash ได้)" + ("; $_ ไม่มีใน bash — ตรวจเอง" if has_us else "")
+                if silent():
+                    emit("# " + v)
+                else:
+                    emit_stmt(v, n)
+            elif conv[0].startswith("#"):
+                emit(conv[0])
+            else:
+                if silent():
+                    emit("# " + conv[0])
+                else:
+                    emit_stmt(conv[0], conv[1])
+
+    body = "\n".join(out)
+    if not headers:
+        body = "\n".join(ln for ln in body.splitlines()
+                         if not ln.strip().startswith("# powershell: "))
+    if body and not body.startswith("#!"):
+        body = "#!/usr/bin/env bash\n" + body
+    return body + "\n"
+
+
+# ==========================================================================
 # CLI
 # ==========================================================================
 
