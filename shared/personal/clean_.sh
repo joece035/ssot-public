@@ -44,18 +44,20 @@ ssot_link=(
 
 link_check(){
     local link_to=""
+    local f_path=""
     for f in "${ssot_link[@]}"; do
+        f_path="${f/#$HOME/\~}"
         if [[ -L "$f" ]]; then
             link_to=$(readlink "$f" 2>/dev/null)
             if [[ -e "$f" ]]; then
-                cn 250 b "$f -> $(cn lg "" "$link_to")"
+                cn 250 b "$f_path -> $(cn lg "" "${link_to/#$HOME/\~}")"
             else
-                cn 1 b "$f -> $(cn 1 "" "$link_to [BROKEN]")"
+                cn 1 b "$f_path -> $(cn 1 "" "${link_to/#$HOME/\~} [BROKEN]")"
             fi
         elif [[ -e "$f" ]]; then
-            cn 214 b "$f not a symlink (regular file)"
+            cn 214 b "$f_path not a symlink (regular file)"
         else
-            cn 240 b "$f not found"
+            cn 240 b "$f_path not found"
         fi
     done
 }
@@ -86,11 +88,12 @@ link_(){
 
             # 1. Clean State: บังคับลบเฉพาะ Target ที่เป็น Symlink เก่าทิ้งเพื่อเตรียมสร้างใหม่
             for target in "${!links[@]}"; do
+                local target_path="${target/#$HOME/\~}"
                 if [[ -L "$target" ]]; then
                     rm -f "$target"
-                    cn 250 b "cleaned symlink: $target"
+                    cn 250 b "cleaned symlink: $target_path"
                 elif [[ -e "$target" ]]; then
-                    cn 214 b "skip non-symlink (preserving file): $target"
+                    cn 214 b "skip non-symlink (preserving file): $target_path"
                 fi
             done
 
@@ -100,10 +103,11 @@ link_(){
             # 3. Re-link ใหม่ทั้งหมดจาก Clean State
             for target in "${!links[@]}"; do
                 local source="${links[$target]}"
+                local source_path="${source/#$HOME/\~}"
                 if [[ -e "$source" ]]; then
-                    ln -sf "$source" "$target" && cn lg b "done symlink $source -> $target"
+                    ln -sf "$source" "$target" && cn lg b "done symlink $source_path -> ${target/#$HOME/\~}"
                 else
-                    cn 1 b "source not found: $source"
+                    cn 1 b "source not found: $source_path"
                 fi
             done
             ;;
@@ -122,9 +126,9 @@ link_(){
                 
                 # ตรวจสอบว่า Target ปลายทางมีอยู่จริงหรือไม่
                 if [[ -e "$f" ]]; then
-                    cn 250 b "$f -> $(cn 45 b "$file_to")"
+                    cn 250 b "${f/#$HOME/\~} -> $(cn 45 b "${file_to/#$HOME/\~}")"
                 else
-                    cn 1 b "$f -> $(cn 1 b "$file_to [BROKEN]")"
+                    cn 1 b "${f/#$HOME/\~} -> $(cn 1 b "${file_to/#$HOME/\~} [BROKEN]")"
                 fi
                 (( count++ ))
             done < <(find "$directory" -maxdepth 1 -type l -print0 2>/dev/null)

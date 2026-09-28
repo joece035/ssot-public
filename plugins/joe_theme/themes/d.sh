@@ -78,35 +78,65 @@ _set_prompt() {
     local _prev_row=${_SSOT_LAST_ROW:-0}
     _SSOT_LAST_ROW=$_cur_row
 
-    local _max_lines
-    _max_lines=$(tput lines 2>/dev/null || echo "${LINES:-24}")
+    # ดึงจำนวนบรรทัดทั้งหมดของหน้าจอ Terminal ปัจจุบัน
+    local _max_lines=${LINES:-$(tput lines 2>/dev/null || echo 24)}
 
-    # คำสั่งถูกรันจริงไหม (Enter เปล่า HISTCMD ไม่เพิ่ม)
-    local _ran=0
-    [[ "$HISTCMD" != "${_SSOT_LAST_HIST:-}" ]] && _ran=1
-    _SSOT_LAST_HIST=$HISTCMD
+    # 2. คำนวณ Delta
+    local _delta=$(( _cur_row - _prev_row ))
+    (( _delta < 0 )) && _delta=$(( -_delta ))
 
-    # _SSOT_USED = ระยะจากหัว full banner ถึง cursor ปัจจุบัน
-    if (( _cur_row <= 1 || _cur_row < _prev_row )); then
-        _SSOT_USED=$_max_lines            # clear / cursor กระโดดขึ้น -> บังคับ full
-    else
-        local _d
-        if (( _cur_row < _max_lines )); then
-            _d=$(( _cur_row - _prev_row ))            # ยังไม่ชนขอบ วัดตรง
-        elif (( _prev_row < _max_lines )); then
-            _d=$(( _max_lines - _prev_row ))          # เพิ่งชนขอบ
-        else
-            _d=1                                      # ติดขอบต่อเนื่อง (Enter 1 แถว)
-        fi
-        (( _cur_row >= _max_lines && _ran )) && _d=$(( _d + 1 ))  # เดา output ขั้นต่ำ 1 บรรทัด
-        _SSOT_USED=$(( ${_SSOT_USED:-99999} + _d ))
-    fi
-
+    # -------------------------------------------------------------
+    # 🎯 SMART PROMPT LIFECYCLE (v2):
+    # 1. Clear screen หรือ cursor กระโดดขึ้นบนสุด (_cur_row <= 2 หรือ _cur_row < _prev_row)
+    #    -> แสดง Full Banner ทันที
+    # 2. เลื่อนลงมาระหว่างกลางจอ (_cur_row < _max_lines) และเคยแสดง Banner ไปแล้ว
+    #    -> แสดง Mini Prompt (-→ ) เสมอ เพราะ Banner บนสุดยังอยู่บนหน้าจอแน่นอน
+    # 3. Output ก้อนใหญ่ดัน Cursor จากกลางจอลงมามิดขอบล่าง (_delta กระโดด)
+    #    -> เช่น คำสั่ง seq, ls, cat, for-loop ที่ดันจอลงมาจนชนขอบล่าง -> แสดง Full Banner
+    # 4. Cursor ติดขอบล่างจออยู่แล้ว (_cur_row >= _max_lines)
+    #    -> ถ้าเป็นคำสั่งเงียบ (cd, export, enter ว่าง) ให้คง Mini Prompt ไว้
+    #    -> ถ้าเป็นคำสั่งที่มี output รันติดต่อกันจนพ้นจอ ให้แสดง Full Banner
+    # -------------------------------------------------------------
     local show_mini=0
-    if (( _SSOT_USED < _max_lines )); then
+
+    # CASE 1: Clear screen หรือ cursor กระโดดขึ้นบนสุด
+    if (( _cur_row <= 1 || (_cur_row < _prev_row && _prev_row > 2) )); then
+        _SSOT_BANNER_SHOWN=1
+        _SSOT_SCROLL_COUNT=0
+        show_mini=0
+
+    # CASE 2: อยู่ระหว่างกลางจอ (_cur_row < _max_lines) และเคยแสดง Banner แล้ว
+    elif (( _cur_row < _max_lines && ${_SSOT_BANNER_SHOWN:-0} == 1 )); then
         show_mini=1
+
+    # CASE 3: Output ก้อนใหญ่ดันลงมาจากกลางจอจนชนขอบล่าง (_prev_row อยู่ห่างจากขอบล่างเกิน 4 บรรทัด)
+    elif (( _cur_row >= _max_lines && _prev_row > 0 && _prev_row < (_max_lines - 4) )); then
+        _SSOT_BANNER_SHOWN=1
+        _SSOT_SCROLL_COUNT=0
+        show_mini=0
+
+    # CASE 4: ติดขอบล่างจออยู่แล้ว (_cur_row >= _max_lines)
     else
-        _SSOT_USED=3                      # full สูง 4 แถว หัวอยู่เหนือ cursor 3 แถว
+        # เช็คคำสั่งล่าสุดจาก history (ถ้ามี)
+        local last_cmd=""
+        if [[ $- == *i* ]]; then
+            last_cmd=$(history 1 2>/dev/null | sed -E 's/^[ ]*[0-9]+[ ]*//')
+        fi
+
+        # ถ้าเป็นคำสั่งที่ไม่มี output (cd, pushd, popd, export, unset หรือเคาะ Enter เปล่า)
+        if [[ -z "$last_cmd" || "$last_cmd" =~ ^(cd|pushd|popd|export|unset)([[:space:]]|$) ]]; then
+            show_mini=1
+        else
+            # ถ้าเป็นคำสั่งที่มี output (เช่น seq, ls, git, cat, for ... done)
+            _SSOT_SCROLL_COUNT=$(( ${_SSOT_SCROLL_COUNT:-0} + 1 ))
+            if (( _SSOT_SCROLL_COUNT < 2 )); then
+                show_mini=1
+            else
+                _SSOT_SCROLL_COUNT=0
+                _SSOT_BANNER_SHOWN=1
+                show_mini=0
+            fi
+        fi
     fi
 
     # ถ้าเข้าเงื่อนไข Mini Prompt: พิมพ์แค่ -→ แล้วจบฟังก์ชันทันที
@@ -134,6 +164,7 @@ _set_prompt() {
     # -- USER@HOST
     local cur_user="${USER:-$(id -un)}"
     local cur_host="${NODE_HOST:-wsl2}"
+    #local user_host="$(psc cr b "$cur_user") @ $(psc y b "$cur_host")"
 
     # -- Current Dir & Git
     local current_dir="$(psc 242 d "${PWD/#$HOME/\~}")"
@@ -149,11 +180,10 @@ _set_prompt() {
 
     # -- 2. Dynamic border calculation: ยิงวัดความกว้างรอบเดียว (One-Shot)
     local term_w
-    term_w=$(tput cols 2>/dev/null || echo $COLUMNS)
+    term_w=$(tput cols 2>/dev/null || echo 80)
     (( term_w < 37 )) && term_w=37
 
     local text_len
-		# -- วัด Width จริง ( ANSI escape codes ??? OSC sequences)
     text_len=$(_w "$prompt_content")
 
     local lens=$text_len
@@ -168,7 +198,7 @@ _set_prompt() {
         _str_b+="${BN_BORDER_CHAR_BOT}"
     done
 
-    # Random border color (Single color for both top bottom and also sep)
+    # Random border color (Single color for both top & bottom)
     
     local border_top="$(psc "$c_box" "b" "${_str_t}")"
     local border_bot="$(psc "$c_box" "b" "${_str_b}")"
@@ -186,8 +216,8 @@ _set_prompt() {
 
 # ✅ FIX 4: ลบ duplicate — เหลือแค่ชุดเดียว
 _SSOT_LAST_ROW=0
-_SSOT_USED=99999      # ค่าสูง = prompt แรกได้ full เสมอ
-_SSOT_LAST_HIST=
+_SSOT_BANNER_SHOWN=0
+_SSOT_SCROLL_COUNT=0
 export -n PROMPT_COMMAND 2>/dev/null || true
 PROMPT_COMMAND=_set_prompt
 
@@ -199,7 +229,7 @@ fi
 # 5. Show Fastfetch (only in interactive WSL shells with logo)
 if [[ $- == *i* ]] && command -v fastfetch >/dev/null 2>&1; then
     if [ "$JOE_ENV" = "WSL" ]; then
-        #clear
+        clear
         fastfetch --logo ubuntu
     fi
 fi

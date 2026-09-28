@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-codetrans - แปลงโค้ด bash <-> python แบบ line-by-line สำหรับคนฝึกเขียน python
+codetrans - แปลงโค้ด bash <-> python <-> powershell แบบ line-by-line สำหรับคนฝึกภาษาที่สอง
 
 ผลลัพธ์จะวาง comment คู่กันทุกบรรทัด เพื่อให้แกะเทียบได้ง่าย:
 
@@ -22,8 +22,9 @@ Flags:
 
 Usage:
     python3 codetrans.py script.sh -t python
-    python3 codetrans.py script.sh -t python -o script.py
-    cat script.sh | python3 codetrans.py -f bash -t python
+    python3 codetrans.py script.sh -t powershell   # หรือ -t pwsh (alias เดียวกัน)
+    python3 codetrans.py script.ps1 -f powershell -t bash
+    cat script.sh | python3 codetrans.py -f bash -t pwsh
 """
 
 from __future__ import annotations
@@ -40,10 +41,17 @@ import sys
 
 REGISTRY: dict[tuple[str, str], object] = {}
 
+_LANG_ALIAS = {"pwsh": "powershell", "ps": "powershell", "ps1": "powershell"}
+
+
+def _canon(lang: str) -> str:
+    l = lang.strip().lower()
+    return _LANG_ALIAS.get(l, l)
+
 
 def register(src: str, dst: str):
     def deco(fn):
-        REGISTRY[(src, dst)] = fn
+        REGISTRY[(_canon(src), _canon(dst))] = fn
         return fn
     return deco
 
@@ -53,6 +61,7 @@ def pairs() -> list[tuple[str, str]]:
 
 
 def translate(code: str, src: str, dst: str, **kw) -> str:
+    src, dst = _canon(src), _canon(dst)
     if src == dst:
         return code
     fn = REGISTRY.get((src, dst))
@@ -1546,17 +1555,18 @@ def python_to_bash(code: str, headers: bool = True, notes: bool = True) -> str:
 # CLI
 # ==========================================================================
 
-EXT_LANG = {".sh": "bash", ".bash": "bash", ".zsh": "bash", ".py": "python"}
+EXT_LANG = {".sh": "bash", ".bash": "bash", ".zsh": "bash", ".py": "python",
+            ".ps1": "powershell", ".psm1": "powershell"}
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         prog="codetrans",
-        description="แปลงโค้ด bash <-> python แบบ line-by-line พร้อม comment เทียบกัน",
+        description="แปลงโค้ด bash <-> python <-> powershell แบบ line-by-line พร้อม comment เทียบกัน (pwsh = powershell)",
     )
     ap.add_argument("file", nargs="?", help="ไฟล์อ่านเข้า (เว้นว่าง = อ่านจาก stdin)")
-    ap.add_argument("-f", "--from", dest="src", help="ภาษาต้นทาง (bash, python)")
-    ap.add_argument("-t", "--to", dest="dst", help="ภาษาปลายทาง (bash, python)")
+    ap.add_argument("-f", "--from", dest="src", help="ภาษาต้นทาง (bash, python, powershell/pwsh)")
+    ap.add_argument("-t", "--to", dest="dst", help="ภาษาปลายทาง (bash, python, powershell/pwsh)")
     ap.add_argument("-o", "--output", help="เขียนผลลงไฟล์นี้")
     ap.add_argument("--list", action="store_true", help="ดูคู่ภาษาที่รองรับ")
     ap.add_argument("--clean", action="store_true", help="เอา comment ออกทั้งหมด")
@@ -1574,8 +1584,9 @@ def main(argv: list[str] | None = None) -> int:
     src = args.src or (EXT_LANG.get(os.path.splitext(args.file)[1]) if args.file else None)
     dst = args.dst
     if not src or not dst:
-        print("codetrans: ระบุ --from/--to (หรือใช้ไฟล์ .sh/.py)", file=sys.stderr)
+        print("codetrans: ระบุ --from/--to (หรือใช้ไฟล์ .sh/.py/.ps1)", file=sys.stderr)
         return 2
+    src, dst = _canon(src), _canon(dst)
 
     if args.file:
         with open(args.file, encoding="utf-8") as fh:
