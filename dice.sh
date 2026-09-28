@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-
+source $HOME/.bashrc
 set -u
 
 # ============================================================
@@ -99,24 +99,30 @@ last_balance="$balance"
 # ============================================================
 
 float_add() {
-    awk -v a="$1" -v b="$2" 'BEGIN { printf "%.8f", a + b }'
+		mth "$1+$2" 8 d
+    #awk -v a="$1" -v b="$2" 'BEGIN { printf "%.8f", a + b }'
 }
 
 float_sub() {
-    awk -v a="$1" -v b="$2" 'BEGIN { printf "%.8f", a - b }'
+		mth "$1-$2" 8 d
+   #awk -v a="$1" -v b="$2" 'BEGIN { printf "%.8f", a - b }'
 }
 
 float_mul() {
-    awk -v a="$1" -v b="$2" 'BEGIN { printf "%.8f", a * b }'
+		mth "$1*$2" 8 d
+    #awk -v a="$1" -v b="$2" 'BEGIN { printf "%.8f", a * b }'
 }
 
 float_div() {
-    awk -v a="$1" -v b="$2" 'BEGIN { printf "%.8f", a / b }'
+		mth "$1/$2" 8 d
+   #awk -v a="$1" -v b="$2" 'BEGIN { printf "%.8f", a / b }'
 }
 
 float_gte() {
+		#mth "ROUND($1+$2),8"
     awk -v a="$1" -v b="$2" 'BEGIN { exit !(a >= b) }'
 }
+
 
 float_gt() {
     awk -v a="$1" -v b="$2" 'BEGIN { exit !(a > b) }'

@@ -7,18 +7,20 @@
 #   - lose -> bet x2
 #   - win  -> reset to BASE_BET
 # ============================================================
-
+source $HOME/.bashrc
 set -u
 
 # ─────────────────────────────────────────
 # [1] CONFIGURATION
 # ─────────────────────────────────────────
-
+HE=1
 START_BALANCE=1000      # starting balance
 BASE_BET=1              # base bet amount
-WIN_CHANCE=49.5         # win probability %
+WIN_CHANCE="49.5"     # win probability %
 MAX_ROUNDS=200          # simulation rounds
 MAX_LOSS_STREAK=10      # safety stop: max consecutive losses
+payout=$(mth "(1-($HE/100))/($WIN_CHANCE/100)" 2 d)
+LOSEMUL=$(mth "(1+(1/$payout)+(0.05/$payout))")
 
 # ─────────────────────────────────────────
 # [2] GLOBAL STATE
@@ -32,14 +34,32 @@ lose_count=0
 loss_streak=0
 max_loss_streak=0
 
-# ─────────────────────────────────────────
-# [3] FLOAT MATH (via awk)
-# ─────────────────────────────────────────
 
-fadd() { awk -v a="$1" -v b="$2" 'BEGIN { printf "%.8f", a + b }'; }
-fsub() { awk -v a="$1" -v b="$2" 'BEGIN { printf "%.8f", a - b }'; }
-fmul() { awk -v a="$1" -v b="$2" 'BEGIN { printf "%.8f", a * b }'; }
-fgt()  { awk -v a="$1" -v b="$2" 'BEGIN { exit !(a > b) }'; }
+
+fadd() {
+		mth "$1+$2" 8 d
+    #awk -v a="$1" -v b="$2" 'BEGIN { printf "%.8f", a + b }'
+}
+
+fsub() {
+		mth "$1-$2" 8 d
+   #awk -v a="$1" -v b="$2" 'BEGIN { printf "%.8f", a - b }'
+}
+
+fmul() {
+		mth "$1*$2" 8 d
+    #awk -v a="$1" -v b="$2" 'BEGIN { printf "%.8f", a * b }'
+}
+
+float_div() {
+		mth "$1/$2" 8 d
+   #awk -v a="$1" -v b="$2" 'BEGIN { printf "%.8f", a / b }'
+}
+
+fgt() {
+		#mth "ROUND($1+$2),8"
+    awk -v a="$1" -v b="$2" 'BEGIN { exit !(a >= b) }'
+}
 
 # ─────────────────────────────────────────
 # [4] ROLL DICE
@@ -51,13 +71,16 @@ roll_dice() {
     # WIN_CHANCE=49.5  ->  threshold=4950
     # ถ้า roll < threshold = win
     local threshold
-    threshold=$(awk -v c="$WIN_CHANCE" 'BEGIN { printf "%d", c * 100 }')
+    threshold=$(mth "$WIN_CHANCE*100" 0 d )
 
     local roll
     roll=$(( RANDOM % 10000 ))
 
     if (( roll < threshold )); then
-        echo "$roll win"
+				result=win
+				win_amount=$(mth "$BASE_BET*$payout" 8 d)
+        echo "$roll $result $win_amouny"
+				balance=$(mth "$balance+$win_amount" 8 d )
     else
         echo "$roll lose"
     fi

@@ -140,8 +140,7 @@ alias db='${SSOT:-$HOME/ssot}/tools/dashboard.sh'
 #ssh audit
 alias ssh-audit='bash $SSOT/bootstrap/script/ssh_audit.sh'
 
-
+alias py="python3"
 # --codetrans
-alias 2py='python3 $SSOT/bash_to_python/codetrans.py'
-alias 2sh='python3 $SSOT/bash_to_python/codetrans.py'
-alias 2pwsh='python3 $SSOT/bash_to_python/codetrans.py'
+export b2p_path="$SSOT/bash_to_python/codetrans.py"
+alias 2py='python3 $b2p_path'
