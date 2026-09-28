@@ -15,11 +15,12 @@ set -u
 # ─────────────────────────────────────────
 HE=1                    # house edge %
 START_BALANCE=1000      # starting balance
-BASE_BET=0.2              # base bet amount
-WIN_CHANCE="5"       # win probability %
-MAX_ROUNDS=500          # simulation rounds
-MAX_LOSS_STREAK=1000      # safety stop: max consecutive losses
-STOP_ON_WIN=20
+BASE_BET=0.01              # base bet amount
+WIN_CHANCE="0.90"       # win probability %
+MAX_ROUNDS=2000          # simulation rounds
+MAX_LOSS_STREAK=""      # safety stop: max consecutive losses
+STOP_ON_WIN=1             # stop on first win
+
 # Payout multiplier: (1 - HE/100) / (WIN_CHANCE/100)
 payout=$(mth "(1-($HE/100))/($WIN_CHANCE/100)" 4 d)
 
@@ -96,20 +97,33 @@ apply_martingale() {
     if [[ "$result" == "win" ]]; then
         # WIN: กำไรสุทธิ = bet * (payout - 1)
         local net_profit
-        net_profit=$(fmul "$bet" "$(fsub "$payout" 1)" 8 d)
-        balance=$(fadd "$balance" "$net_profit" 8 d)
-        current_bet=$BASE_BET
-        loss_streak=0
+        net_profit=$(fmul "$bet" "$(fsub "$payout" 1)")
+        balance=$(fadd "$balance" "$net_profit")
+        if [ "$STOP_ON_WIN" -eq 1 ]; then
+            # STOP_ON_WIN = 1 : win -> stop (profit = bet * (payout - 1))
+            loss_streak=0
+        else
+            # STOP_ON_WIN = 0 : win -> continue with LOSEMUL
+            current_bet=$(fmul "$current_bet" "$LOSEMUL")
+            loss_streak=0
+        fi
         ((win_count++))
     else
         # LOSE: เสียเงินเดิมพัน, ทบเงินด้วย LOSEMUL
-        balance=$(fsub "$balance" "$bet" 8 d)
-        current_bet=$(fmul "$bet" "$LOSEMUL" 8 d)
+        balance=$(fsub "$balance" "$bet")
+        current_bet=$(fmul "$current_bet" "$LOSEMUL")
         ((loss_streak++))
         ((lose_count++))
 
         if (( loss_streak > max_loss_streak )); then
             max_loss_streak=$loss_streak
+        fi
+    fi
+
+    if [ "$STOP_ON_WIN" -eq 1 ]; then
+        if [ "$result" == "win" ]; then
+            stop_reason="STOP_ON_WIN: win"
+            return 0
         fi
     fi
 }
@@ -118,13 +132,11 @@ apply_martingale() {
 # [6] STOP CONDITIONS
 # ─────────────────────────────────────────
 should_stop() {
-
-    
-        # (a) balance หมด
-        if ! fgt "$balance" 0; then
-            echo "BUST: balance depleted"
-            return 0
-        fi
+    # (a) balance หมด
+    if ! fgt "$balance" 0; then
+        echo "BUST: balance depleted"
+        return 0
+    fi
     # (b) loss streak เกิน limit
     if (( loss_streak >= MAX_LOSS_STREAK )); then
         echo "MAX_STREAK: $loss_streak consecutive losses"
@@ -145,10 +157,10 @@ print_round() {
     local roll="$1"
     local result="$2"
     local bet="$3"
-    local icon="$(cn lg b "WIN + $(fmul "$bet" "$(fsub "$payout" 1)" 8 d)")"
-    [[ "$result" == "lose" ]] && icon="$(cn lr b "LOSS")"
+    local icon="WIN"
+    [[ "$result" == "lose" ]] && icon="LOS"
 
-    printf "Round %3d | Roll: %4d | %s | Bet: %10.8f | Balance: %12.8f | Streak: %d\n" \
+    printf "Round %3d | Roll: %4d | %s | Bet: %10.2f | Balance: %12.2f | Streak: %d\n" \
         "$round" "$roll" "$icon" "$bet" "$balance" "$loss_streak"
 }
 
@@ -166,10 +178,6 @@ stop_reason=""
 
 while (( round < MAX_ROUNDS )); do
     ((round++))
-
-    if (( win_count >= STOP_ON_WIN )); then
-        break
-    fi
 
     # ตรวจสอบเงื่อนไขหยุดก่อนเดิมพัน
     if stop_reason=$(should_stop); then
