@@ -279,14 +279,15 @@ ssot_load(){
 
 #-- Global shell refresh
 pp() {
-    clear &&
-    LOAD_LIST="${1:-""}"
-    AI_PROFILE="${2:-"mom"}"
-    if [[ -n "${ZSH_VERSION:-}" ]]; then
-        source "$HOME/.zshrc"
-        
+    if (( $# == 0)); then
+        _C -s -d "exec zsh" "exec bash"
     else
-        source "$HOME/.bashrc"
+        clear
+        LOAD_LIST="${1:-""}"
+        AI_PROFILE="${2:-""}"
+        if [[ -n "${ZSH_VERSION:-}" ]]; then
+            _C -s -d "source $HOME/.zshrc" "source $HOME/.bashrc"   
+        fi
     fi
     #cn 46 b "✓ Config reloaded!"
 }

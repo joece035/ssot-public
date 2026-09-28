@@ -78,7 +78,8 @@ g() {
 					-pu|--pull--rebase)
 							git add -A 
 							git commit -m "$(date)" 
-					    git_ "pl"
+					        git_ "pl"
+                            _C -s -d "exec zsh" "exec bash"
 							;;
 			  	*)		
     # มี args → ส่งต่อไป git_ (ซึ่งรู้จัก s/c/a/all/push/pull ฯลฯ)

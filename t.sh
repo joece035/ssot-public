@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 
 test_p="$HOME/ssot/shared/personal"
-
-#echo "${test_p/#$HOME/\~}"
-
 test_p2="/home/joez/ssot/shared/functions"
 
 
