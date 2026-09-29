@@ -11,15 +11,23 @@ source $HOME/.bashrc
 set -u
 
 # ─────────────────────────────────────────
+# [0] HELPER COLOR
+# ─────────────────────────────────────────
+_wc() { cn 255 b "$@"; } #white color
+_gr(){ cn 235 d "$@"; } #gray color
++c(){ cn 82 b "$@"; }  #win color
+-c(){ cn lr b "$@"; }  #lose color
+
+# ─────────────────────────────────────────
 # [1] CONFIGURATION
 # ─────────────────────────────────────────
 HE=1                    # house edge %
 START_BALANCE=1000      # starting balance
-BASE_BET=0.01              # base bet amount
-WIN_CHANCE="0.90"       # win probability %
+BASE_BET=2              # base bet amount
+WIN_CHANCE="9"       # win probability %
 MAX_ROUNDS=2000          # simulation rounds
-MAX_LOSS_STREAK=""      # safety stop: max consecutive losses
-STOP_ON_WIN=1             # stop on first win
+MAX_LOSS_STREAK="1000"      # safety stop: max consecutive losses
+STOP_ON_WIN=5             # stop on first win
 
 # Payout multiplier: (1 - HE/100) / (WIN_CHANCE/100)
 payout=$(mth "(1-($HE/100))/($WIN_CHANCE/100)" 4 d)
@@ -32,6 +40,7 @@ LOSEMUL=$(mth "1 + (1 / ($payout - 1))+(0.05/$payout)" 4 d)
 # ─────────────────────────────────────────
 # [2] GLOBAL STATE
 # ─────────────────────────────────────────
+threshold=$(mth "$WIN_CHANCE*100" 0 d)
 balance=$START_BALANCE
 current_bet=$BASE_BET
 round=0
@@ -74,16 +83,17 @@ fgte() {
 # Returns: "<roll_value> <win|lose>"
 # ─────────────────────────────────────────
 roll_dice() {
-    local threshold
-    threshold=$(mth "$WIN_CHANCE*100" 0 d)
-
     local roll
     roll=$(( RANDOM % 10000 ))
 
     if (( roll < threshold )); then
-        echo "$roll win"
+        last_roll="$roll"
+        result="win"
+        #echo "$roll win"
     else
-        echo "$roll lose"
+        last_roll="$roll"
+        result="lose"
+        #echo "$roll lose"
     fi
 }
 
@@ -96,34 +106,21 @@ apply_martingale() {
 
     if [[ "$result" == "win" ]]; then
         # WIN: กำไรสุทธิ = bet * (payout - 1)
-        local net_profit
-        net_profit=$(fmul "$bet" "$(fsub "$payout" 1)")
-        balance=$(fadd "$balance" "$net_profit")
-        if [ "$STOP_ON_WIN" -eq 1 ]; then
-            # STOP_ON_WIN = 1 : win -> stop (profit = bet * (payout - 1))
-            loss_streak=0
-        else
-            # STOP_ON_WIN = 0 : win -> continue with LOSEMUL
-            current_bet=$(fmul "$current_bet" "$LOSEMUL")
-            loss_streak=0
-        fi
+        win_amount=$(fmul "$bet" "$payout")
+        balance=$(fadd "$balance" "$win_amount")
+        net_profit=$(fsub "$win_amount" "$bet")
+        current_bet=$BASE_BET
+        loss_streak=0
         ((win_count++))
     else
         # LOSE: เสียเงินเดิมพัน, ทบเงินด้วย LOSEMUL
         balance=$(fsub "$balance" "$bet")
-        current_bet=$(fmul "$current_bet" "$LOSEMUL")
+        current_bet=$(fmul "$bet" "$LOSEMUL")
         ((loss_streak++))
         ((lose_count++))
 
         if (( loss_streak > max_loss_streak )); then
             max_loss_streak=$loss_streak
-        fi
-    fi
-
-    if [ "$STOP_ON_WIN" -eq 1 ]; then
-        if [ "$result" == "win" ]; then
-            stop_reason="STOP_ON_WIN: win"
-            return 0
         fi
     fi
 }
@@ -157,66 +154,97 @@ print_round() {
     local roll="$1"
     local result="$2"
     local bet="$3"
-    local icon="WIN"
-    [[ "$result" == "lose" ]] && icon="LOS"
+    local icon  r_fmt roll_fmt amt_fmt bal_fmt stk_fmt
 
-    printf "Round %3d | Roll: %4d | %s | Bet: %10.2f | Balance: %12.2f | Streak: %d\n" \
-        "$round" "$roll" "$icon" "$bet" "$balance" "$loss_streak"
+    # 1. Format ความกว้างตัวเลขก่อนระบายสี
+    printf -v r_fmt    "%3d"   "$round"
+    printf -v roll_fmt "%4d"   "$roll"
+    printf -v bal_fmt  "%13.8f" "$balance"
+    printf -v stk_fmt  "%2d"   "$loss_streak"
+
+    if [[ "$result" == "win" ]]; then
+       
+        printf -v amt_fmt "%13.8f" "$win_amount"
+        
+        # 2. นำสตริงที่ได้ขนาดแน่นอนแล้วไปใส่สี
+        icon="$(+c "WIN ")"
+        local roll_c="$(+c "$roll_fmt")"
+        local amt_c="$(+c "+$amt_fmt")"
+        local net_profit_c="$(+c "+$net_profit")"
+        
+        # 3. Print ออกมาด้วย %s สบายๆ ไม่เบี้ยวแน่นอน
+        printf -v _data "[%s] | R: %s | %s | won:%s | Bal: %s | $(+c "Profit:") %s\n" \
+            "$r_fmt" "$roll_c" "$icon" "$amt_c" "$bal_fmt" "$net_profit_c"
+            
+        printf "%s" "$_data"
+    else
+        printf -v amt_fmt "%10.8f" "$bet"
+        icon="$(-c "LOSS")"
+        local roll_c="$roll_fmt"
+        local amt_c="$amt_fmt"
+        
+        printf "[%s] | R: %s | %s | Bet: %s | Bal: %s | Stk: %s\n" \
+            "$r_fmt" "$roll_c" "$icon" "$amt_c" "$bal_fmt" "$stk_fmt"
+    fi
 }
 
 # ─────────────────────────────────────────
 # [8] MAIN LOOP
 # ─────────────────────────────────────────
-echo "=========================================================================="
-echo "  MARTINGALE DICE SIMULATOR"
-echo "=========================================================================="
-printf "  Start: %.2f | BaseBet: %.2f | WinChance: %.2f%% | Payout: %.4fx | LoseMul: %.4fx\n" \
+cn 136 b "=========================================================================="
+cn 255 b "  MARTINGALE DICE SIMULATOR"
+cn 136 b "=========================================================================="
+printf " Bal: %.8f | base: %.8f | WC: %.2f%% | Payout: %.4fx | Mul: %.4fx\n " \
     "$START_BALANCE" "$BASE_BET" "$WIN_CHANCE" "$payout" "$LOSEMUL"
-echo "=========================================================================="
+cn 136 b "=========================================================================="
 
 stop_reason=""
 
 while (( round < MAX_ROUNDS )); do
     ((round++))
 
+    if (( win_count >= STOP_ON_WIN )); then
+        break
+    fi
+
     # ตรวจสอบเงื่อนไขหยุดก่อนเดิมพัน
     if stop_reason=$(should_stop); then
         break
     fi
 
-    bet_this_round=$current_bet
+    nextbet=$current_bet
 
     # --- roll dice ---
-    read -r last_roll result <<< "$(roll_dice)"
-
+    roll_dice   # -- result stored in $result and $last_roll ---
+    #printf "roll: %4d | result: %s\n" "$last_roll" "$result"      
     # --- apply martingale ---
-    apply_martingale "$result" "$bet_this_round"
+    apply_martingale "$result" "$nextbet"
 
     # --- print round ---
-    print_round "$last_roll" "$result" "$bet_this_round"
+    print_round "$last_roll" "$result" "$nextbet"
 done
 
 # ─────────────────────────────────────────
 # [9] SESSION SUMMARY
 # ─────────────────────────────────────────
 echo
-echo "=========================================================================="
-echo "  SESSION SUMMARY"
-echo "=========================================================================="
-printf "  Rounds: %d  W: %d  L: %d  MaxStreak: %d\n" \
+cn 136 b "=========================================================================="
+cn 255 b "  SESSION SUMMARY"
+cn 136 b "=========================================================================="
+printf "  $(_wc 'Rounds'): %d  $(+c 'W'): %d  $(-c 'L'): %d  $(_wc 'MaxStreak'): %d\n" \
     "$round" "$win_count" "$lose_count" "$max_loss_streak"
 
 profit=$(fsub "$balance" "$START_BALANCE")
-printf "  Final Balance : %.8f\n" "$balance"
-printf "  Net PnL       : %.8f\n" "$profit"
+printf "  $(_wc 'Final Balance'): %.8f\n" "$balance"
+printf "  $(_wc 'Net PnL'): %.8f\n" "$profit"
 
 if fgt "$balance" "$START_BALANCE"; then
-    echo "  Result: PROFIT"
+    +c "  Result: PROFIT"
 elif fgt "$START_BALANCE" "$balance"; then
-    echo "  Result: LOSS"
+    -c "  Result: LOSS"
 else
-    echo "  Result: BREAK EVEN"
+    -c "  Result: BREAK EVEN"
 fi
 
-[[ -n "$stop_reason" ]] && echo "  Stop Reason: $stop_reason"
-echo "=========================================================================="
+[[ -n "$stop_reason" ]] && cn 216 b "  Stop Reason: $stop_reason"
+cn 136 b "=========================================================================="

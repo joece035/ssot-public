@@ -11,6 +11,13 @@ source $HOME/.bashrc
 set -u
 
 # ─────────────────────────────────────────
+# [0] HELPER COLOR
+# ─────────────────────────────────────────
+_gr(){ cn 235 d "$@"; }
++c(){ cn 82 b "$@"; }  #win color
+-c(){ cn 124 b "$@"; }  #lose color
+
+# ─────────────────────────────────────────
 # [1] CONFIGURATION
 # ─────────────────────────────────────────
 HE=1                    # house edge %
@@ -148,19 +155,28 @@ print_round() {
     local icon="$(cn lg b "WIN + $(fmul "$bet" "$(fsub "$payout" 1)" 8 d)")"
     [[ "$result" == "lose" ]] && icon="$(cn lr b "LOSS")"
 
+    local roll_ icon_ bet_ balance_ loss_streak_
+    
+    roll_="$(_gr $roll)"
+    icon_="$icon"
+    bet_="$(_gr $bet)"
+    balance_="$(_gr $balance)"
+    loss_streak_="$(_gr $loss_streak)"
+    round_="$(_gr $round)"
+
     printf "Round %3d | Roll: %4d | %s | Bet: %10.8f | Balance: %12.8f | Streak: %d\n" \
-        "$round" "$roll" "$icon" "$bet" "$balance" "$loss_streak"
+       "$round" "$roll" "$icon" "$bet" "$balance" "$loss_streak"
 }
 
 # ─────────────────────────────────────────
 # [8] MAIN LOOP
 # ─────────────────────────────────────────
-echo "=========================================================================="
-echo "  MARTINGALE DICE SIMULATOR"
-echo "=========================================================================="
-printf "  Start: %.2f | BaseBet: %.2f | WinChance: %.2f%% | Payout: %.4fx | LoseMul: %.4fx\n" \
+cn 136 b "=========================================================================="
+cn 136 b "  MARTINGALE DICE SIMULATOR"
+cn 136 b "=========================================================================="
+printf "  Start: %.8f | BaseBet: %.8f | WC: %.2f%% | Payout: %.4fx | LoseMul: %.4fx\n" \
     "$START_BALANCE" "$BASE_BET" "$WIN_CHANCE" "$payout" "$LOSEMUL"
-echo "=========================================================================="
+cn 136 b "=========================================================================="
 
 stop_reason=""
 
@@ -195,7 +211,7 @@ echo
 echo "=========================================================================="
 echo "  SESSION SUMMARY"
 echo "=========================================================================="
-printf "  Rounds: %d  W: %d  L: %d  MaxStreak: %d\n" \
+printf "  rounds: %d  W: %d  L: %d  MaxStreak: %d\n" \
     "$round" "$win_count" "$lose_count" "$max_loss_streak"
 
 profit=$(fsub "$balance" "$START_BALANCE")
