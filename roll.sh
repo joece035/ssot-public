@@ -24,10 +24,15 @@ _gr(){ cn 235 d "$@"; } #gray color
 HE=1                    # house edge %
 START_BALANCE=1000      # starting balance
 BASE_BET=2              # base bet amount
-WIN_CHANCE="9"       # win probability %
+WIN_CHANCE="4"       # win probability %
 MAX_ROUNDS=2000          # simulation rounds
 MAX_LOSS_STREAK="1000"      # safety stop: max consecutive losses
-STOP_ON_WIN=5             # stop on first win
+
+# -- stop condition config
+STOP_ON_WIN=5             # stop on any win
+STOP_PROFIT=100
+STOP_BALANCE=1100
+
 
 # Payout multiplier: (1 - HE/100) / (WIN_CHANCE/100)
 payout=$(mth "(1-($HE/100))/($WIN_CHANCE/100)" 4 d)
@@ -100,7 +105,7 @@ roll_dice() {
 # ─────────────────────────────────────────
 # [5] MARTINGALE LOGIC
 # ─────────────────────────────────────────
-apply_martingale() {
+dobet() {
     local result="$1"   # win | lose
     local bet="$2"      # bet amount this round
 
@@ -109,13 +114,17 @@ apply_martingale() {
         win_amount=$(fmul "$bet" "$payout")
         balance=$(fadd "$balance" "$win_amount")
         net_profit=$(fsub "$win_amount" "$bet")
-        current_bet=$BASE_BET
+				total_profit=$(fsub "$balance" "$START_BALANCE")
+        nexbet=$BASE_BET
         loss_streak=0
         ((win_count++))
+				((win_streak++))
     else
         # LOSE: เสียเงินเดิมพัน, ทบเงินด้วย LOSEMUL
         balance=$(fsub "$balance" "$bet")
-        current_bet=$(fmul "$bet" "$LOSEMUL")
+        nextbet=$(fmul "$bet" "$LOSEMUL")
+				total_profit=$(fsub "$balance" "$START_BALANCE")
+				win_streak=0
         ((loss_streak++))
         ((lose_count++))
 
@@ -154,6 +163,7 @@ print_round() {
     local roll="$1"
     local result="$2"
     local bet="$3"
+		local profit="$4"
     local icon  r_fmt roll_fmt amt_fmt bal_fmt stk_fmt
 
     # 1. Format ความกว้างตัวเลขก่อนระบายสี
@@ -212,16 +222,16 @@ while (( round < MAX_ROUNDS )); do
         break
     fi
 
-    nextbet=$current_bet
+  
 
     # --- roll dice ---
     roll_dice   # -- result stored in $result and $last_roll ---
     #printf "roll: %4d | result: %s\n" "$last_roll" "$result"      
     # --- apply martingale ---
-    apply_martingale "$result" "$nextbet"
+    dobet "$result" "$nextbet"
 
     # --- print round ---
-    print_round "$last_roll" "$result" "$nextbet"
+    print_round "$last_roll" "$result" "$nextbet" "$total_profit"
 done
 
 # ─────────────────────────────────────────

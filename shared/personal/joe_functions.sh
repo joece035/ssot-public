@@ -186,11 +186,11 @@ _b2p(){
         .ps1|.psm1) src="powershell";;
         *)
             local head1=""; head1=$(head -n 1 "$f" 2>/dev/null)
-            case "$head1" in
+          	  case "$head1" in
                 *python*) src="python";;
                 *pwsh*|*powershell*) src="powershell";;
                 *bash*|*zsh*|*/sh) src="bash";;
-            esac
+            	esac
             ;;
     esac
     if [[ -z "$src" ]]; then
@@ -225,4 +225,6 @@ _b2p(){
     else
         cn r bi "codetrans translation failed"
         return 1
-    
+    fi
+}		
+		
