@@ -267,9 +267,6 @@ hunting(){
         (( rare_number1100x++ ))
     elif (( last_roll == 9990 || last_roll == 9 )); then
         (( rare_number990x++ ))
-    elif (( last_roll > wrong_side )); then
-        (( wrong_side++ ))
-        
     fi
 }
 # ─────────────────────────────────────────
