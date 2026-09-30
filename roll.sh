@@ -24,15 +24,16 @@ _gr(){ cn 235 d "$@"; } #gray color
 HE=1                    # house edge %
 START_BALANCE=1000      # starting balance
 BASE_BET=1              # base bet amount
-WIN_CHANCE="0.1"        # win probability %
+WIN_CHANCE="0.99"        # win probability %
 MAX_ROUNDS=2000          # simulation rounds
 MAX_LOSS_STREAK="1000"   # safety stop: max consecutive losses
 BET_STRATEGY="high"      # "low" หรือ "high"
 bet_target="$BET_STRATEGY"
+WARGER_TARGET=1000
 
 # -- stop condition config
 STOP_ON_WIN=5             # stop on any win
-STOP_PROFIT=1000
+STOP_PROFIT=500
 STOP_BALANCE=
 
 
@@ -51,6 +52,8 @@ threshold_low=$(mth "$WIN_CHANCE*100" 0 d)
 threshold_high=$(mth "(100-$WIN_CHANCE)*100" 0 d)
 balance=$START_BALANCE
 nextbet=$BASE_BET
+wagered=0
+total_profit=0
 round=0
 win_count=0
 win_streak=0
@@ -147,6 +150,7 @@ dobet() {
 		((win_streak++))
     else
         # LOSE: เสียเงินเดิมพัน, ทบเงินด้วย LOSEMUL
+        
         balance=$(fsub "$balance" "$bet")
         nextbet=$(fmul "$bet" "$LOSEMUL")
 		total_profit=$(fsub "$balance" "$START_BALANCE")
@@ -165,7 +169,7 @@ dobet() {
 # ─────────────────────────────────────────
 stop_condition() {
 
-    local profit=$(fsub "$balance" "$START_BALANCE")
+    
     local nextbet=$nextbet
     # (a) balance หมด
     if ! fgt "$balance" 0; then
@@ -183,8 +187,13 @@ stop_condition() {
         return 0
     fi
 
-    if fgte "$profit" "$STOP_PROFIT"; then
+    if fgte "$total_profit" "$STOP_PROFIT"; then
         echo "PROFIT REACHED: $STOP_PROFIT"
+        return 0
+    fi
+
+    if fgte "$wagered" "$WARGER_TARGET"; then
+        echo "WARGER REACHED: $WARGER_TARGET"
         return 0
     fi
 
@@ -198,8 +207,8 @@ print_round() {
     local roll="$1"
     local result="$2"
     local bet="$3"
-	local profit="$4"
-    local icon  r_fmt roll_fmt amt_fmt bal_fmt stk_fmt
+	local total_profit="$4"
+    local icon r_fmt roll_fmt amt_fmt bal_fmt stk_fmt roll_c
 
     # 1. Format ความกว้างตัวเลขก่อนระบายสี
     printf -v r_fmt    "%3d"   "$round"
@@ -214,17 +223,13 @@ print_round() {
     fi
 
     if [[ "$result" == "win" ]]; then
-       
         printf -v amt_fmt "%13.8f" "$win_amount"
-        
-        # 2. นำสตริงที่ได้ขนาดแน่นอนแล้วไปใส่สี
         icon="$(+c "WIN ")"
-        local roll_c="$(+c "$roll_fmt")"
+        roll_c="$(+c "$roll_fmt")"
         local amt_c="$(+c "+$amt_fmt")"
-        local profit_c="$(+c "+$profit")"
+        local profit_c="$(+c "+$total_profit")"
 
-        
-        # 3. Print ออกมาด้วย %s สบายๆ ไม่เบี้ยวแน่นอน
+        # Print ออกมาด้วย %s สบายๆ ไม่เบี้ยวแน่นอน
         printf -v _data "[%s] | R: %s | %s | won:%s | $(+c "Profit:") %s\n" \
             "$r_fmt" "$roll_c" "$icon" "$amt_c" "$profit_c"
             
@@ -232,8 +237,16 @@ print_round() {
     else
         printf -v amt_fmt "%10.8f" "$bet"
         icon="$(-c "LOSS")"
-        local roll_c="$roll_fmt"
         local amt_c="$amt_fmt"
+
+        # ตรวจจับ wrong side เพื่อ highlight roll number (Cyan 45)
+        if [[ "$bet_target" == "low" ]] && (( roll >= threshold_high )); then
+            roll_c="$(cn 45 b "$roll_fmt")"
+        elif [[ "$bet_target" == "high" ]] && (( roll < threshold_low )); then
+            roll_c="$(cn 45 b "$roll_fmt")"
+        else
+            roll_c="$(cn 245 d "$roll_fmt")"
+        fi
         
         printf "[%s] | R: %s | %s | Bet: %s | Bal: %s | Stk: %s\n" \
             "$r_fmt" "$roll_c" "$icon" "$amt_c" "$bal_c" "$stk_fmt"
@@ -282,9 +295,8 @@ cn 136 b "======================================================================
 stop_reason=""
 
 while (( round < MAX_ROUNDS )); do
-    ((round++))
-
     if (( win_count >= STOP_ON_WIN )); then
+        stop_reason="WIN LIMIT: reached $STOP_ON_WIN wins"
         break
     fi
 
@@ -293,11 +305,11 @@ while (( round < MAX_ROUNDS )); do
         break
     fi
 
-  
+    ((round++))
+    wagered=$(fadd "$wagered" "$nextbet")
 
     # --- roll dice ---
     roll_dice   # -- result stored in $result and $last_roll ---
-    #printf "roll: %4d | result: %s\n" "$last_roll" "$result"      
     # --- apply martingale ---
     dobet "$result" "$nextbet"
     # --- hunting ---
@@ -309,31 +321,44 @@ done
 # ─────────────────────────────────────────
 # [9] SESSION SUMMARY
 # ─────────────────────────────────────────
-echo
+
+# -- dynamic color --
+if fgt "$total_profit" "0"; then
+    profit_c="$(+c "+$total_profit")"
+    bal_c="$(+c "$balance")"
+elif fgt "0" "$total_profit"; then
+    profit_c="$(-c "$total_profit")"
+    bal_c="$(-c "$balance")"
+else
+    profit_c="$(_gr "$total_profit")"
+    bal_c="$(_gr "$balance")"
+fi
+wagered_c="$(cn 245 b "$wagered")"
+
+echo ""
 cn 136 b "=========================================================================="
 cn 255 b "  SESSION SUMMARY"
 cn 136 b "=========================================================================="
 printf "  $(_wc 'Rounds'): %d  $(+c 'W'): %d  $(-c 'L'): %d  $(_wc 'MaxStreak'): %d\n" \
     "$round" "$win_count" "$lose_count" "$max_loss_streak"
 
-profit=$(fsub "$balance" "$START_BALANCE")
-printf "  $(_wc 'Final Balance'): %.8f\n" "$balance"
-printf "  $(_wc 'Net PnL'): %.8f\n" "$profit"
+printf "  $(_wc 'Final Balance'): %s\n" "$bal_c"
+printf "  $(_wc 'Net PnL'): %s\n" "$profit_c"
+printf "  $(_wc 'Wagered'): %s\n" "$wagered_c"
 
 if fgt "$balance" "$START_BALANCE"; then
     +c "  Result: PROFIT"
 elif fgt "$START_BALANCE" "$balance"; then
     -c "  Result: LOSS"
 else
-    -c "  Result: BREAK EVEN"
+    _gr "  Result: BREAK EVEN"
 fi
 
 
-[[ -n "$stop_reason" ]] && cn 216 b "  Stop Reason: $stop_reason"
+[[ -n "$stop_reason" ]] && cn 45 b "  Stop Reason: $stop_reason"
 cn 136 b "=========================================================================="
 printf "  $(+c "Rare Number")\n" 
 cn 136 b "=========================================================================="
-echo " "
 printf "  $(_wc "9900x"): %d\n" "$rare_number9900x"
 printf "  $(_wc "4950x"): %d\n" "$rare_number4950x"
 printf "  $(_wc "3300x"): %d\n" "$rare_number3300x"
