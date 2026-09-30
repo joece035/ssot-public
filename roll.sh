@@ -16,7 +16,7 @@ set -u
 _wc() { cn 255 b "$@"; } #white color
 _gr(){ cn 235 d "$@"; } #gray color
 +c(){ cn 82 b "$@"; }  #win color
--c(){ cn 88 d "$@"; }  #lose color
+-c(){ cn 124 d "$@"; }  #lose color
 
 # ─────────────────────────────────────────
 # [1] CONFIGURATION
@@ -24,9 +24,11 @@ _gr(){ cn 235 d "$@"; } #gray color
 HE=1                    # house edge %
 START_BALANCE=1000      # starting balance
 BASE_BET=1              # base bet amount
-WIN_CHANCE="0.1"       # win probability %
+WIN_CHANCE="0.1"        # win probability %
 MAX_ROUNDS=2000          # simulation rounds
-MAX_LOSS_STREAK="1000"      # safety stop: max consecutive losses
+MAX_LOSS_STREAK="1000"   # safety stop: max consecutive losses
+BET_STRATEGY="high"      # "low" หรือ "high"
+bet_target="$BET_STRATEGY"
 
 # -- stop condition config
 STOP_ON_WIN=5             # stop on any win
@@ -45,8 +47,8 @@ LOSEMUL=$(mth "1 + (1 / ($payout - 1))+(0.05/$payout)" 4 d)
 # ─────────────────────────────────────────
 # [2] GLOBAL STATE
 # ─────────────────────────────────────────
-threshold=$(mth "$WIN_CHANCE*100" 0 d)
-wrong_side=$(mth "10000-$threshold" 0 d)
+threshold_low=$(mth "$WIN_CHANCE*100" 0 d)
+threshold_high=$(mth "(100-$WIN_CHANCE)*100" 0 d)
 balance=$START_BALANCE
 nextbet=$BASE_BET
 round=0
@@ -104,15 +106,24 @@ fgte() {
 roll_dice() {
     local roll
     roll=$(( RANDOM % 10000 ))
+    last_roll="$roll"
 
-    if (( roll < threshold )); then
-        last_roll="$roll"
-        result="win"
-        #echo "$roll win"
-    else
-        last_roll="$roll"
-        result="lose"
-        #echo "$roll lose"
+    if [[ "$bet_target" == "low" ]]; then
+        if (( roll < threshold_low )); then
+            result="win"
+        else
+            result="lose"
+            # ตรวจจับว่าถ้าแทง Low แต่ดันไปออกแต้มฝั่ง High (Wrong side)
+            (( roll >= threshold_high )) && (( wrong_side++ ))
+        fi
+    else # bet_target == "high"
+        if (( roll >= threshold_high )); then
+            result="win"
+        else
+            result="lose"
+            # ตรวจจับว่าถ้าแทง High แต่ดันไปออกแต้มฝั่ง Low (Wrong side)
+            (( roll < threshold_low )) && (( wrong_side++ ))
+        fi
     fi
 }
 
@@ -120,6 +131,7 @@ roll_dice() {
 # [5] MARTINGALE LOGIC
 # ─────────────────────────────────────────
 dobet() {
+
     local result="$1"   # win | lose
     local bet="$2"      # bet amount this round
 
@@ -235,25 +247,25 @@ hunting(){
     # 1. นับ rare number
     local last_roll="$1"
 
-    if (( last_roll == 0 || last_roll == 9999 )); then
+    if (( last_roll == 9999 || last_roll == 0 )); then
         (( rare_number9900x++ ))
-    elif (( last_roll >= 9998 || last_roll <= 1 )); then
+    elif (( last_roll == 9998 || last_roll == 1 )); then
         (( rare_number4950x++ ))
-    elif (( last_roll >= 9997 || last_roll <= 2 )); then
+    elif (( last_roll == 9997 || last_roll == 2 )); then
         (( rare_number3300x++ ))
-    elif (( last_roll >= 9996 || last_roll <= 3 )); then
+    elif (( last_roll == 9996 || last_roll == 3 )); then
         (( rare_number2475x++ ))
-    elif (( last_roll >= 9995 || last_roll <= 4 )); then
+    elif (( last_roll == 9995 || last_roll == 4 )); then
         (( rare_number1980x++ ))
-    elif (( last_roll >= 9994 || last_roll <= 5 )); then
+    elif (( last_roll == 9994 || last_roll == 5 )); then
         (( rare_number1650x++ ))
-    elif (( last_roll >= 9993 || last_roll <= 6 )); then
+    elif (( last_roll == 9993 || last_roll == 6 )); then
         (( rare_number1414x++ ))
-    elif (( last_roll >= 9992 || last_roll <= 7 )); then
-        (( rare_number1237++ ))
-    elif (( last_roll >= 9991 || last_roll <= 8 )); then
+    elif (( last_roll == 9992 || last_roll == 7 )); then
+        (( rare_number1237x++ ))
+    elif (( last_roll == 9991 || last_roll == 8 )); then
         (( rare_number1100x++ ))
-    elif (( last_roll >= 9990 || last_roll <= 9 )); then
+    elif (( last_roll == 9990 || last_roll == 9 )); then
         (( rare_number990x++ ))
     elif (( last_roll > wrong_side )); then
         (( wrong_side++ ))
@@ -324,7 +336,7 @@ fi
 cn 136 b "=========================================================================="
 printf "  $(+c "Rare Number")\n" 
 cn 136 b "=========================================================================="
-
+echo " "
 printf "  $(_wc "9900x"): %d\n" "$rare_number9900x"
 printf "  $(_wc "4950x"): %d\n" "$rare_number4950x"
 printf "  $(_wc "3300x"): %d\n" "$rare_number3300x"
@@ -335,4 +347,6 @@ printf "  $(_wc "1414x"): %d\n" "$rare_number1414x"
 printf "  $(_wc "1237x"): %d\n" "$rare_number1237x"
 printf "  $(_wc "1100x"): %d\n" "$rare_number1100x"
 printf "  $(_wc "990x"): %d\n" "$rare_number990x"
-printf "  $(+c "test_num"): %d\n" "$test_num"
+printf "  $(+c "wrong_side"): %d\n" "$wrong_side"
+echo " "
+cn 136 b "=========================================================================="
