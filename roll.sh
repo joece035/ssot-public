@@ -16,7 +16,7 @@ set -u
 _wc() { cn 255 b "$@"; } #white color
 _gr(){ cn 235 d "$@"; } #gray color
 +c(){ cn 82 b "$@"; }  #win color
--c(){ cn 124 d "$@"; }  #lose color
+-c(){ cn 124 b "$@"; }  #lose color
 
 # ─────────────────────────────────────────
 # [1] CONFIGURATION
@@ -208,7 +208,7 @@ print_round() {
     printf -v stk_fmt  "%2d"   "$loss_streak"
     
     if fgt "$START_BALANCE" "$balance" ; then
-        local bal_c=$(cn 88 d "$bal_fmt")
+        local bal_c=$(cn 124 b "$bal_fmt")
     else
         local bal_c=$(cn 28 b "$bal_fmt")    
     fi
