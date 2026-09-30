@@ -23,8 +23,8 @@ _gr(){ cn 235 d "$@"; } #gray color
 # ─────────────────────────────────────────
 HE=1                    # house edge %
 START_BALANCE=1000      # starting balance
-BASE_BET=2              # base bet amount
-WIN_CHANCE="0.5"       # win probability %
+BASE_BET=1              # base bet amount
+WIN_CHANCE="0.1"       # win probability %
 MAX_ROUNDS=2000          # simulation rounds
 MAX_LOSS_STREAK="1000"      # safety stop: max consecutive losses
 
@@ -46,6 +46,7 @@ LOSEMUL=$(mth "1 + (1 / ($payout - 1))+(0.05/$payout)" 4 d)
 # [2] GLOBAL STATE
 # ─────────────────────────────────────────
 threshold=$(mth "$WIN_CHANCE*100" 0 d)
+wrong_side=$(mth "10000-$threshold" 0 d)
 balance=$START_BALANCE
 nextbet=$BASE_BET
 round=0
@@ -55,6 +56,18 @@ lose_count=0
 loss_streak=0
 max_loss_streak=0
 last_roll=0
+
+rare_number9900x=0
+rare_number4950x=0
+rare_number3300x=0
+rare_number2475x=0
+rare_number1980x=0
+rare_number1650x=0
+rare_number1414x=0
+rare_number1237x=0
+rare_number1100x=0
+rare_number990x=0
+wrong_side=0
 
 # ─────────────────────────────────────────
 # [3] MATH HELPERS
@@ -216,6 +229,38 @@ print_round() {
 }
 
 # ─────────────────────────────────────────
+# [7.1] RARE NUMBER HUNT
+# ─────────────────────────────────────────
+hunting(){
+    # 1. นับ rare number
+    local last_roll="$1"
+
+    if (( last_roll == 0 || last_roll == 9999 )); then
+        (( rare_number9900x++ ))
+    elif (( last_roll >= 9998 || last_roll <= 1 )); then
+        (( rare_number4950x++ ))
+    elif (( last_roll >= 9997 || last_roll <= 2 )); then
+        (( rare_number3300x++ ))
+    elif (( last_roll >= 9996 || last_roll <= 3 )); then
+        (( rare_number2475x++ ))
+    elif (( last_roll >= 9995 || last_roll <= 4 )); then
+        (( rare_number1980x++ ))
+    elif (( last_roll >= 9994 || last_roll <= 5 )); then
+        (( rare_number1650x++ ))
+    elif (( last_roll >= 9993 || last_roll <= 6 )); then
+        (( rare_number1414x++ ))
+    elif (( last_roll >= 9992 || last_roll <= 7 )); then
+        (( rare_number1237++ ))
+    elif (( last_roll >= 9991 || last_roll <= 8 )); then
+        (( rare_number1100x++ ))
+    elif (( last_roll >= 9990 || last_roll <= 9 )); then
+        (( rare_number990x++ ))
+    elif (( last_roll > wrong_side )); then
+        (( wrong_side++ ))
+        
+    fi
+}
+# ─────────────────────────────────────────
 # [8] MAIN LOOP
 # ─────────────────────────────────────────
 cn 136 b "=========================================================================="
@@ -246,7 +291,8 @@ while (( round < MAX_ROUNDS )); do
     #printf "roll: %4d | result: %s\n" "$last_roll" "$result"      
     # --- apply martingale ---
     dobet "$result" "$nextbet"
-
+    # --- hunting ---
+    hunting "$last_roll"
     # --- print round ---
     print_round "$last_roll" "$result" "$nextbet" "$total_profit"
 done
@@ -273,5 +319,20 @@ else
     -c "  Result: BREAK EVEN"
 fi
 
+
 [[ -n "$stop_reason" ]] && cn 216 b "  Stop Reason: $stop_reason"
 cn 136 b "=========================================================================="
+printf "  $(+c "Rare Number")\n" 
+cn 136 b "=========================================================================="
+
+printf "  $(_wc "9900x"): %d\n" "$rare_number9900x"
+printf "  $(_wc "4950x"): %d\n" "$rare_number4950x"
+printf "  $(_wc "3300x"): %d\n" "$rare_number3300x"
+printf "  $(_wc "2475x"): %d\n" "$rare_number2475x"
+printf "  $(_wc "1980x"): %d\n" "$rare_number1980x"
+printf "  $(_wc "1650x"): %d\n" "$rare_number1650x"
+printf "  $(_wc "1414x"): %d\n" "$rare_number1414x"
+printf "  $(_wc "1237x"): %d\n" "$rare_number1237x"
+printf "  $(_wc "1100x"): %d\n" "$rare_number1100x"
+printf "  $(_wc "990x"): %d\n" "$rare_number990x"
+printf "  $(+c "test_num"): %d\n" "$test_num"
