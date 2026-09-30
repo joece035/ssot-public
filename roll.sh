@@ -22,18 +22,18 @@ _gr(){ cn 235 d "$@"; } #gray color
 # [1] CONFIGURATION
 # ─────────────────────────────────────────
 HE=1                    # house edge %
-START_BALANCE=1000      # starting balance
-BASE_BET=1              # base bet amount
-WIN_CHANCE="0.99"        # win probability %
-MAX_ROUNDS=2000          # simulation rounds
-MAX_LOSS_STREAK="1000"   # safety stop: max consecutive losses
+BASE_BET=${1:-1}              # base bet amount
+WIN_CHANCE=${2:-0.99}        # win probability %
+START_BALANCE=${3:-1000}      # starting balance
+MAX_ROUNDS=${7:-2000}          # simulation rounds
+MAX_LOSS_STREAK=${5:-1000}   # safety stop: max consecutive losses
 BET_STRATEGY="high"      # "low" หรือ "high"
 bet_target="$BET_STRATEGY"
-WARGER_TARGET=1000
+WARGER_TARGET=${6:-1000}
 
 # -- stop condition config
 STOP_ON_WIN=5             # stop on any win
-STOP_PROFIT=500
+STOP_PROFIT=${4:-500}
 STOP_BALANCE=
 
 
