@@ -144,3 +144,7 @@ alias py="python3"
 # --codetrans
 export b2p_path="$SSOT/bash_to_python/codetrans.py"
 alias 2py='python3 $b2p_path'
+
+# -- dice simulator
+
+alias dice="bash $SSOT/roll.sh"

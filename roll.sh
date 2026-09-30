@@ -19,21 +19,55 @@ _gr(){ cn 235 d "$@"; } #gray color
 -c(){ cn 124 b "$@"; }  #lose color
 
 # ─────────────────────────────────────────
-# [1] CONFIGURATION
+# [1] CONFIGURATION  (flag-based args)
 # ─────────────────────────────────────────
 HE=1                    # house edge %
-BASE_BET=${1:-1}              # base bet amount
-WIN_CHANCE=${2:-0.99}        # win probability %
-START_BALANCE=${3:-1000}      # starting balance
-MAX_ROUNDS=${7:-2000}          # simulation rounds
-MAX_LOSS_STREAK=${5:-1000}   # safety stop: max consecutive losses
-BET_STRATEGY="high"      # "low" หรือ "high"
-bet_target="$BET_STRATEGY"
-WARGER_TARGET=${6:-1000}
 
-# -- stop condition config
-STOP_ON_WIN=5             # stop on any win
-STOP_PROFIT=${4:-500}
+# --- defaults ---
+BASE_BET=1
+WIN_CHANCE=0.99
+START_BALANCE=1000
+MAX_ROUNDS=2000
+MAX_LOSS_STREAK=1000
+WARGER_TARGET=1000
+STOP_ON_WIN=5
+STOP_PROFIT=500
+STOP_BALANCE=
+BET_STRATEGY="high"     # "low" or "high"
+
+# --- flag parser ---
+_usage() {
+    echo "Usage: $0 [OPTIONS]"
+    echo "  -b  | --basebet        Base bet amount          (default: 1)"
+    echo "  -c  | --chance         Win chance %             (default: 0.99)"
+    echo "  -sb | --startbalance   Starting balance         (default: 1000)"
+    echo "  -r  | --rounds         Max rounds               (default: 2000)"
+    echo "  -ml | --maxloss        Max loss streak          (default: 1000)"
+    echo "  -sw | --stop-win       Stop profit target       (default: 500)"
+    echo "  -sl | --stop-lose      Stop loss (wager limit)  (default: 1000)"
+    echo "  -ow | --on-win         Stop after N wins        (default: 5)"
+    echo "  -s  | --strategy       Bet strategy low|high    (default: high)"
+    echo "  -h  | --help           Show this help"
+    exit 0
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -b|--basebet)        BASE_BET="$2";        shift 2 ;;
+        -c|--chance)         WIN_CHANCE="$2";      shift 2 ;;
+        -sb|--startbalance)  START_BALANCE="$2";   shift 2 ;;
+        -r|--rounds)         MAX_ROUNDS="$2";      shift 2 ;;
+        -ml|--maxloss)       MAX_LOSS_STREAK="$2"; shift 2 ;;
+        -sw|--stop-win)      STOP_PROFIT="$2";     shift 2 ;;
+        -sl|--stop-lose)     WARGER_TARGET="$2";   shift 2 ;;
+        -ow|--on-win)        STOP_ON_WIN="$2";     shift 2 ;;
+        -s|--strategy)       BET_STRATEGY="$2";    shift 2 ;;
+        -h|--help)           _usage ;;
+        *) echo "Unknown flag: $1" >&2; _usage ;;
+    esac
+done
+
+bet_target="$BET_STRATEGY"
 STOP_BALANCE=
 
 
