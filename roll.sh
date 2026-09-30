@@ -16,7 +16,7 @@ set -u
 _wc() { cn 255 b "$@"; } #white color
 _gr(){ cn 235 d "$@"; } #gray color
 +c(){ cn 82 b "$@"; }  #win color
--c(){ cn lr b "$@"; }  #lose color
+-c(){ cn 88 d "$@"; }  #lose color
 
 # ─────────────────────────────────────────
 # [1] CONFIGURATION
@@ -24,14 +24,14 @@ _gr(){ cn 235 d "$@"; } #gray color
 HE=1                    # house edge %
 START_BALANCE=1000      # starting balance
 BASE_BET=2              # base bet amount
-WIN_CHANCE="4"       # win probability %
+WIN_CHANCE="0.5"       # win probability %
 MAX_ROUNDS=2000          # simulation rounds
 MAX_LOSS_STREAK="1000"      # safety stop: max consecutive losses
 
 # -- stop condition config
 STOP_ON_WIN=5             # stop on any win
-STOP_PROFIT=100
-STOP_BALANCE=1100
+STOP_PROFIT=1000
+STOP_BALANCE=
 
 
 # Payout multiplier: (1 - HE/100) / (WIN_CHANCE/100)
@@ -47,9 +47,10 @@ LOSEMUL=$(mth "1 + (1 / ($payout - 1))+(0.05/$payout)" 4 d)
 # ─────────────────────────────────────────
 threshold=$(mth "$WIN_CHANCE*100" 0 d)
 balance=$START_BALANCE
-current_bet=$BASE_BET
+nextbet=$BASE_BET
 round=0
 win_count=0
+win_streak=0
 lose_count=0
 loss_streak=0
 max_loss_streak=0
@@ -114,17 +115,17 @@ dobet() {
         win_amount=$(fmul "$bet" "$payout")
         balance=$(fadd "$balance" "$win_amount")
         net_profit=$(fsub "$win_amount" "$bet")
-				total_profit=$(fsub "$balance" "$START_BALANCE")
-        nexbet=$BASE_BET
+		total_profit=$(fsub "$balance" "$START_BALANCE")
+        nextbet=$BASE_BET
         loss_streak=0
         ((win_count++))
-				((win_streak++))
+		((win_streak++))
     else
         # LOSE: เสียเงินเดิมพัน, ทบเงินด้วย LOSEMUL
         balance=$(fsub "$balance" "$bet")
         nextbet=$(fmul "$bet" "$LOSEMUL")
-				total_profit=$(fsub "$balance" "$START_BALANCE")
-				win_streak=0
+		total_profit=$(fsub "$balance" "$START_BALANCE")
+		win_streak=0
         ((loss_streak++))
         ((lose_count++))
 
@@ -137,7 +138,10 @@ dobet() {
 # ─────────────────────────────────────────
 # [6] STOP CONDITIONS
 # ─────────────────────────────────────────
-should_stop() {
+stop_condition() {
+
+    local profit=$(fsub "$balance" "$START_BALANCE")
+    local nextbet=$nextbet
     # (a) balance หมด
     if ! fgt "$balance" 0; then
         echo "BUST: balance depleted"
@@ -149,10 +153,16 @@ should_stop() {
         return 0
     fi
     # (c) next bet > balance (ไม่มีเงินพอเดิมพันตาต่อไป)
-    if fgt "$current_bet" "$balance"; then
-        echo "BET_GT_BAL: bet=$current_bet balance=$balance"
+    if fgt "$nextbet" "$balance"; then
+        echo "BET_GT_BAL: bet=$nextbet balance=$balance"
         return 0
     fi
+
+    if fgte "$profit" "$STOP_PROFIT"; then
+        echo "PROFIT REACHED: $STOP_PROFIT"
+        return 0
+    fi
+
     return 1
 }
 
@@ -163,7 +173,7 @@ print_round() {
     local roll="$1"
     local result="$2"
     local bet="$3"
-		local profit="$4"
+	local profit="$4"
     local icon  r_fmt roll_fmt amt_fmt bal_fmt stk_fmt
 
     # 1. Format ความกว้างตัวเลขก่อนระบายสี
@@ -171,6 +181,12 @@ print_round() {
     printf -v roll_fmt "%4d"   "$roll"
     printf -v bal_fmt  "%13.8f" "$balance"
     printf -v stk_fmt  "%2d"   "$loss_streak"
+    
+    if fgt "$START_BALANCE" "$balance" ; then
+        local bal_c=$(cn 88 d "$bal_fmt")
+    else
+        local bal_c=$(cn 28 b "$bal_fmt")    
+    fi
 
     if [[ "$result" == "win" ]]; then
        
@@ -180,11 +196,12 @@ print_round() {
         icon="$(+c "WIN ")"
         local roll_c="$(+c "$roll_fmt")"
         local amt_c="$(+c "+$amt_fmt")"
-        local net_profit_c="$(+c "+$net_profit")"
+        local profit_c="$(+c "+$profit")"
+
         
         # 3. Print ออกมาด้วย %s สบายๆ ไม่เบี้ยวแน่นอน
-        printf -v _data "[%s] | R: %s | %s | won:%s | Bal: %s | $(+c "Profit:") %s\n" \
-            "$r_fmt" "$roll_c" "$icon" "$amt_c" "$bal_fmt" "$net_profit_c"
+        printf -v _data "[%s] | R: %s | %s | won:%s | $(+c "Profit:") %s\n" \
+            "$r_fmt" "$roll_c" "$icon" "$amt_c" "$profit_c"
             
         printf "%s" "$_data"
     else
@@ -194,7 +211,7 @@ print_round() {
         local amt_c="$amt_fmt"
         
         printf "[%s] | R: %s | %s | Bet: %s | Bal: %s | Stk: %s\n" \
-            "$r_fmt" "$roll_c" "$icon" "$amt_c" "$bal_fmt" "$stk_fmt"
+            "$r_fmt" "$roll_c" "$icon" "$amt_c" "$bal_c" "$stk_fmt"
     fi
 }
 
@@ -218,7 +235,7 @@ while (( round < MAX_ROUNDS )); do
     fi
 
     # ตรวจสอบเงื่อนไขหยุดก่อนเดิมพัน
-    if stop_reason=$(should_stop); then
+    if stop_reason=$(stop_condition); then
         break
     fi
 
