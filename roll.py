@@ -59,50 +59,50 @@ def parse_arguments():
         "-c",
         "--chance",
         type=float,
-        default=0.99,
+        default=0.5,
         help="Win chance % (default: 0.99)",
     )
     parser.add_argument(
         "-sb",
         "--startbalance",
         type=float,
-        default=1000.0,
-        help="Starting balance (default: 1000)",
+        default=10000.0,
+        help="Starting balance (default: 10000)",
     )
     parser.add_argument(
         "-r",
         "--rounds",
         type=int,
-        default=2000,
-        help="Max rounds (default: 2000)",
+        default=100000,
+        help="Max rounds (default: 1000)",
     )
     parser.add_argument(
         "-ml",
         "--maxloss",
         type=int,
-        default=1000,
-        help="Max loss streak (default: 1000)",
+        default=10000,
+        help="Max loss streak (default: 10000)",
     )
     parser.add_argument(
         "-sw",
         "--stop-win",
         type=float,
-        default=500.0,
-        help="Stop profit target (default: 500)",
+        default=1000.0,
+        help="Stop profit target (default: 1000)",
     )
     parser.add_argument(
         "-sl",
         "--stop-lose",
         type=float,
-        default=1000.0,
-        help="Stop loss / Wager limit (default: 1000)",
+        default=5000.0,
+        help="Stop loss / Wager limit (default: 5000)",
     )
     parser.add_argument(
         "-ow",
         "--on-win",
         type=int,
-        default=5,
-        help="Stop after N wins (default: 5)",
+        default=50,
+        help="Stop after N wins (default: 50)",
     )
     parser.add_argument(
         "-s",

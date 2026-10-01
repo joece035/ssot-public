@@ -148,3 +148,4 @@ alias 2py='python3 $b2p_path'
 # -- dice simulator
 
 alias dice="bash $SSOT/roll.sh"
+alias dicepy="python3 $SSOT/roll.py"
