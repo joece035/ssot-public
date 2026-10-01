@@ -41,7 +41,7 @@ LOSS_TRIGGER=5          # % balance drop to switch to recovery
 PROFIT_TRIGGER=1        # % profit above start balance to switch back to wager
 WAGER_BET="2.5"         # 2.5% of start balance
 WAGER_WIN_CHANCE=98
-WAGER_TARGET=100
+WAGER_TARGET=500000
 WAGER_STOP_ON_WIN=50
 WAGER_BET_STRATEGY="high"
 
@@ -105,12 +105,14 @@ TRIGGER_BALANCE_PROFIT=$(mth "$START_BALANCE+($PROFIT_TRIGGER/100)*$START_BALANC
 
 # Payout & Thresholds for PROFIT MODE
 payout=$(mth "(1-($HE/100))/($WIN_CHANCE/100)" 4 d)
+profit_win_mul=$(mth "$payout - 1" 4 d)
 LOSEMUL=$(mth "1 + (1 / ($payout - 1)) + (0.05 / $payout)" 4 d)
 profit_threshold_low=$(mth "$WIN_CHANCE*100" 0 d)
 profit_threshold_high=$(mth "(100-$WIN_CHANCE)*100" 0 d)
 
 # Payout & Thresholds for WAGER MODE
 wager_payout=$(mth "(1-($HE/100))/($WAGER_WIN_CHANCE/100)" 4 d)
+wager_win_mul=$(mth "$wager_payout - 1" 4 d)
 wager_threshold_low=$(mth "$WAGER_WIN_CHANCE*100" 0 d)
 wager_threshold_high=$(mth "(100-$WAGER_WIN_CHANCE)*100" 0 d)
 
@@ -222,15 +224,16 @@ profit_mode() {
     local bet="$2"      # bet amount this round
 
     if [[ "$result" == "win" ]]; then
-        win_amount=$(fmul "$bet" "$payout")
+        # WIN: Net profit = bet * (payout - 1)
+        win_amount=$(fmul "$bet" "$profit_win_mul")
         balance=$(fadd "$balance" "$win_amount")
-        net_profit=$(fsub "$win_amount" "$bet")
         total_profit=$(fsub "$balance" "$START_BALANCE")
         nextbet=$BASE_BET
         loss_streak=0
         ((win_count++))
         ((win_streak++))
     else
+        # LOSE: Balance decreases by bet amount
         balance=$(fsub "$balance" "$bet")
         nextbet=$(fmul "$bet" "$LOSEMUL")
         total_profit=$(fsub "$balance" "$START_BALANCE")
@@ -249,15 +252,16 @@ wagering_mode() {
     local bet="$2"      # bet amount this round
 
     if [[ "$result" == "win" ]]; then
-        win_amount=$(fmul "$bet" "$wager_payout")
+        # WIN: Net profit = bet * (payout - 1)
+        win_amount=$(fmul "$bet" "$wager_win_mul")
         balance=$(fadd "$balance" "$win_amount")
-        net_profit=$(fsub "$win_amount" "$bet")
         total_profit=$(fsub "$balance" "$START_BALANCE")
         nextbet=$WAGER_BASE_BET
         loss_streak=0
         ((win_count++))
         ((win_streak++))
     else
+        # LOSE: Balance decreases by bet amount
         balance=$(fsub "$balance" "$bet")
         nextbet=$WAGER_BASE_BET
         total_profit=$(fsub "$balance" "$START_BALANCE")
@@ -409,10 +413,11 @@ print_round() {
         local w_c=$(cn 141 b "$w_fmt")
 
         if [[ "$result" == "win" ]]; then
-            printf "[%s] | %s | R:%s | %s | Wager: %s | Bal: %s\n" \
-                "$r_fmt" "$mode_badge" "$roll_c" "$icon" "$w_c" "$bal_c"
+            printf -v win_str "+%10.8f" "$win_amount"
+            printf "[%s] | %s | R:%s | %s | Wager:%s | Won:%s | Bal:%s\n" \
+                "$r_fmt" "$mode_badge" "$roll_c" "$icon" "$w_c" "$(+c "$win_str")" "$bal_c"
         else
-            printf "[%s] | %s | R:%s | %s | Wager: %s | Bal: %s | Stk:%s\n" \
+            printf "[%s] | %s | R:%s | %s | Wager:%s | Bal:%s | Stk:%s\n" \
                 "$r_fmt" "$mode_badge" "$roll_c" "$icon" "$w_c" "$bal_c" "$stk_fmt"
         fi
     else
