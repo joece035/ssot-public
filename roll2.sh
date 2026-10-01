@@ -19,46 +19,46 @@ _gr(){ cn 235 d "$@"; } #gray color
 -c(){ cn 124 b "$@"; }  #lose color
 
 # ─────────────────────────────────────────
-# [1] CONFIGURATION  (flag-based args)
+# [1] CONFIGURATION  (SSOT dice.env + Flag args)
 # ─────────────────────────────────────────
-HE=1                    # house edge %
-GAME_MODE=3             # 1=profit, 2=wager, 3=hybrid (wager + recovering profit)
-START_BALANCE=10000
-STOP_PROFIT_TARGET=20   # 20% from start balance
-STOP_LOSS_TARGET=10     # 10% from start balance
-
-# --- profit mode defaults ---
-BASE_BET=1
-WIN_CHANCE=0.99
-MAX_ROUNDS=2000
-MAX_LOSS_STREAK=1000
-STOP_ON_WIN=500
-STOP_BALANCE=
-BET_STRATEGY="high"     # "low" or "high"
-
-# --- wager mode defaults ---
-LOSS_TRIGGER=2          # % balance drop to switch to recovery (e.g. 2% drop)
-PROFIT_TRIGGER=1        # % profit target to exit recovery (e.g. recovered + 1%)
-WAGER_BET="2.5"         # 2.5% of start balance
-WAGER_WIN_CHANCE=98
-WAGER_TARGET=500000
-WAGER_STOP_ON_WIN=500
-WAGER_BET_STRATEGY="high"
+CONFIG_FILE="${SSOT:-$HOME/ssot}/dice.env"
+if [[ -f "$CONFIG_FILE" ]]; then
+    source "$CONFIG_FILE"
+else
+    # Fallback defaults if dice.env missing
+    HE=1.0
+    GAME_MODE=3
+    START_BALANCE=10000
+    STOP_PROFIT_TARGET=20.0
+    STOP_LOSS_TARGET=10.0
+    BASE_BET=2.0
+    WIN_CHANCE=3.96
+    MAX_ROUNDS=20000
+    MAX_LOSS_STREAK=10000
+    STOP_ON_WIN=5000
+    BET_STRATEGY="high"
+    LOSS_TRIGGER=2.0
+    PROFIT_TRIGGER=1.0
+    WAGER_BET="2.5"
+    WAGER_WIN_CHANCE=98.0
+    WAGER_TARGET=200000.0
+    WAGER_STOP_ON_WIN=5000
+fi
 
 # --- flag parser ---
 _usage() {
     echo "Usage: $0 [OPTIONS]"
-    echo "  -m  | --mode           Game mode: 1(profit), 2(wager), 3(hybrid) (default: 3)"
-    echo "  -b  | --basebet        Base bet amount          (default: 1)"
-    echo "  -c  | --chance         Win chance % (Profit)    (default: 0.99)"
-    echo "  -wc | --wager-chance   Win chance % (Wager)     (default: 98)"
-    echo "  -sb | --startbalance   Starting balance         (default: 10000)"
-    echo "  -r  | --rounds         Max rounds               (default: 2000)"
-    echo "  -ml | --maxloss        Max loss streak          (default: 1000)"
+    echo "  -m  | --mode           Game mode: 1(profit), 2(wager), 3(hybrid) (default: $GAME_MODE)"
+    echo "  -b  | --basebet        Base bet amount          (default: $BASE_BET)"
+    echo "  -c  | --chance         Win chance % (Profit)    (default: $WIN_CHANCE)"
+    echo "  -wc | --wager-chance   Win chance % (Wager)     (default: $WAGER_WIN_CHANCE)"
+    echo "  -sb | --startbalance   Starting balance         (default: $START_BALANCE)"
+    echo "  -r  | --rounds         Max rounds               (default: $MAX_ROUNDS)"
+    echo "  -ml | --maxloss        Max loss streak          (default: $MAX_LOSS_STREAK)"
     echo "  -sw | --stop-win       Stop profit target       (default: auto calculated)"
-    echo "  -sl | --stop-wagered   Wager limit target       (default: 500000)"
-    echo "  -ow | --on-win         Stop after N wins        (default: 500)"
-    echo "  -s  | --strategy       Bet strategy low|high    (default: high)"
+    echo "  -sl | --stop-wagered   Wager limit target       (default: $WAGER_TARGET)"
+    echo "  -ow | --on-win         Stop after N wins        (default: $STOP_ON_WIN)"
+    echo "  -s  | --strategy       Bet strategy low|high    (default: $BET_STRATEGY)"
     echo "  -h  | --help           Show this help"
     exit 0
 }

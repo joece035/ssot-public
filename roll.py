@@ -6,10 +6,13 @@ Supports:
   - Mode 1: Profit Mode (Martingale recovery with low win chance)
   - Mode 2: Wager Mode (High win chance, flat bet to build wager volume)
   - Mode 3: Hybrid Mode (Wager mode that switches to Profit recovery when dropped)
+  - Central Config: Reads defaults from ~/ssot/dice.env
 ============================================================
 """
 
 import argparse
+import os
+from pathlib import Path
 import random
 import time
 
@@ -34,39 +37,110 @@ def neg_c(text: str) -> str:
     return cn(124, str(text), True)
 
 # ─────────────────────────────────────────
+# [0.1] LOAD SSOT CENTRAL CONFIG (dice.env)
+# ─────────────────────────────────────────
+def load_env_config() -> dict[str, str]:
+    """Load configuration from ~/ssot/dice.env if available."""
+    config: dict[str, str] = {}
+    ssot_dir = os.environ.get("SSOT", os.path.expanduser("~/ssot"))
+    env_path = Path(ssot_dir) / "dice.env"
+
+    if env_path.is_file():
+        with open(env_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    key, val = line.split("=", 1)
+                    val = val.split("#", 1)[0].strip().strip("\"'")
+                    config[key.strip()] = val
+    return config
+
+# ─────────────────────────────────────────
 # [1] ARGUMENT PARSER
 # ─────────────────────────────────────────
-def parse_arguments():
+def parse_arguments(env_cfg: dict[str, str]):
+    def cfg_get(key: str, default, cast_type=str):
+        if key in env_cfg:
+            try:
+                return cast_type(env_cfg[key])
+            except (ValueError, TypeError):
+                pass
+        return default
+
     parser = argparse.ArgumentParser(
         description="Multi-Mode Dice Simulator (Martingale / Wager / Hybrid)",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
-        "-m", "--mode", type=int, choices=[1, 2, 3], default=1,
+        "-m", "--mode", type=int, choices=[1, 2, 3],
+        default=cfg_get("GAME_MODE", 3, int),
         help="Game mode: 1(profit), 2(wager), 3(hybrid)"
     )
-    parser.add_argument("-b", "--basebet", type=float, default=2, help="Base bet amount")
-    parser.add_argument("-c", "--chance", type=float, default=3.96, help="Win chance %% (Profit Mode)")
-    parser.add_argument("-wc", "--wager-chance", type=float, default=98.0, help="Win chance %% (Wager Mode)")
-    parser.add_argument("-sb", "--startbalance", type=float, default=10000.0, help="Starting balance")
-    parser.add_argument("-r", "--rounds", type=int, default=20000, help="Max rounds")
-    parser.add_argument("-ml", "--maxloss", type=int, default=10000, help="Max loss streak limit")
-    parser.add_argument("-sw", "--stop-win", type=float, default=None, help="Stop profit target (amount)")
-    parser.add_argument("-sl", "--stop-wagered", type=float, default=200000.0, help="Wager target limit")
-    parser.add_argument("-ow", "--on-win", type=int, default=5000, help="Stop after N wins")
-    parser.add_argument("-s", "--strategy", type=str, choices=["low", "high"], default="high", help="Bet strategy low|high")
-    parser.add_argument("-d", "--delay", type=float, default=0.0, help="Delay (seconds) between rounds (e.g. 0.05)")
+    parser.add_argument(
+        "-b", "--basebet", type=float,
+        default=cfg_get("BASE_BET", 2.0, float),
+        help="Base bet amount"
+    )
+    parser.add_argument(
+        "-c", "--chance", type=float,
+        default=cfg_get("WIN_CHANCE", 3.96, float),
+        help="Win chance % (Profit Mode)"
+    )
+    parser.add_argument(
+        "-wc", "--wager-chance", type=float,
+        default=cfg_get("WAGER_WIN_CHANCE", 98.0, float),
+        help="Win chance % (Wager Mode)"
+    )
+    parser.add_argument(
+        "-sb", "--startbalance", type=float,
+        default=cfg_get("START_BALANCE", 10000.0, float),
+        help="Starting balance"
+    )
+    parser.add_argument(
+        "-r", "--rounds", type=int,
+        default=cfg_get("MAX_ROUNDS", 20000, int),
+        help="Max rounds"
+    )
+    parser.add_argument(
+        "-ml", "--maxloss", type=int,
+        default=cfg_get("MAX_LOSS_STREAK", 10000, int),
+        help="Max loss streak limit"
+    )
+    parser.add_argument(
+        "-sw", "--stop-win", type=float, default=None,
+        help="Stop profit target (amount)"
+    )
+    parser.add_argument(
+        "-sl", "--stop-wagered", type=float,
+        default=cfg_get("WAGER_TARGET", 200000.0, float),
+        help="Wager target limit"
+    )
+    parser.add_argument(
+        "-ow", "--on-win", type=int,
+        default=cfg_get("STOP_ON_WIN", 5000, int),
+        help="Stop after N wins"
+    )
+    parser.add_argument(
+        "-s", "--strategy", type=str, choices=["low", "high"],
+        default=cfg_get("BET_STRATEGY", "high", str),
+        help="Bet strategy low|high"
+    )
+    parser.add_argument(
+        "-d", "--delay", type=float, default=0.0,
+        help="Delay (seconds) between rounds (e.g. 0.05)"
+    )
     return parser.parse_args()
 
 # ─────────────────────────────────────────
 # [2] MAIN SIMULATION LOGIC
 # ─────────────────────────────────────────
 def run_simulation():
-    args = parse_arguments()
+    env_cfg = load_env_config()
+    args = parse_arguments(env_cfg)
     round_delay = args.delay
     game_mode = args.mode
 
-    house_edge = 1.0
+    house_edge = float(env_cfg.get("HE", 1.0))
     start_balance = args.startbalance
     base_bet = args.basebet
     profit_win_chance = args.chance
@@ -77,16 +151,17 @@ def run_simulation():
     stop_on_win = args.on_win
     bet_target = args.strategy
 
-    # Default thresholds & targets
-    loss_trigger_pct = 2.0      # 2% drop -> recovery
-    profit_trigger_pct = 1.0    # 1% above start balance -> resume wager
-    wager_bet_pct = 2.5         # 2.5% of start balance
+    # Thresholds & triggers from env or defaults
+    loss_trigger_pct = float(env_cfg.get("LOSS_TRIGGER", 2.0))
+    profit_trigger_pct = float(env_cfg.get("PROFIT_TRIGGER", 1.0))
+    wager_bet_pct = float(env_cfg.get("WAGER_BET", 2.5))
+    stop_profit_target_pct = float(env_cfg.get("STOP_PROFIT_TARGET", 20.0))
 
     trigger_balance = (1.0 - (loss_trigger_pct / 100.0)) * start_balance
     trigger_balance_profit = start_balance + ((profit_trigger_pct / 100.0) * start_balance)
 
     wager_base_bet = (wager_bet_pct / 100.0) * start_balance
-    stop_profit = args.stop_win if args.stop_win is not None else 0.20 * start_balance
+    stop_profit = args.stop_win if args.stop_win is not None else (stop_profit_target_pct / 100.0) * start_balance
 
     # Profit Mode Math
     profit_payout = (1.0 - (house_edge / 100.0)) / (profit_win_chance / 100.0)
