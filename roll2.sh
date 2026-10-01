@@ -32,17 +32,17 @@ BASE_BET=1
 WIN_CHANCE=0.99
 MAX_ROUNDS=2000
 MAX_LOSS_STREAK=1000
-STOP_ON_WIN=50
+STOP_ON_WIN=500
 STOP_BALANCE=
 BET_STRATEGY="high"     # "low" or "high"
 
 # --- wager mode defaults ---
-LOSS_TRIGGER=5          # % balance drop to switch to recovery
-PROFIT_TRIGGER=1        # % profit above start balance to switch back to wager
+LOSS_TRIGGER=2          # % balance drop to switch to recovery (e.g. 2% drop)
+PROFIT_TRIGGER=1        # % profit target to exit recovery (e.g. recovered + 1%)
 WAGER_BET="2.5"         # 2.5% of start balance
 WAGER_WIN_CHANCE=98
 WAGER_TARGET=500000
-WAGER_STOP_ON_WIN=50
+WAGER_STOP_ON_WIN=500
 WAGER_BET_STRATEGY="high"
 
 # --- flag parser ---
@@ -56,8 +56,8 @@ _usage() {
     echo "  -r  | --rounds         Max rounds               (default: 2000)"
     echo "  -ml | --maxloss        Max loss streak          (default: 1000)"
     echo "  -sw | --stop-win       Stop profit target       (default: auto calculated)"
-    echo "  -sl | --stop-wagered   Wager limit target       (default: 100)"
-    echo "  -ow | --on-win         Stop after N wins        (default: 50)"
+    echo "  -sl | --stop-wagered   Wager limit target       (default: 500000)"
+    echo "  -ow | --on-win         Stop after N wins        (default: 500)"
     echo "  -s  | --strategy       Bet strategy low|high    (default: high)"
     echo "  -h  | --help           Show this help"
     exit 0
@@ -220,11 +220,10 @@ roll_dice() {
 # [5] MODES LOGIC
 # ─────────────────────────────────────────
 profit_mode() {
-    local result="$1"   # win | lose
-    local bet="$2"      # bet amount this round
+    local result="$1"
+    local bet="$2"
 
     if [[ "$result" == "win" ]]; then
-        # WIN: Net profit = bet * (payout - 1)
         win_amount=$(fmul "$bet" "$profit_win_mul")
         balance=$(fadd "$balance" "$win_amount")
         total_profit=$(fsub "$balance" "$START_BALANCE")
@@ -233,7 +232,6 @@ profit_mode() {
         ((win_count++))
         ((win_streak++))
     else
-        # LOSE: Balance decreases by bet amount
         balance=$(fsub "$balance" "$bet")
         nextbet=$(fmul "$bet" "$LOSEMUL")
         total_profit=$(fsub "$balance" "$START_BALANCE")
@@ -248,11 +246,10 @@ profit_mode() {
 }
 
 wagering_mode() {
-    local result="$1"   # win | lose
-    local bet="$2"      # bet amount this round
+    local result="$1"
+    local bet="$2"
 
     if [[ "$result" == "win" ]]; then
-        # WIN: Net profit = bet * (payout - 1)
         win_amount=$(fmul "$bet" "$wager_win_mul")
         balance=$(fadd "$balance" "$win_amount")
         total_profit=$(fsub "$balance" "$START_BALANCE")
@@ -261,7 +258,6 @@ wagering_mode() {
         ((win_count++))
         ((win_streak++))
     else
-        # LOSE: Balance decreases by bet amount
         balance=$(fsub "$balance" "$bet")
         nextbet=$WAGER_BASE_BET
         total_profit=$(fsub "$balance" "$START_BALANCE")
@@ -275,43 +271,48 @@ wagering_mode() {
     fi
 }
 
+# Settle current bet and evaluate mode switch for next round
 dobet() {
     local res="$1"
     local bet="$2"
+    local current_m="$3"
 
-    if [[ "$GAME_MODE" == "1" ]]; then
-        MODE="PROFIT"
-        profit_mode "$res" "$bet"
-
-    elif [[ "$GAME_MODE" == "2" ]]; then
-        MODE="WAGER"
+    # Step 1: Settle current round based on the mode it was played in
+    if [[ "$current_m" == "WAGER" ]]; then
         wagering_mode "$res" "$bet"
+    else
+        profit_mode "$res" "$bet"
+    fi
 
-    elif [[ "$GAME_MODE" == "3" ]]; then
-        # Check condition to switch state
-        if fgte "$TRIGGER_BALANCE" "$balance"; then
-            # Balance drop to/below trigger -> RECOVERY (PROFIT MODE)
-            if [[ "$MODE" != "PROFIT" ]]; then
+    # Step 2: Check for mode transition in Hybrid mode (Mode 3)
+    if [[ "$GAME_MODE" == "3" ]]; then
+        if [[ "$MODE" == "WAGER" ]]; then
+            # Currently in WAGER: Switch to RECOVERY if balance drops to/below trigger
+            if fgte "$TRIGGER_BALANCE" "$balance"; then
+                echo ""
+                cn 196 b "  >>> [MODE SWITCH] ⚠️  Balance dropped below trigger ($TRIGGER_BALANCE) -> RECOVERY (PROFIT MODE) <<<"
                 MODE="PROFIT"
                 nextbet=$BASE_BET
+                loss_streak=0
             fi
-            profit_mode "$res" "$bet"
+        elif [[ "$MODE" == "PROFIT" ]]; then
+            # Currently in RECOVERY (PROFIT): Exit recovery if:
+            # 1. Just WON and capital is fully restored (balance >= START_BALANCE)
+            # OR
+            # 2. Balance reached TRIGGER_BALANCE_PROFIT target
+            local recovered=false
+            if [[ "$res" == "win" ]] && fgte "$balance" "$START_BALANCE"; then
+                recovered=true
+            elif fgte "$balance" "$TRIGGER_BALANCE_PROFIT"; then
+                recovered=true
+            fi
 
-        elif fgte "$balance" "$TRIGGER_BALANCE_PROFIT"; then
-            # Recovered with target profit -> BACK TO WAGER
-            if [[ "$MODE" != "WAGER" ]]; then
+            if [[ "$recovered" == true ]]; then
+                echo ""
+                cn 46 b "  >>> [MODE SWITCH] 🎯 Capital recovered! (Bal: $balance >= Start: $START_BALANCE) -> RESUME WAGER MODE <<<"
                 MODE="WAGER"
                 nextbet=$WAGER_BASE_BET
-            fi
-            wagering_mode "$res" "$bet"
-
-        else
-            # In-between zone -> keep current mode running
-            if [[ "$MODE" == "PROFIT" ]]; then
-                profit_mode "$res" "$bet"
-            else
-                MODE="WAGER"
-                wagering_mode "$res" "$bet"
+                loss_streak=0
             fi
         fi
     fi
@@ -480,8 +481,8 @@ printf " Mode: %s | Bal: %.8f | Base: %.8f | WagerBet: %.8f\n" \
     "$MODE" "$START_BALANCE" "$BASE_BET" "$WAGER_BASE_BET"
 printf " ProfitWC: %.2f%% (%.4fx) | WagerWC: %.2f%% (%.4fx)\n" \
     "$WIN_CHANCE" "$payout" "$WAGER_WIN_CHANCE" "$wager_payout"
-printf " StopProfit: +%.8f | WagerTarget: %.2f | LossTrigger: -%s%%\n" \
-    "$STOP_PROFIT" "$WAGER_TARGET" "$LOSS_TRIGGER"
+printf " StopProfit: +%.8f | WagerTarget: %.2f | LossTrigger: -%s%% (<=%.2f)\n" \
+    "$STOP_PROFIT" "$WAGER_TARGET" "$LOSS_TRIGGER" "$TRIGGER_BALANCE"
 cn 136 b "=========================================================================="
 
 stop_reason=""
@@ -508,13 +509,13 @@ while (( round < MAX_ROUNDS )); do
     # --- roll dice (mode aware) ---
     roll_dice "$round_mode"
 
-    # --- dobet logic ---
-    dobet "$result" "$current_bet"
+    # --- settle math & check mode transitions ---
+    dobet "$result" "$current_bet" "$round_mode"
 
     # --- hunting ---
     hunting "$last_roll"
 
-    # --- print round ---
+    # Print log of round played
     print_round "$last_roll" "$result" "$current_bet" "$total_profit" "$round_mode"
 done
 

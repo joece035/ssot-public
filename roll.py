@@ -1,126 +1,62 @@
 #!/usr/bin/env python3
 """
+DICE SIMULATOR - MULTI MODE ENGINE (Python Port)
 ============================================================
-MARTINGALE DICE SIMULATOR — Python Implementation
-============================================================
-Strategy:
-  - lose -> bet x dynamic recovering multiplier (LOSEMUL)
-  - win  -> reset to BASE_BET
+Supports:
+  - Mode 1: Profit Mode (Martingale recovery with low win chance)
+  - Mode 2: Wager Mode (High win chance, flat bet to build wager volume)
+  - Mode 3: Hybrid Mode (Wager mode that switches to Profit recovery when dropped)
 ============================================================
 """
 
 import argparse
 import random
-import sys
 import time
 
-
 # ─────────────────────────────────────────
-# [0] HELPER COLOR (ANSI Color Codes)
+# [0] HELPER COLOR
 # ─────────────────────────────────────────
-def cn(code: int, text: str, bold: bool = True) -> str:
-    """Format string with ANSI 256-color codes."""
-    style = "1;" if bold else "0;"
+def cn(code: int, text: str, bold: bool = False) -> str:
+    """Helper formatting text with ANSI 256 color code."""
+    style = "1;" if bold else ""
     return f"\033[{style}38;5;{code}m{text}\033[0m"
 
+def _wc(text: str) -> str:
+    return cn(255, str(text), True)
 
-def _wc(text: str) -> str:  # white color
-    return cn(255, text, True)
+def _gr(text: str) -> str:
+    return cn(235, str(text), False)
 
+def pos_c(text: str) -> str:
+    return cn(82, str(text), True)
 
-def _gr(text: str) -> str:  # gray color
-    return cn(235, text, False)
-
-
-def pos_c(text: str) -> str:  # win/positive color (+c)
-    return cn(82, text, True)
-
-
-def neg_c(text: str) -> str:  # lose/negative color (-c)
-    return cn(124, text, True)
-
+def neg_c(text: str) -> str:
+    return cn(124, str(text), True)
 
 # ─────────────────────────────────────────
-# [1] CONFIGURATION & ARGUMENT PARSER
+# [1] ARGUMENT PARSER
 # ─────────────────────────────────────────
 def parse_arguments():
     parser = argparse.ArgumentParser(
-        description="Martingale Dice Simulator",
-        formatter_class=argparse.RawTextHelpFormatter,
+        description="Multi-Mode Dice Simulator (Martingale / Wager / Hybrid)",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
-        "-b",
-        "--basebet",
-        type=float,
-        default=1.0,
-        help="Base bet amount (default: 1)",
+        "-m", "--mode", type=int, choices=[1, 2, 3], default=3,
+        help="Game mode: 1(profit), 2(wager), 3(hybrid)"
     )
-    parser.add_argument(
-        "-c",
-        "--chance",
-        type=float,
-        default=0.5,
-        help="Win chance % (default: 0.99)",
-    )
-    parser.add_argument(
-        "-sb",
-        "--startbalance",
-        type=float,
-        default=10000.0,
-        help="Starting balance (default: 10000)",
-    )
-    parser.add_argument(
-        "-r",
-        "--rounds",
-        type=int,
-        default=100000,
-        help="Max rounds (default: 1000)",
-    )
-    parser.add_argument(
-        "-ml",
-        "--maxloss",
-        type=int,
-        default=10000,
-        help="Max loss streak (default: 10000)",
-    )
-    parser.add_argument(
-        "-sw",
-        "--stop-win",
-        type=float,
-        default=1000.0,
-        help="Stop profit target (default: 1000)",
-    )
-    parser.add_argument(
-        "-sl",
-        "--stop-lose",
-        type=float,
-        default=5000.0,
-        help="Stop loss / Wager limit (default: 5000)",
-    )
-    parser.add_argument(
-        "-ow",
-        "--on-win",
-        type=int,
-        default=50,
-        help="Stop after N wins (default: 50)",
-    )
-    parser.add_argument(
-        "-s",
-        "--strategy",
-        type=str,
-        choices=["low", "high"],
-        default="high",
-        help="Bet strategy low|high (default: high)",
-    )
-    parser.add_argument(
-        "-d",
-        "--delay",
-        type=float,
-        default=0.0,
-        help="Delay (seconds) between rounds, e.g. 0.05 (default: 0 = max speed)",
-    )
+    parser.add_argument("-b", "--basebet", type=float, default=1.0, help="Base bet amount")
+    parser.add_argument("-c", "--chance", type=float, default=0.99, help="Win chance % (Profit Mode)")
+    parser.add_argument("-wc", "--wager-chance", type=float, default=98.0, help="Win chance % (Wager Mode)")
+    parser.add_argument("-sb", "--startbalance", type=float, default=10000.0, help="Starting balance")
+    parser.add_argument("-r", "--rounds", type=int, default=2000, help="Max rounds")
+    parser.add_argument("-ml", "--maxloss", type=int, default=1000, help="Max loss streak limit")
+    parser.add_argument("-sw", "--stop-win", type=float, default=None, help="Stop profit target (amount)")
+    parser.add_argument("-sl", "--stop-wagered", type=float, default=500000.0, help="Wager target limit")
+    parser.add_argument("-ow", "--on-win", type=int, default=500, help="Stop after N wins")
+    parser.add_argument("-s", "--strategy", type=str, choices=["low", "high"], default="high", help="Bet strategy low|high")
+    parser.add_argument("-d", "--delay", type=float, default=0.0, help="Delay (seconds) between rounds (e.g. 0.05)")
     return parser.parse_args()
-
 
 # ─────────────────────────────────────────
 # [2] MAIN SIMULATION LOGIC
@@ -128,29 +64,45 @@ def parse_arguments():
 def run_simulation():
     args = parse_arguments()
     round_delay = args.delay
+    game_mode = args.mode
 
-    # Constants
-    house_edge = 1.0  # House edge %
-    base_bet = args.basebet
-    win_chance = args.chance
+    house_edge = 1.0
     start_balance = args.startbalance
+    base_bet = args.basebet
+    profit_win_chance = args.chance
+    wager_win_chance = args.wager_chance
     max_rounds = args.rounds
     max_loss_streak_limit = args.maxloss
-    stop_profit = args.stop_win
-    wager_target = args.stop_lose
+    wager_target = args.stop_wagered
     stop_on_win = args.on_win
     bet_target = args.strategy
 
-    # Math calculations
-    payout = (1 - (house_edge / 100)) / (win_chance / 100)
-    lose_mul = 1 + (1 / (payout - 1)) + (0.05 / payout)
+    # Default thresholds & targets
+    loss_trigger_pct = 2.0      # 2% drop -> recovery
+    profit_trigger_pct = 1.0    # 1% above start balance -> resume wager
+    wager_bet_pct = 2.5         # 2.5% of start balance
 
-    threshold_low = int(win_chance * 100)
-    threshold_high = int((100 - win_chance) * 100)
+    trigger_balance = (1.0 - (loss_trigger_pct / 100.0)) * start_balance
+    trigger_balance_profit = start_balance + ((profit_trigger_pct / 100.0) * start_balance)
 
-    # Global State Initialization
+    wager_base_bet = (wager_bet_pct / 100.0) * start_balance
+    stop_profit = args.stop_win if args.stop_win is not None else 0.20 * start_balance
+
+    # Profit Mode Math
+    profit_payout = (1.0 - (house_edge / 100.0)) / (profit_win_chance / 100.0)
+    profit_win_mul = profit_payout - 1.0
+    lose_mul = 1.0 + (1.0 / (profit_payout - 1.0)) + (0.05 / profit_payout)
+    profit_t_low = int(profit_win_chance * 100)
+    profit_t_high = int((100 - profit_win_chance) * 100)
+
+    # Wager Mode Math
+    wager_payout = (1.0 - (house_edge / 100.0)) / (wager_win_chance / 100.0)
+    wager_win_mul = wager_payout - 1.0
+    wager_t_low = int(wager_win_chance * 100)
+    wager_t_high = int((100 - wager_win_chance) * 100)
+
+    # State variables
     balance = start_balance
-    nextbet = base_bet
     wagered = 0.0
     total_profit = 0.0
     round_num = 0
@@ -161,59 +113,55 @@ def run_simulation():
     max_loss_streak = 0
     wrong_side = 0
 
+    if game_mode == 2:
+        current_mode = "WAGER"
+        nextbet = wager_base_bet
+    elif game_mode == 3:
+        current_mode = "WAGER"
+        nextbet = wager_base_bet
+    else:
+        current_mode = "PROFIT"
+        nextbet = base_bet
+
     rare_counts = {
-        "9900x": 0,  # 9999 or 0
-        "4950x": 0,  # 9998 or 1
-        "3300x": 0,  # 9997 or 2
-        "2475x": 0,  # 9996 or 3
-        "1980x": 0,  # 9995 or 4
-        "1650x": 0,  # 9994 or 5
-        "1414x": 0,  # 9993 or 6
-        "1237x": 0,  # 9992 or 7
-        "1100x": 0,  # 9991 or 8
-        "990x": 0,  # 9990 or 9
+        "9900x": 0, "4950x": 0, "3300x": 0, "2475x": 0, "1980x": 0,
+        "1650x": 0, "1414x": 0, "1237x": 0, "1100x": 0, "990x": 0
     }
 
     def check_rare_number(roll: int):
-        nonlocal wrong_side
-        if roll in (9999, 0):
-            rare_counts["9900x"] += 1
-        elif roll in (9998, 1):
-            rare_counts["4950x"] += 1
-        elif roll in (9997, 2):
-            rare_counts["3300x"] += 1
-        elif roll in (9996, 3):
-            rare_counts["2475x"] += 1
-        elif roll in (9995, 4):
-            rare_counts["1980x"] += 1
-        elif roll in (9994, 5):
-            rare_counts["1650x"] += 1
-        elif roll in (9993, 6):
-            rare_counts["1414x"] += 1
-        elif roll in (9992, 7):
-            rare_counts["1237x"] += 1
-        elif roll in (9991, 8):
-            rare_counts["1100x"] += 1
-        elif roll in (9990, 9):
-            rare_counts["990x"] += 1
+        if roll in (9999, 0): rare_counts["9900x"] += 1
+        elif roll in (9998, 1): rare_counts["4950x"] += 1
+        elif roll in (9997, 2): rare_counts["3300x"] += 1
+        elif roll in (9996, 3): rare_counts["2475x"] += 1
+        elif roll in (9995, 4): rare_counts["1980x"] += 1
+        elif roll in (9994, 5): rare_counts["1650x"] += 1
+        elif roll in (9993, 6): rare_counts["1414x"] += 1
+        elif roll in (9992, 7): rare_counts["1237x"] += 1
+        elif roll in (9991, 8): rare_counts["1100x"] += 1
+        elif roll in (9990, 9): rare_counts["990x"] += 1
 
-    def roll_dice():
+    def roll_dice(mode: str):
         nonlocal wrong_side
         roll = random.randint(0, 9999)
 
+        if mode == "WAGER":
+            t_low, t_high = wager_t_low, wager_t_high
+        else:
+            t_low, t_high = profit_t_low, profit_t_high
+
         if bet_target == "low":
-            if roll < threshold_low:
+            if roll < t_low:
                 result = "win"
             else:
                 result = "lose"
-                if roll >= threshold_high:
+                if roll >= t_high:
                     wrong_side += 1
         else:  # bet_target == "high"
-            if roll >= threshold_high:
+            if roll >= t_high:
                 result = "win"
             else:
                 result = "lose"
-                if roll < threshold_low:
+                if roll < t_low:
                     wrong_side += 1
 
         return roll, result
@@ -226,67 +174,62 @@ def run_simulation():
         if current_nextbet > balance:
             return f"BET_GT_BAL: bet={current_nextbet:.8f} balance={balance:.8f}"
         if total_profit >= stop_profit:
-            return f"PROFIT REACHED: {stop_profit}"
+            return f"PROFIT REACHED: {stop_profit:.8f}"
         if wagered >= wager_target:
-            return f"WARGER REACHED: {wager_target}"
+            return f"WAGER REACHED: {wager_target:.2f}"
         return ""
 
-    def print_round(
-        r_num: int, roll: int, result: str, bet: float, win_amt: float
-    ):
+    def print_round(r_num: int, roll: int, result: str, bet: float, mode_played: str, win_amt: float):
         r_fmt = f"{r_num:3d}"
         roll_fmt = f"{roll:4d}"
         bal_fmt = f"{balance:13.8f}"
         stk_fmt = f"{loss_streak:2d}"
 
-        bal_c = (
-            cn(124, bal_fmt, True)
-            if start_balance > balance
-            else cn(28, bal_fmt, True)
-        )
+        bal_c = neg_c(bal_fmt) if start_balance > balance else cn(28, bal_fmt, True)
 
-        if result == "win":
-            amt_fmt = f"{win_amt:13.8f}"
-            icon = pos_c("WIN ")
-            roll_c = pos_c(roll_fmt)
-            amt_c = pos_c(f"+{amt_fmt}")
-            profit_c = pos_c(f"+{total_profit:.8f}")
+        active_high = wager_t_high if mode_played == "WAGER" else profit_t_high
+        active_low = wager_t_low if mode_played == "WAGER" else profit_t_low
 
-            print(
-                f"[{r_fmt}] | R: {roll_c} | {icon} | won:{amt_c} | {pos_c('Profit:')} {profit_c}"
-            )
+        if (bet_target == "low" and roll >= active_high) or (bet_target == "high" and roll < active_low):
+            roll_c = cn(45, roll_fmt, True)
         else:
-            amt_fmt = f"{bet:10.8f}"
-            icon = neg_c("LOSS")
+            roll_c = cn(245, roll_fmt, False)
 
-            if (bet_target == "low" and roll >= threshold_high) or (
-                bet_target == "high" and roll < threshold_low
-            ):
-                roll_c = cn(45, roll_fmt, True)
+        mode_badge = cn(208, "PROFIT", True) if mode_played == "PROFIT" else cn(75, "WAGER ", True)
+        icon = pos_c("WIN ") if result == "win" else neg_c("LOSS")
+
+        if mode_played == "WAGER":
+            pct = (wagered / wager_target) * 100.0 if wager_target > 0 else 0.0
+            w_fmt = f"{wagered:8.2f}/{wager_target:<8.2f} ({pct:5.1f}%)"
+            w_c = cn(141, w_fmt, True)
+
+            if result == "win":
+                win_str = pos_c(f"+{win_amt:10.8f}")
+                print(f"[{r_fmt}] | {mode_badge} | R:{roll_c} | {icon} | Wager:{w_c} | Won:{win_str} | Bal:{bal_c}")
             else:
-                roll_c = cn(245, roll_fmt, False)
+                print(f"[{r_fmt}] | {mode_badge} | R:{roll_c} | {icon} | Wager:{w_c} | Bal:{bal_c} | Stk:{stk_fmt}")
+        else:
+            if result == "win":
+                amt_c = pos_c(f"+{win_amt:12.8f}")
+                pnl_c = pos_c(f"+{total_profit:12.8f}")
+                print(f"[{r_fmt}] | {mode_badge} | R:{roll_c} | {icon} | Won:{amt_c} | PnL:{pnl_c} | Bal:{bal_c}")
+            else:
+                amt_c = f"{bet:12.8f}"
+                pnl_c = neg_c(f"{total_profit:12.8f}") if total_profit < 0 else _gr(f"{total_profit:12.8f}")
+                print(f"[{r_fmt}] | {mode_badge} | R:{roll_c} | {icon} | Bet:{amt_c} | PnL:{pnl_c} | Bal:{bal_c} | Stk:{stk_fmt}")
 
-            print(
-                f"[{r_fmt}] | R: {roll_c} | {icon} | Bet: {amt_fmt} | Bal: {bal_c} | Stk: {stk_fmt}"
-            )
-
-    # ─────────────────────────────────────────
-    # HEADER PRINTING
-    # ─────────────────────────────────────────
+    # Header
     print(cn(136, "=" * 74))
-    print(cn(255, "  MARTINGALE DICE SIMULATOR"))
+    print(cn(255, "  DICE SIMULATOR - MULTI MODE ENGINE (Python)"))
     print(cn(136, "=" * 74))
-    print(
-        f" Bal: {start_balance:.8f} | base: {base_bet:.8f} | WC: {win_chance:.2f}% | "
-        f"Payout: {payout:.4f}x | Mul: {lose_mul:.4f}x"
-    )
+    print(f" Mode: {current_mode} | Bal: {start_balance:.8f} | Base: {base_bet:.8f} | WagerBet: {wager_base_bet:.8f}")
+    print(f" ProfitWC: {profit_win_chance:.2f}% ({profit_payout:.4f}x) | WagerWC: {wager_win_chance:.2f}% ({wager_payout:.4f}x)")
+    print(f" StopProfit: +{stop_profit:.8f} | WagerTarget: {wager_target:.2f} | LossTrigger: -{loss_trigger_pct:.1f}% (<={trigger_balance:.2f})")
     print(cn(136, "=" * 74))
 
     stop_reason = ""
 
-    # ─────────────────────────────────────────
-    # MAIN LOOP
-    # ─────────────────────────────────────────
+    # Main Loop
     while round_num < max_rounds:
         if win_count >= stop_on_win:
             stop_reason = f"WIN LIMIT: reached {stop_on_win} wins"
@@ -297,38 +240,82 @@ def run_simulation():
             break
 
         round_num += 1
-        wagered += nextbet
+        current_bet = nextbet
+        round_mode = current_mode
 
-        last_roll, result = roll_dice()
+        wagered += current_bet
 
-        # Martingale Logic
+        last_roll, result = roll_dice(round_mode)
+
+        # Settle Math
         win_amount = 0.0
-        if result == "win":
-            win_amount = nextbet * payout
-            balance += win_amount
-            total_profit = balance - start_balance
-            nextbet = base_bet
-            loss_streak = 0
-            win_count += 1
-            win_streak += 1
-        else:
-            balance -= nextbet
-            nextbet = nextbet * lose_mul
-            total_profit = balance - start_balance
-            win_streak = 0
-            loss_streak += 1
-            lose_count += 1
-            if loss_streak > max_loss_streak:
-                max_loss_streak = loss_streak
+        if round_mode == "WAGER":
+            if result == "win":
+                win_amount = current_bet * wager_win_mul
+                balance += win_amount
+                total_profit = balance - start_balance
+                nextbet = wager_base_bet
+                loss_streak = 0
+                win_count += 1
+                win_streak += 1
+            else:
+                balance -= current_bet
+                nextbet = wager_base_bet
+                total_profit = balance - start_balance
+                win_streak = 0
+                loss_streak += 1
+                lose_count += 1
+                if loss_streak > max_loss_streak:
+                    max_loss_streak = loss_streak
+        else:  # PROFIT Mode (Martingale)
+            if result == "win":
+                win_amount = current_bet * profit_win_mul
+                balance += win_amount
+                total_profit = balance - start_balance
+                nextbet = base_bet
+                loss_streak = 0
+                win_count += 1
+                win_streak += 1
+            else:
+                balance -= current_bet
+                nextbet = current_bet * lose_mul
+                total_profit = balance - start_balance
+                win_streak = 0
+                loss_streak += 1
+                lose_count += 1
+                if loss_streak > max_loss_streak:
+                    max_loss_streak = loss_streak
+
+        # Mode Transition Check (Hybrid Mode 3)
+        if game_mode == 3:
+            if current_mode == "WAGER":
+                if balance <= trigger_balance:
+                    print()
+                    print(cn(196, f"  >>> [MODE SWITCH] ⚠️  Balance dropped below trigger ({trigger_balance:.2f}) -> RECOVERY (PROFIT MODE) <<<", True))
+                    current_mode = "PROFIT"
+                    nextbet = base_bet
+                    loss_streak = 0
+            elif current_mode == "PROFIT":
+                recovered = False
+                if result == "win" and balance >= start_balance:
+                    recovered = True
+                elif balance >= trigger_balance_profit:
+                    recovered = True
+
+                if recovered:
+                    print()
+                    print(cn(46, f"  >>> [MODE SWITCH] 🎯 Capital recovered! (Bal: {balance:.2f} >= Start: {start_balance:.2f}) -> RESUME WAGER MODE <<<", True))
+                    current_mode = "WAGER"
+                    nextbet = wager_base_bet
+                    loss_streak = 0
 
         check_rare_number(last_roll)
-        print_round(round_num, last_roll, result, nextbet, win_amount)
+        print_round(round_num, last_roll, result, current_bet, round_mode, win_amount)
+
         if round_delay > 0:
             time.sleep(round_delay)
-        
-    # ─────────────────────────────────────────
-    # SESSION SUMMARY
-    # ─────────────────────────────────────────
+
+    # Summary
     if total_profit > 0:
         profit_c = pos_c(f"+{total_profit:.8f}")
         bal_c = pos_c(f"{balance:.8f}")
@@ -351,7 +338,7 @@ def run_simulation():
     )
     print(f"  {_wc('Final Balance')}: {bal_c}")
     print(f"  {_wc('Net PnL')}: {profit_c}")
-    print(f"  {_wc('Wagered')}: {wagered_c}")
+    print(f"  {_wc('Wagered')}: {wagered_c} / {wager_target:.2f}")
 
     if balance > start_balance:
         print(pos_c("  Result: PROFIT"))
