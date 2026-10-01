@@ -84,12 +84,12 @@ def parse_arguments(env_cfg: dict[str, str]):
     parser.add_argument(
         "-c", "--chance", type=float,
         default=cfg_get("WIN_CHANCE", 3.96, float),
-        help="Win chance % (Profit Mode)"
+        help="Win chance %% (Profit Mode)"
     )
     parser.add_argument(
         "-wc", "--wager-chance", type=float,
         default=cfg_get("WAGER_WIN_CHANCE", 98.0, float),
-        help="Win chance % (Wager Mode)"
+        help="Win chance %% (Wager Mode)"
     )
     parser.add_argument(
         "-sb", "--startbalance", type=float,
