@@ -76,9 +76,9 @@ g() {
     else
 		  	case "$1" in
 					-pu|--pull--rebase)
-							git add -A 
-							git commit -m "$(date)" 
-					        git_ "pl"
+							git add -A &&
+							git commit -m "$(date)" && 
+					        git_ "pl" &&
                             _C -s -d "exec zsh" "exec bash"
 							;;
 			  	*)		

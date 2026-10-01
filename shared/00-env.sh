@@ -78,6 +78,7 @@ case "$JOE_ENV" in
          export WIN_PATH="/mnt/"
          export HWSL="unseen"
          export HWSL2="$HOME"
+         export PYTHON_BIN="/usr/bin/python3"
          ;;
     GIT-BASH)
          export HERMES_DIR="/mnt/c/Users/User/AppData/Local/hermes"
@@ -86,6 +87,8 @@ case "$JOE_ENV" in
          export WIN_PATH='/'
          export HWSL="//wsl.localhost/Ubuntu/home/usercivenz"
          export HWSL2="//wsl.localhost/Ubuntu-22.04/home/joez"
+         export PYTHON_BIN="/c/Users/User/AppData/Local/Programs/Python/Python39/python"
+        
 
          ;;
     *)
