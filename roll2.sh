@@ -22,9 +22,9 @@ _gr(){ cn 235 d "$@"; } #gray color
 # [1] CONFIGURATION  (flag-based args)
 # ─────────────────────────────────────────
 HE=1                    # house edge %
-GAME_MODE=1             # 1=profit, 2=wager, 3=hybrid (wager + recovering profit)
+GAME_MODE=3             # 1=profit, 2=wager, 3=hybrid (wager + recovering profit)
 START_BALANCE=10000
-STOP_PROFIT_TARGET=2    # 2% from start balance
+STOP_PROFIT_TARGET=20   # 20% from start balance
 STOP_LOSS_TARGET=10     # 10% from start balance
 
 # --- profit mode defaults ---
@@ -48,9 +48,10 @@ WAGER_BET_STRATEGY="high"
 # --- flag parser ---
 _usage() {
     echo "Usage: $0 [OPTIONS]"
-    echo "  -m  | --mode           Game mode: 1(profit), 2(wager), 3(hybrid) (default: 1)"
+    echo "  -m  | --mode           Game mode: 1(profit), 2(wager), 3(hybrid) (default: 3)"
     echo "  -b  | --basebet        Base bet amount          (default: 1)"
-    echo "  -c  | --chance         Win chance %             (default: 0.99)"
+    echo "  -c  | --chance         Win chance % (Profit)    (default: 0.99)"
+    echo "  -wc | --wager-chance   Win chance % (Wager)     (default: 98)"
     echo "  -sb | --startbalance   Starting balance         (default: 10000)"
     echo "  -r  | --rounds         Max rounds               (default: 2000)"
     echo "  -ml | --maxloss        Max loss streak          (default: 1000)"
@@ -70,6 +71,7 @@ while [[ $# -gt 0 ]]; do
         -m|--mode)           GAME_MODE="$2";          shift 2 ;;
         -b|--basebet)        BASE_BET="$2";           shift 2 ;;
         -c|--chance)         WIN_CHANCE="$2";         shift 2 ;;
+        -wc|--wager-chance)  WAGER_WIN_CHANCE="$2";   shift 2 ;;
         -sb|--startbalance)  START_BALANCE="$2";      shift 2 ;;
         -r|--rounds)         MAX_ROUNDS="$2";         shift 2 ;;
         -ml|--maxloss)       MAX_LOSS_STREAK="$2";    shift 2 ;;
@@ -101,17 +103,20 @@ WAGER_BASE_BET=$(mth "($WAGER_BET/100)*$START_BALANCE" 8 d)
 TRIGGER_BALANCE=$(mth "(1-($LOSS_TRIGGER/100))*$START_BALANCE" 8 d)
 TRIGGER_BALANCE_PROFIT=$(mth "$START_BALANCE+($PROFIT_TRIGGER/100)*$START_BALANCE" 8 d)
 
-# Payout multiplier: (1 - HE/100) / (WIN_CHANCE/100)
+# Payout & Thresholds for PROFIT MODE
 payout=$(mth "(1-($HE/100))/($WIN_CHANCE/100)" 4 d)
-
-# Multiplier for Martingale recovery:
 LOSEMUL=$(mth "1 + (1 / ($payout - 1)) + (0.05 / $payout)" 4 d)
+profit_threshold_low=$(mth "$WIN_CHANCE*100" 0 d)
+profit_threshold_high=$(mth "(100-$WIN_CHANCE)*100" 0 d)
+
+# Payout & Thresholds for WAGER MODE
+wager_payout=$(mth "(1-($HE/100))/($WAGER_WIN_CHANCE/100)" 4 d)
+wager_threshold_low=$(mth "$WAGER_WIN_CHANCE*100" 0 d)
+wager_threshold_high=$(mth "(100-$WAGER_WIN_CHANCE)*100" 0 d)
 
 # ─────────────────────────────────────────
 # [2] GLOBAL STATE
 # ─────────────────────────────────────────
-threshold_low=$(mth "$WIN_CHANCE*100" 0 d)
-threshold_high=$(mth "(100-$WIN_CHANCE)*100" 0 d)
 balance=$START_BALANCE
 wagered=0
 total_profit=0
@@ -175,26 +180,36 @@ fgte() {
 }
 
 # ─────────────────────────────────────────
-# [4] ROLL DICE
+# [4] ROLL DICE (Mode Aware)
 # ─────────────────────────────────────────
 roll_dice() {
+    local mode="$1"
     local roll
     roll=$(( RANDOM % 10000 ))
     last_roll="$roll"
 
+    local t_low t_high
+    if [[ "$mode" == "WAGER" ]]; then
+        t_low="$wager_threshold_low"
+        t_high="$wager_threshold_high"
+    else
+        t_low="$profit_threshold_low"
+        t_high="$profit_threshold_high"
+    fi
+
     if [[ "$bet_target" == "low" ]]; then
-        if (( roll < threshold_low )); then
+        if (( roll < t_low )); then
             result="win"
         else
             result="lose"
-            (( roll >= threshold_high )) && (( wrong_side++ ))
+            (( roll >= t_high )) && (( wrong_side++ ))
         fi
     else # bet_target == "high"
-        if (( roll >= threshold_high )); then
+        if (( roll >= t_high )); then
             result="win"
         else
             result="lose"
-            (( roll < threshold_low )) && (( wrong_side++ ))
+            (( roll < t_low )) && (( wrong_side++ ))
         fi
     fi
 }
@@ -234,7 +249,7 @@ wagering_mode() {
     local bet="$2"      # bet amount this round
 
     if [[ "$result" == "win" ]]; then
-        win_amount=$(fmul "$bet" "$payout")
+        win_amount=$(fmul "$bet" "$wager_payout")
         balance=$(fadd "$balance" "$win_amount")
         net_profit=$(fsub "$win_amount" "$bet")
         total_profit=$(fsub "$balance" "$START_BALANCE")
@@ -356,10 +371,19 @@ print_round() {
         local bal_c=$(cn 28 b "$bal_fmt")
     fi
 
-    # Highlight wrong side rolls
-    if [[ "$bet_target" == "low" ]] && (( roll >= threshold_high )); then
+    # Threshold for highlighting wrong side
+    local active_high active_low
+    if [[ "$current_mode" == "WAGER" ]]; then
+        active_high="$wager_threshold_high"
+        active_low="$wager_threshold_low"
+    else
+        active_high="$profit_threshold_high"
+        active_low="$profit_threshold_low"
+    fi
+
+    if [[ "$bet_target" == "low" ]] && (( roll >= active_high )); then
         roll_c="$(cn 45 b "$roll_fmt")"
-    elif [[ "$bet_target" == "high" ]] && (( roll < threshold_low )); then
+    elif [[ "$bet_target" == "high" ]] && (( roll < active_low )); then
         roll_c="$(cn 45 b "$roll_fmt")"
     else
         roll_c="$(cn 245 d "$roll_fmt")"
@@ -380,7 +404,6 @@ print_round() {
 
     # Print based on Mode Purpose
     if [[ "$current_mode" == "WAGER" ]]; then
-        # WAGER MODE: Focus on Wager progress % and balance impact
         local pct=$(mth "($wagered/$WAGER_TARGET)*100" 1 d)
         printf -v w_fmt "%8.2f/%-8.2f (%5.1f%%)" "$wagered" "$WAGER_TARGET" "$pct"
         local w_c=$(cn 141 b "$w_fmt")
@@ -393,7 +416,6 @@ print_round() {
                 "$r_fmt" "$mode_badge" "$roll_c" "$icon" "$w_c" "$bal_c" "$stk_fmt"
         fi
     else
-        # PROFIT MODE: Focus on PnL, Bet size, Martingale streak
         if [[ "$result" == "win" ]]; then
             printf -v amt_fmt "%12.8f" "$win_amount"
             local amt_c="$(+c "+$amt_fmt")"
@@ -449,8 +471,10 @@ hunting() {
 cn 136 b "=========================================================================="
 cn 255 b "  DICE SIMULATOR - MULTI MODE ENGINE"
 cn 136 b "=========================================================================="
-printf " Mode: %s | Bal: %.8f | Base: %.8f | WagerBet: %.8f | WC: %.2f%%\n" \
-    "$MODE" "$START_BALANCE" "$BASE_BET" "$WAGER_BASE_BET" "$WIN_CHANCE"
+printf " Mode: %s | Bal: %.8f | Base: %.8f | WagerBet: %.8f\n" \
+    "$MODE" "$START_BALANCE" "$BASE_BET" "$WAGER_BASE_BET"
+printf " ProfitWC: %.2f%% (%.4fx) | WagerWC: %.2f%% (%.4fx)\n" \
+    "$WIN_CHANCE" "$payout" "$WAGER_WIN_CHANCE" "$wager_payout"
 printf " StopProfit: +%.8f | WagerTarget: %.2f | LossTrigger: -%s%%\n" \
     "$STOP_PROFIT" "$WAGER_TARGET" "$LOSS_TRIGGER"
 cn 136 b "=========================================================================="
@@ -476,8 +500,8 @@ while (( round < MAX_ROUNDS )); do
 
     wagered=$(fadd "$wagered" "$current_bet")
 
-    # --- roll dice ---
-    roll_dice
+    # --- roll dice (mode aware) ---
+    roll_dice "$round_mode"
 
     # --- dobet logic ---
     dobet "$result" "$current_bet"
