@@ -394,6 +394,7 @@ _check_(){
         -p|--PKG)       _check_pkg "$@" ;;
         -c|--compat)    _check_compat "$@" ;;
         -h|--help|help) _check_usage; return 0 ;;
+        -js|--JENV-short) _CJOE "$@" ;;
         *)
             # Smart lazy-load: If first argument is not a flag, treat as function
             if [[ "$mode" != -* ]]; then
@@ -444,4 +445,14 @@ print(w)
 
 _w(){
 	get_real_width "$@"
+}
+
+_CJOE(){
+    local cmd=""
+    case "$JOE_ENV" in
+        GIT-BASH) cmd=$1; $cmd ;;
+        WSL) cmd=$2; $cmd ;;
+        WSL2) cmd=$3; $cmd ;;
+    esac    
+
 }
