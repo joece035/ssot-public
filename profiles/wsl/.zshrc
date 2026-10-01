@@ -8,7 +8,7 @@
 unsetopt KSH_ARRAYS SH_WORD_SPLIT 2>/dev/null || true
 
 # -- Path Setup (Must be BEFORE any tools/helpers run) ----------
-export PATH="$HOME/.local/bin:$HOME/.local/lib/openclaw/bin:$HOME/.opencode/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
+export PATH="$HOME/.local/bin:$HOME/.local/lib/openclaw/bin:$HOME/.opencode/bin:$HOME/usr/local/sbin:$HOME/usr/local/bin:$HOME/usr/sbin:$HOME/usr/bin:$HOME/sbin:$HOME/bin:$PATH"
 
 # -- Initialize color engine (must come before any tools that use it) --
 # Check if .bash_helper is executable and source it

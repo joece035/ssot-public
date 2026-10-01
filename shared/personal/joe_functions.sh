@@ -112,7 +112,7 @@ repository_remote_url(){
             ;;
     esac
 }
-alias gremote='repository_remote_url'
+alias grepo='repository_remote_url'
 
 # -- ฟังก์ชั่นหา Display Width ที่แท้จริง (รวม Emoji, Wide characters และตัด ANSI Code / PS1 delimiters ออก)
 

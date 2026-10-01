@@ -42,12 +42,12 @@ def parse_arguments():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
-        "-m", "--mode", type=int, choices=[1, 2, 3], default=3,
+        "-m", "--mode", type=int, choices=[1, 2, 3], default=1,
         help="Game mode: 1(profit), 2(wager), 3(hybrid)"
     )
     parser.add_argument("-b", "--basebet", type=float, default=2, help="Base bet amount")
-    parser.add_argument("-c", "--chance", type=float, default=3.96, help="Win chance % (Profit Mode)")
-    parser.add_argument("-wc", "--wager-chance", type=float, default=98.0, help="Win chance % (Wager Mode)")
+    parser.add_argument("-c", "--chance", type=float, default=3.96, help="Win chance %% (Profit Mode)")
+    parser.add_argument("-wc", "--wager-chance", type=float, default=98.0, help="Win chance %% (Wager Mode)")
     parser.add_argument("-sb", "--startbalance", type=float, default=10000.0, help="Starting balance")
     parser.add_argument("-r", "--rounds", type=int, default=20000, help="Max rounds")
     parser.add_argument("-ml", "--maxloss", type=int, default=10000, help="Max loss streak limit")

@@ -47,6 +47,8 @@ case "$JOE_ENV" in
          export PYTHON_VENV="$HOME/.dash_venv/bin/activate"
          export SDCARD_PATH="/storage/emulated/0/"
          export NODE_HOST="termux"
+         export PYTHON_BIN="/data/data/com.termux/files/usr/bin/python3.14"
+         
          ;;
     MUMU)
          export HERMES_DIR="/data/data/com.termux/files/home/.hermes"
@@ -63,13 +65,14 @@ case "$JOE_ENV" in
     ACODEX)
          export NODE_HOST="acodex"
          ;;
-		WSL)
+	WSL)
          export HERMES_DIR="$HOME/.hermes"
          export PYTHON_VENV="$HOME/.venv/bin/activate"
          export NODE_HOST="wsl"
          export WIN_PATH="/mnt/"
          export HWSL="$HOME"
          export HWSL2="unseen"
+         export PYTHON_BIN="$HOME/.local/bin/python3"
          ;;
     WSL2)
          export HERMES_DIR="$HOME/.hermes"
@@ -78,7 +81,7 @@ case "$JOE_ENV" in
          export WIN_PATH="/mnt/"
          export HWSL="unseen"
          export HWSL2="$HOME"
-         export PYTHON_BIN="/usr/bin/python3"
+         export PYTHON_BIN="$HOME/.local/bin/python3.11"
          ;;
     GIT-BASH)
          export HERMES_DIR="/mnt/c/Users/User/AppData/Local/hermes"
@@ -87,7 +90,7 @@ case "$JOE_ENV" in
          export WIN_PATH='/'
          export HWSL="//wsl.localhost/Ubuntu/home/usercivenz"
          export HWSL2="//wsl.localhost/Ubuntu-22.04/home/joez"
-         export PYTHON_BIN="/c/Users/User/AppData/Local/Programs/Python/Python39/python"
+         export PYTHON_BIN="$HOME/AppData/Local/Programs/Python/Python39/python"
         
 
          ;;
@@ -100,6 +103,7 @@ esac
 # ============================================================
 # 2. GLOBAL VARIABLE
 # ============================================================
+export _py=${PYTHON_BIN}
 export hwsl=${HWSL}
 export hwsl2=${HWSL2}
 export bsc="$HOME/bashscripts"
