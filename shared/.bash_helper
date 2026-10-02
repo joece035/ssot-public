@@ -187,68 +187,141 @@ guard() {
     fi
 }
 # -- shell switch
+# Sets the LOGIN shell permanently (passwd entry) AND swaps the running
+# session. Use `sws b|bash|z|zsh`, or `sws` with no arg to toggle.
+#
+# BUG FIXED 2026-10-03: this used to switch only the current session
+# because the chsh call silently failed:
+#   * `chsh -s ...`       -> "PAM: Authentication failure" (no TTY/password)
+#   * `sudo chsh -s ...`  -> exits 0 but writes NOTHING to /etc/passwd,
+#                            so the change evaporated on the next login
+# Verified on WSL: after `sudo chsh -s /usr/bin/bash`, passwd still said
+# /usr/bin/zsh. `usermod -s` writes correctly and persists.
 sws(){
-    local shell_type=$1
-    # ── ตั้ง chsh command ตาม environment (array เพื่อรองรับ zsh no-split) ───
-    local -a exec_cmd
-    if [[ "$JOE_ENV" == "WSL" ]]; then
-        exec_cmd=(sudo chsh)
-    else
-        exec_cmd=(chsh)   # Termux / native Linux ไม่ต้อง sudo
-    fi
+    local shell_type="${1:-}"
 
-    # ── helper: หา path ของ shell ──────────────────────────────
-    _find_shell(){
-        local sh="$1"
-        local p; p="$(command -v "$sh" 2>/dev/null)"
-        [[ -z "$p" ]] && { cn red b "$sh not found"; return 1; }
-        echo "$p"
+    # ── Resolve the target shell to an ABSOLUTE path ─────────────
+    # Termux's chsh rejects relative paths (".../usr/bin//bin/bash").
+    _sws_find_shell(){
+        local sh="${1:-}" p
+        [[ -z "$sh" ]] && return 1
+        p="$(command -v "$sh" 2>/dev/null)"
+        if [[ -z "$p" || ! -x "$p" ]]; then
+            cn red b "shell not found: $sh"
+            return 1
+        fi
+        printf '%s' "$p"
     }
 
-    # ── helper: switch ทั้ง login-shell + instant session ───────
-    _do_switch(){
-        local target_shell="$1"
-        local target_cmd; target_cmd="$(_find_shell "$target_shell")" || return 1
+    # ── Read the shell currently recorded as the DEFAULT ─────────
+    # Termux keeps no passwd login shell: `chsh` is a shell script that
+    # symlinks $HOME/.termux/shell -> $PREFIX/bin/<shell>. Elsewhere the
+    # default lives in the passwd entry. Check Termux first so we never
+    # report a Linux passwd shell on Android.
+    _sws_current_login_shell(){
+        local u="${USER:-$(id -un)}" line
+        if [[ "$JOE_ENV" == "TERMUX" || "$JOE_ENV" == "MUMU" || "$JOE_ENV" == "OPPO" || "$JOE_ENV" == "ACODEX" ]]; then
+            [[ -L "$HOME/.termux/shell" ]] && readlink -f "$HOME/.termux/shell"
+            return 0
+        fi
+        if command -v getent >/dev/null 2>&1; then
+            line="$(getent passwd "$u" 2>/dev/null)"
+        elif [[ -r /etc/passwd ]]; then
+            line="$(grep "^${u}:" /etc/passwd 2>/dev/null | head -1)"
+        fi
+        [[ -n "$line" ]] && printf '%s' "${line##*:}"
+    }
 
-        # 1) เปลี่ยน login shell (มีผลรอบหน้า)
-        "${exec_cmd[@]}" -s "$target_cmd" || { cn red b "chsh failed"; return 1; }
+    _sws_is_termux(){
+        [[ "$JOE_ENV" == "TERMUX" || "$JOE_ENV" == "MUMU" \
+           || "$JOE_ENV" == "OPPO" || "$JOE_ENV" == "ACODEX" ]]
+    }
 
-        # 2) อัปเดต $_SHELL ใน env ทันที
-        export _SHELL="$target_shell"
-        export SHELL="$target_cmd"
+    # ── Persist the login shell ──────────────────────────────────
+    # Order matters: usermod first (works on WSL/Linux, silent no-op risk
+    # with chsh), then chsh as the Termux/Android path.
+    _sws_set_login_shell(){
+        local abs_path="$1" before after
+        before="$(_sws_current_login_shell)"
 
-        cn 10 b "switched to $target_shell"
+        if _sws_is_termux; then
+            # Termux chsh prepends $PREFIX/bin to whatever it is given, so
+            # an absolute path becomes ".../bin//data/.../bin/zsh" and it
+            # refuses. Pass the bare name.
+            chsh -s "$(basename "$abs_path")" 2>/dev/null
+        else
+            if command -v usermod >/dev/null 2>&1; then
+                local -a _elev=()
+                # WSL/GIT-BASH need root; native Linux userland does not.
+                if [[ "$JOE_ENV" == "WSL" || "$JOE_ENV" == "WSL2" || "$JOE_ENV" == "GIT-BASH" ]]; then
+                    command -v sudo >/dev/null 2>&1 && _elev=(sudo)
+                fi
+                "${_elev[@]}" usermod -s "$abs_path" "$(id -un)" 2>/dev/null
+            fi
+            # Verify + fall back to chsh for boxes without usermod.
+            after="$(_sws_current_login_shell)"
+            if [[ "$after" != "$abs_path" ]] && command -v chsh >/dev/null 2>&1; then
+                chsh -s "$abs_path" 2>/dev/null
+                after="$(_sws_current_login_shell)"
+            fi
+        fi
+        after="$(_sws_current_login_shell)"
+
+        # ── VERIFY: never claim success on a silent failure ───────
+        if [[ "$after" == "$abs_path" ]]; then
+            cn 10 b "default shell -> ${abs_path}"
+        else
+            cn 196 b "could NOT change default shell (still: ${after:-unknown})"
+            cn 244 d "   chsh/usermod failed — this session will still switch"
+            return 1
+        fi
+    }
+
+    # ── Switch this session too ─────────────────────────────────
+    _sws_switch_session(){
+        local abs_path="$1"
+        export _SHELL="$(basename "$abs_path")"
+        export SHELL="$abs_path"
         cn 226 b "↳ reloading session now..."
-
-        # 3) Instant switch — แทนที่ process ปัจจุบันด้วย shell ใหม่
-        exec "$target_cmd" -l
+        exec "$abs_path" -l
     }
 
     # ── No-arg: interactive toggle ──────────────────────────────
     if [[ "$#" -eq 0 ]]; then
-        c 198 "b" "SHELL : "; cn ora b "$_SHELL"
-        local target_shell confirm
-
-        if [[ "$_SHELL" == "bash" ]]; then
+        local cur="${_SHELL:-${SHELL##*/}}"
+        c 198 b "SHELL : "
+        cn ora b "$cur"
+        local target confirm
+        if [[ "$cur" == "bash" ]]; then
             read -p "$(_ep "SWITCH TO ZSH  (y/n): ")" confirm
-            target_shell="zsh"
-        elif [[ "$_SHELL" == "zsh" ]]; then
-            read "confirm?$(_ep "SWITCH TO BASH (y/n): ")"
-            target_shell="bash"
+            target="zsh"
+        elif [[ "$cur" == "zsh" ]]; then
+            read "confirm?$(_ep "SWITCH TO BASH (y/n): ")" confirm
+            target="bash"
         else
-            cn red b "Unknown shell: $_SHELL"; return 1
+            cn red b "Unknown shell: $cur"
+            return 1
         fi
-
-        [[ "$confirm" =~ ^[Yy]$ ]] && _do_switch "$target_shell"
+        [[ "$confirm" =~ ^[Yy]$ ]] || return 0
+        local abs
+        abs="$(_sws_find_shell "$target")" || return 1
+        _sws_set_login_shell "$abs" || return 1
+        _sws_switch_session "$abs"
         return
     fi
 
     # ── Direct arg: sws b / sws z ──────────────────────────────
-    case $shell_type in
-        b|bash) _do_switch bash ;;
-        z|zsh)  _do_switch zsh  ;;
-        *)      cn red b "Usage: sws [b|bash|z|zsh]" ;;
+    local target_shell
+    case "$shell_type" in
+        b|bash) target_shell="bash" ;;
+        z|zsh)  target_shell="zsh"  ;;
+        *)      cn red b "Usage: sws [b|bash|z|zsh]"; return 1 ;;
     esac
+
+    local abs_path
+    abs_path="$(_sws_find_shell "$target_shell")" || return 1
+    _sws_set_login_shell "$abs_path" || return 1
+    _sws_switch_session "$abs_path"
 }
 # -- shell detection
 cshell() {
