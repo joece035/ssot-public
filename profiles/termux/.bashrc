@@ -21,22 +21,28 @@ export LANG="C.UTF-8"
 unset LC_COLLATE LC_MESSAGES LC_MONETARY LC_NUMERIC LC_TIME LC_PAPER LC_MEASUREMENT 2>/dev/null
 
 # ── ble.sh ──────────────────────────────────────────────────────
-# ble.sh probes the locale with .test-C-locale, which does
-#   LC_ALL= LC_CTYPE= LANG=C; s='あ'; ((${#s}==3))
-# Termux's bash always reports ${#s}==1 there because it decodes UTF-8
-# regardless of LANG, so the probe can never pass and ble.sh prints this
-# on every single login:
+# ble.sh probed the locale with .test-C-locale:
+#   local LC_ALL= LC_CTYPE= LANG=C; local s='あ'; ((${#s}==3))
+# Termux's bash always answers 1 there (it decodes UTF-8 whatever LANG
+# says) — verified unfixable: plain, --posix, --noediting and -o posix
+# all give ${#s}==1. So the probe always failed and every login printed
 #   ble.sh: The locale 'C' (LC_CTYPE) seems broken. ...
 #   ble.sh: Termux has an issue with its locale "C", ...
-# It is a false positive — see termux/termux-packages#23010 — and ble
-# only reaches the message through ble/util/notify-broken-locale, which
-# returns immediately when _ble_util_locale_broken is empty. Clearing
-# that one cache variable after load silences it without touching the
-# encoding table ble actually uses.
+# which is a false positive (termux/termux-packages#23010).
+#
+# Clearing _ble_util_locale_broken after load does NOT help: ble recomputes
+# the cache whenever $LC_ALL:$LC_CTYPE:$LANG differs from its saved triple,
+# and .update-locale-cache runs from ble/term/attach at the FIRST PROMPT —
+# after our rc file has finished. The value is therefore always repopulated.
+#
+# Override the probe instead. It is defined by ble.sh and called by name, so
+# a redefinition after the source sticks and can only ever make the check
+# pass — it cannot affect any encoding table or character handling.
 if [[ $- == *i* && -f $HOME/.local/share/blesh/ble.sh ]]; then
     if [[ -z "${BLE_VERSION-}" ]]; then
         source "$HOME/.local/share/blesh/ble.sh" --attach=none
-        # silence the known-bogus Termux C-locale warning
+        # Termux bash is always multibyte-aware; report the probe as passing
+        ble/util/.test-C-locale() { return 0; }
         _ble_util_locale_broken=
         _ble_util_locale_broken_notified=
     fi
