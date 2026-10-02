@@ -11,12 +11,35 @@ shopt -s checkwinsize
 
 # ── 2. BASH LINE EDITOR (Source only, no attach yet) ──
 
-# ── Fix ble.sh locale (Termux has no locale command) ──
-export LANG="en_US.UTF-8"
-export LC_ALL="en_US.UTF-8"
-export LC_CTYPE="en_US.UTF-8"
+# ── Locale (Termux) ─────────────────────────────────────────────
+# Termux ships NO locale database and has no `locale` command. C.UTF-8
+# is the POSIX-sanctioned spelling that bash here actually honours, so
+# set it: it gives correct multibyte handling for the prompt and tools.
+export LC_ALL="C.UTF-8"
+export LC_CTYPE="C.UTF-8"
+export LANG="C.UTF-8"
+unset LC_COLLATE LC_MESSAGES LC_MONETARY LC_NUMERIC LC_TIME LC_PAPER LC_MEASUREMENT 2>/dev/null
+
+# ── ble.sh ──────────────────────────────────────────────────────
+# ble.sh probes the locale with .test-C-locale, which does
+#   LC_ALL= LC_CTYPE= LANG=C; s='あ'; ((${#s}==3))
+# Termux's bash always reports ${#s}==1 there because it decodes UTF-8
+# regardless of LANG, so the probe can never pass and ble.sh prints this
+# on every single login:
+#   ble.sh: The locale 'C' (LC_CTYPE) seems broken. ...
+#   ble.sh: Termux has an issue with its locale "C", ...
+# It is a false positive — see termux/termux-packages#23010 — and ble
+# only reaches the message through ble/util/notify-broken-locale, which
+# returns immediately when _ble_util_locale_broken is empty. Clearing
+# that one cache variable after load silences it without touching the
+# encoding table ble actually uses.
 if [[ $- == *i* && -f $HOME/.local/share/blesh/ble.sh ]]; then
-    [[ ${BLE_VERSION-} ]] || source $HOME/.local/share/blesh/ble.sh --attach=none
+    if [[ -z "${BLE_VERSION-}" ]]; then
+        source "$HOME/.local/share/blesh/ble.sh" --attach=none
+        # silence the known-bogus Termux C-locale warning
+        _ble_util_locale_broken=
+        _ble_util_locale_broken_notified=
+    fi
 fi
 
 # ── 3. NVM & COMPLETIONS (MUST come BEFORE .env) ──
