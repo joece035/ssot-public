@@ -56,20 +56,45 @@ unalias la 2>/dev/null
 # ── 7. Zsh-specific PATH helper ──
 [[ -d /usr/local/bin ]] && path=("/usr/local/bin" $path)
 
-# ── 8. mapfile shim ──
+# ── 8. mapfile / readarray shim (bash 4+ builtin → zsh function) ──
+# BUG FIXED 2026-10-03: old body was eval "${_var}=(\"\${(@f)}\")".
+#   ${(@f)} has NO parameter name → zsh parse error
+#   "(eval):1: unmatched \"" → array stayed empty → callers (find_stuff.sh
+#   find_unsource_func) reported "function not found". Now reads stdin
+#   line-by-line and assigns by name.
 if ! command -v mapfile &>/dev/null && ! typeset -f mapfile &>/dev/null; then
     mapfile() {
-        local _opts=() _var=""
+        local _var="" _line
+        local -a _mf_lines=()          # ALL locals before the read loop (zsh 5.9 leak)
         while [[ $# -gt 0 ]]; do
             case "$1" in
                 -t) shift ;;
-                -d) shift; shift ;;
-                -n) shift; shift ;;
-                -O) shift; shift ;;
-                -s) shift; shift ;;
-                *)  _var="$1"; shift ;;
+                -d|-n|-O|-s|-u|-C) shift 2 ;;
+                -c) shift ;;
+                --) shift; break ;;
+                -*) shift ;;
+                *)  _var="$1"; shift; break ;;
             esac
         done
-        eval "${_var}=(\"\${(@f)\"})"
+        if [[ -z "$_var" ]]; then
+            echo "mapfile: variable name required" >&2
+            return 2
+        fi
+        # No stdin redirect (interactive/TTY) → empty array, never block
+        if [[ -t 0 ]]; then
+            eval "$_var=()"
+            return 0
+        fi
+        while IFS= read -r _line; do
+            _mf_lines+=("$_line")
+        done
+        eval "$_var=(\"\${_mf_lines[@]}\")"
+    }
+fi
+if ! command -v readarray &>/dev/null && ! typeset -f readarray &>/dev/null; then
+    # Multiline body: bash requires `;` or a newline before the closing `}`
+    # (zsh accepts the one-liner, bash -n rejects it).
+    readarray() {
+        mapfile "$@"
     }
 fi

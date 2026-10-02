@@ -199,12 +199,18 @@ find_unsource_func() {
                 [[ -n "$selected" ]] && echo "$selected" || return 1
             else
                 # Fallback: numbered select (built-in, zero dependency)
+                # Guard with -t 0: zsh's `select` prompts even on a closed
+                # stdin (/dev/null), which hangs or mis-reports in scripts.
                 local choice
-                select choice in "${matches[@]}" "Cancel"; do
-                    [[ "$choice" == "Cancel" || -z "$choice" ]] && return 1
-                    echo "$choice"
-                    return 0
-                done
+                if [[ -t 0 ]]; then
+                    select choice in "${matches[@]}" "Cancel"; do
+                        [[ "$choice" == "Cancel" || -z "$choice" ]] && return 1
+                        echo "$choice"
+                        return 0
+                    done
+                fi
+                printf '%s\n' "Cancel" >&2
+                return 1
             fi
             ;;
     esac

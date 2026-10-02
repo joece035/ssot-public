@@ -37,9 +37,17 @@ fi
 # -- fallback: shell guard (canonical cshell lives in .bash_helper) --
 if ! typeset -f _check_shell >/dev/null 2>&1; then
 _check_shell() {
-    local active="${_SHELL:-}"
-    if [[ -z "$active" ]]; then
-        if [[ -n "${ZSH_VERSION:-}" ]]; then active="zsh"; else active="bash"; fi
+    local active=""
+    # Prefer the shell that is EXECUTING this code, not $_SHELL.
+    # $_SHELL is the *login* shell: launching zsh from a bash terminal leaves
+    # _SHELL=bash, which made `_check_ -s -d '<zsh>' '<bash>'` eval the bash
+    # branch inside zsh. Fall back to basename $_SHELL only as a last resort.
+    if [[ -n "${ZSH_VERSION:-}" ]]; then
+        active="zsh"
+    elif [[ -n "${BASH_VERSION:-}" ]]; then
+        active="bash"
+    else
+        active="${_SHELL##*/}"
     fi
     # no arg → print active shell (stdout, for capture)
     if [[ $# -eq 0 ]]; then echo "$active"; return 0; fi
@@ -90,19 +98,26 @@ _check_one_func() {
     _vlog "🔍 [_check_ -f] Searching for '$func' in '$context'..."
     if [[ -n "$context" && -d "$context" ]]; then
         local -a _matches=()
-        local _f _line _og_null _og_glob
-        _og_null=$(shopt -p nullglob 2>/dev/null)
-        _og_glob=$(shopt -p globstar 2>/dev/null)
-        shopt -s nullglob globstar 2>/dev/null
-        local _pat="^[[:space:]]*(function[[:space:]]+${func}([[:space:]\(]|$)|${func}[[:space:]]*\(\))"
-        for _f in "$context"/**/*.sh "$context"/**/*.bash "$context"/**/*.zsh; do
-            [[ -f "$_f" ]] || continue
-            while IFS= read -r _line; do
-                if [[ "$_line" =~ $_pat ]]; then _matches+=("$_f"); break; fi
-            done < "$_f"
-        done
-        eval "$_og_null" 2>/dev/null
-        eval "$_og_glob" 2>/dev/null
+        local _f _line _raw_files
+        # zsh-safe: use find(1) instead of shopt globstar + "**/*.sh".
+        # 'shopt' is bash-only, and quoted "**" globs abort the whole
+        # function with "no matches found" under zsh.
+        # -name '.bash*' / '.*.sh' are required: shared/.bash_helper holds
+        # cshell/_check/_vlog and has no .sh extension.
+        _raw_files=$(find "$context" -type f \( -name '*.sh' -o -name '*.bash' -o -name '*.zsh' \
+            -o -name '.bash*' -o -name '.*.sh' -o -name '.*.zsh' \) \
+            ! -path '*/.git/*' ! -path '*/node_modules/*' ! -path '*/.cache/*' 2>/dev/null | LC_ALL=C sort)
+        if [[ -n "$_raw_files" ]]; then
+            while IFS= read -r _f; do
+                [[ -n "$_f" && -f "$_f" ]] || continue
+                while IFS= read -r _line; do
+                    if [[ "$_line" == *"function $func"* \
+                      || "$_line" == "$func()"* || "$_line" == *"$func ()"* ]]; then
+                        _matches+=("$_f"); break
+                    fi
+                done < "$_f"
+            done <<< "$_raw_files"
+        fi
         if [[ ${#_matches[@]} -eq 1 ]]; then
             # shellcheck disable=SC1090
             source "${_matches[1]:-${_matches[0]}}" 2>/dev/null && _is_func_loaded "$func" && {
@@ -139,34 +154,40 @@ _check_func_safe() {
     fi
 
     # 2. Detect context directory if passed as last argument
-    if [[ -z "$context" && $# -ge 2 && -d "${!#}" ]]; then
-        local _last="${!#}"
+    # zsh-safe: ${!#} is bash-only (returns 0 under zsh). Use ${@: -1}.
+    # set -- "${@:1:$#-1}" also fails under zsh ($#-1 is not arithmetic
+    # inside the slice) — must wrap in $(( )).
+    if [[ -z "$context" && $# -ge 2 ]]; then
+        local _last="${@: -1}"
         local _is_arr=0
-        if [[ -n "$ZSH_VERSION" ]]; then
+        if [[ -n "${ZSH_VERSION:-}" ]]; then
             [[ "${(tP)_last}" == *array* || "${(tP)_last}" == *association* ]] && _is_arr=1
         else
             [[ "$(declare -p "$_last" 2>/dev/null)" =~ ^declare\ -[aA] ]] && _is_arr=1
         fi
-        if [[ $_is_arr -eq 0 ]] && ! _is_func_loaded "$_last"; then
+        if [[ -d "$_last" && $_is_arr -eq 0 ]] && ! _is_func_loaded "$_last"; then
             context="$_last"
-            set -- "${@:1:$#-1}"
+            set -- "${@:1:$(( $# - 1 ))}"
         fi
     fi
     context="${context:-${SSOT:-${repository:-$HOME/ssot}}}"
 
     # 3. Collect target functions (support array variable name by reference or multiple positional args)
+    # zsh-safe: 'local -n' (nameref) is bash 4.3+ only AND zsh 5.9 leaks the
+    # value to stdout when declared inside a loop. Declared up front + eval.
     local -a _target_funcs=()
+    local -a _arr_ref=()
     local item
     for item in "$@"; do
         [[ -z "$item" ]] && continue
-        if [[ -n "$ZSH_VERSION" ]]; then
+        if [[ -n "${ZSH_VERSION:-}" ]]; then
             if [[ "${(tP)item}" == *array* || "${(tP)item}" == *association* ]]; then
                 _target_funcs+=("${(@P)item}")
                 continue
             fi
         else
             if [[ "$(declare -p "$item" 2>/dev/null)" =~ ^declare\ -[aA] ]]; then
-                local -n _arr_ref="$item"
+                eval "_arr_ref=(\"\${$item[@]}\")"
                 _target_funcs+=("${_arr_ref[@]}")
                 continue
             fi
@@ -192,6 +213,16 @@ _check_func_safe() {
     done
 
     return $overall_rc
+}
+
+# _is_comment_line — true when a grep'd line is a shell comment.
+# BUG FIXED 2026-10-03: the old inline filter was
+#   case "$line_text" in [[:space:]]#*|\#*) continue ;;
+# which can never match an indented comment — [[:space:]] consumes exactly
+# ONE space, then '#' must follow immediately, so "\t# 2. read -ra" and
+# "        # 2. read -ra" both fell through and got flagged.
+_is_comment_line() {
+    [[ "$1" =~ ^[[:space:]]*(#|//) ]]
 }
 
 # ============================================================
@@ -263,71 +294,82 @@ HOOKEOF
         [[ -f "$f" ]] || continue
 
         # 1. Array 0-index: ${var[0]} (excluding BASH_SOURCE, FUNCNAME, test_arr)
-        _c_matches=$(\grep -nE '\$\{([a-zA-Z_][a-zA-Z0-9_]*)\[0\]\}' "$f" 2>/dev/null)
+        # Negative lookbehind-equivalent: skip ':-${var[0]}' — that is the
+        # SAFE 1-index-first form this checker itself recommends.
+        _c_matches=$(command grep -nE '\$\{([a-zA-Z_][a-zA-Z0-9_]*)\[0\]\}' "$f" 2>/dev/null \
+            | command grep -vE ':-\$\{[a-zA-Z_][a-zA-Z0-9_]*\[0\]\}')
         if [[ -n "$_c_matches" ]]; then
             while IFS= read -r _entry; do
                 [[ -z "$_entry" ]] && continue
                 line_num="${_entry%%:*}"
                 line_text="${_entry#*:}"
+                # Exclusions:
+                #  *BASH_SOURCE*|*FUNCNAME*|*test_arr* — legitimately 0-indexed
+                #  *'\\${'* — backslash-escaped, so it is literal text inside a
+                #    string (e.g. this checker's own "Fix :" help line), never
+                #    an actual array expansion at runtime.
                 case "$line_text" in *BASH_SOURCE*|*FUNCNAME*|*test_arr*) continue ;; esac
+                # NOTE: pattern is *'\'*'${'* (backslash, then ${) — the
+                # single-quoted '\\${' is TWO backslashes and never matches.
+                case "$line_text" in *'\'*'${'*) continue ;; esac
                 echo "⚠️  [0-INDEX] $f:$line_num"
                 echo "   Line: $line_text"
                 echo "   Risk: Evaluates to EMPTY STRING in Zsh (1-based index)"
                 echo "   Fix : Use '\${var[1]:-\${var[0]}}' or 'set -- \"\${var[@]}\"'"
                 echo ""
-                (( issues++ ))
+                issues=$(( issues + 1 ))
             done <<< "$_c_matches"
         fi
 
         # 2. read -ra (Bash-only flag)
-        _c_matches=$(\grep -nE '\bread[[:space:]]+-[a-zA-Z]*a[[:space:]]' "$f" 2>/dev/null)
+        _c_matches=$(command grep -nE '\bread[[:space:]]+-[a-zA-Z]*a[[:space:]]' "$f" 2>/dev/null)
         if [[ -n "$_c_matches" ]]; then
             while IFS= read -r _entry; do
                 [[ -z "$_entry" ]] && continue
                 line_num="${_entry%%:*}"
                 line_text="${_entry#*:}"
-                case "$line_text" in [[:space:]]#*|\#*) continue ;; esac
+                _is_comment_line "$line_text" && continue
                 echo "⚠️  [READ-RA] $f:$line_num"
                 echo "   Line: $line_text"
                 echo "   Risk: Causes 'bad option: -a' error in Zsh"
                 echo "   Fix : Use 'while IFS= read -r' or '_split_pipe'"
                 echo ""
-                (( issues++ ))
+                issues=$(( issues + 1 ))
             done <<< "$_c_matches"
         fi
 
         # 3. mapfile / readarray (Bash 4+ only)
-        _c_matches=$(\grep -nE '^[[:space:]]*(mapfile|readarray)[[:space:]]' "$f" 2>/dev/null)
+        _c_matches=$(command grep -nE '^[[:space:]]*(mapfile|readarray)[[:space:]]' "$f" 2>/dev/null)
         if [[ -n "$_c_matches" ]]; then
             while IFS= read -r _entry; do
                 [[ -z "$_entry" ]] && continue
                 line_num="${_entry%%:*}"
                 line_text="${_entry#*:}"
-                case "$line_text" in [[:space:]]#*|\#*) continue ;; esac
+                _is_comment_line "$line_text" && continue
                 case "$line_text" in *'mapfile()'*) continue ;; esac
                 echo "⚠️  [MAPFILE] $f:$line_num"
                 echo "   Line: $line_text"
                 echo "   Risk: 'mapfile/readarray' is Bash 4+ only (undefined or returns 1-based array in Zsh)"
                 echo "   Fix : Use 'while IFS= read -r _l; do arr+=(\"\$_l\"); done < ...'"
                 echo ""
-                (( issues++ ))
+                issues=$(( issues + 1 ))
             done <<< "$_c_matches"
         fi
 
         # 4. declare -n (Nameref, Bash 4.3+ only)
-        _c_matches=$(\grep -nE '^[[:space:]]*declare[[:space:]]+-[a-zA-Z]*n[[:space:]]' "$f" 2>/dev/null)
+        _c_matches=$(command grep -nE '^[[:space:]]*declare[[:space:]]+-[a-zA-Z]*n[[:space:]]' "$f" 2>/dev/null)
         if [[ -n "$_c_matches" ]]; then
             while IFS= read -r _entry; do
                 [[ -z "$_entry" ]] && continue
                 line_num="${_entry%%:*}"
                 line_text="${_entry#*:}"
-                case "$line_text" in [[:space:]]#*|\#*) continue ;; esac
+                _is_comment_line "$line_text" && continue
                 echo "⚠️  [NAMEREF] $f:$line_num"
                 echo "   Line: $line_text"
                 echo "   Risk: 'declare -n' (nameref) is unsupported in Zsh"
                 echo "   Fix : Use 'typeset -g', eval, or pass positional arguments"
                 echo ""
-                (( issues++ ))
+                issues=$(( issues + 1 ))
             done <<< "$_c_matches"
         fi
     done
@@ -417,9 +459,10 @@ _C(){
 
 get_real_width() {
     local text="$1"
-    # 1. ??? Bash PS1 prompt delimiters (\[, \])
-    text="${text//\\[/}"
-    text="${text//\\]/}"
+    # 1. Strip Bash PS1 prompt delimiters (\[ \])
+    # zsh-safe: "${text//\\[/}" is a "bad pattern" under zsh (it reads \[ as
+    # a bracket expression). A character class works identically in both.
+    text="${text//[\[\]]/}"
 
     # 2. ??? ANSI escape codes ??? OSC sequences
     local plain_text
