@@ -106,7 +106,7 @@ TRIGGER_BALANCE_PROFIT=$(mth "$START_BALANCE+($PROFIT_TRIGGER/100)*$START_BALANC
 # Payout & Thresholds for PROFIT MODE
 payout=$(mth "(1-($HE/100))/($WIN_CHANCE/100)" 4 d)
 profit_win_mul=$(mth "$payout - 1" 4 d)
-LOSEMUL=$(mth "1 + (1 / ($payout - 1)) + (0.05 / $payout)" 4 d)
+if fgte "1.0001" "$payout"; then LOSEMUL=2.0000; else LOSEMUL=$(mth "1 + (1 / ($payout - 1)) + (0.05 / $payout)" 4 d); fi
 profit_threshold_low=$(mth "$WIN_CHANCE*100" 0 d)
 profit_threshold_high=$(mth "(100-$WIN_CHANCE)*100" 0 d)
 
@@ -122,6 +122,7 @@ wager_threshold_high=$(mth "(100-$WAGER_WIN_CHANCE)*100" 0 d)
 balance=$START_BALANCE
 wagered=0
 total_profit=0
+profit_vault=0          # --- Vault for securing profits from recovery cycles
 round=0
 win_count=0
 win_streak=0
@@ -226,7 +227,7 @@ profit_mode() {
     if [[ "$result" == "win" ]]; then
         win_amount=$(fmul "$bet" "$profit_win_mul")
         balance=$(fadd "$balance" "$win_amount")
-        total_profit=$(fsub "$balance" "$START_BALANCE")
+        total_profit=$(fadd "$(fsub "$balance" "$START_BALANCE")" "$profit_vault")
         nextbet=$BASE_BET
         loss_streak=0
         ((win_count++))
@@ -234,7 +235,7 @@ profit_mode() {
     else
         balance=$(fsub "$balance" "$bet")
         nextbet=$(fmul "$bet" "$LOSEMUL")
-        total_profit=$(fsub "$balance" "$START_BALANCE")
+        total_profit=$(fadd "$(fsub "$balance" "$START_BALANCE")" "$profit_vault")
         win_streak=0
         ((loss_streak++))
         ((lose_count++))
@@ -252,7 +253,7 @@ wagering_mode() {
     if [[ "$result" == "win" ]]; then
         win_amount=$(fmul "$bet" "$wager_win_mul")
         balance=$(fadd "$balance" "$win_amount")
-        total_profit=$(fsub "$balance" "$START_BALANCE")
+        total_profit=$(fadd "$(fsub "$balance" "$START_BALANCE")" "$profit_vault")
         nextbet=$WAGER_BASE_BET
         loss_streak=0
         ((win_count++))
@@ -260,7 +261,7 @@ wagering_mode() {
     else
         balance=$(fsub "$balance" "$bet")
         nextbet=$WAGER_BASE_BET
-        total_profit=$(fsub "$balance" "$START_BALANCE")
+        total_profit=$(fadd "$(fsub "$balance" "$START_BALANCE")" "$profit_vault")
         win_streak=0
         ((loss_streak++))
         ((lose_count++))
@@ -296,10 +297,7 @@ dobet() {
                 loss_streak=0
             fi
         elif [[ "$MODE" == "PROFIT" ]]; then
-            # Currently in RECOVERY (PROFIT): Exit recovery if:
-            # 1. Just WON and capital is fully restored (balance >= START_BALANCE)
-            # OR
-            # 2. Balance reached TRIGGER_BALANCE_PROFIT target
+            # Currently in RECOVERY (PROFIT): Check if capital is recovered
             local recovered=false
             if [[ "$res" == "win" ]] && fgte "$balance" "$START_BALANCE"; then
                 recovered=true
@@ -308,8 +306,15 @@ dobet() {
             fi
 
             if [[ "$recovered" == true ]]; then
+                # Skim surplus profit into vault and reset main balance to START_BALANCE
+                local surplus=$(fsub "$balance" "$START_BALANCE")
+                profit_vault=$(fadd "$profit_vault" "$surplus")
+                balance=$START_BALANCE
+                total_profit=$profit_vault
+
                 echo ""
-                cn 46 b "  >>> [MODE SWITCH] 🎯 Capital recovered! (Bal: $balance >= Start: $START_BALANCE) -> RESUME WAGER MODE <<<"
+                cn 46 b "  >>> [MODE SWITCH] 🎯 Capital recovered! Secured +$surplus to Vault (Total Vault: $profit_vault) <<<"
+                cn 46 b "  >>> Main Balance reset to $START_BALANCE -> RESUME WAGER MODE <<<"
                 MODE="WAGER"
                 nextbet=$WAGER_BASE_BET
                 loss_streak=0
@@ -533,6 +538,7 @@ else
     bal_c="$(_gr "$balance")"
 fi
 wagered_c="$(cn 245 b "$wagered")"
+vault_c="$(+c "+$profit_vault")"
 
 echo ""
 cn 136 b "=========================================================================="
@@ -541,13 +547,14 @@ cn 136 b "======================================================================
 printf "  $(_wc 'Rounds'): %d  $(+c 'W'): %d  $(-c 'L'): %d  $(_wc 'MaxStreak'): %d\n" \
     "$round" "$win_count" "$lose_count" "$max_loss_streak"
 
-printf "  $(_wc 'Final Balance'): %s\n" "$bal_c"
-printf "  $(_wc 'Net PnL'): %s\n" "$profit_c"
-printf "  $(_wc 'Wagered'): %s / %.2f\n" "$wagered_c" "$WAGER_TARGET"
+printf "  $(_wc 'Active Balance'): %s\n" "$bal_c"
+printf "  $(_wc 'Profit Vault'):   %s\n" "$vault_c"
+printf "  $(_wc 'Net Total PnL'):  %s\n" "$profit_c"
+printf "  $(_wc 'Wagered'):        %s / %.2f\n" "$wagered_c" "$WAGER_TARGET"
 
-if fgt "$balance" "$START_BALANCE"; then
+if fgt "$total_profit" "0"; then
     +c "  Result: PROFIT"
-elif fgt "$START_BALANCE" "$balance"; then
+elif fgt "0" "$total_profit"; then
     -c "  Result: LOSS"
 else
     _gr "  Result: BREAK EVEN"

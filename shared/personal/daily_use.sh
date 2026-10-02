@@ -8,7 +8,8 @@ b20_bk(){
 }
 
 # -- ssot sync to git-bash || wsl || wsl2
-upssot() {
+ssot_update() {
+	
 	cd "$HOME/ssot" || return 1
 	git add .
 	git commit -m "Update from $JOE_ENV"

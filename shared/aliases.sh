@@ -149,3 +149,4 @@ alias 2py='python3 $b2p_path'
 
 alias dice="bash $SSOT/roll.sh"
 alias dicepy="$_py $SSOT/roll.py"
+alias dcf='micro $SSOT/dice.env'

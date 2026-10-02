@@ -6,6 +6,7 @@ Supports:
   - Mode 1: Profit Mode (Martingale recovery with low win chance)
   - Mode 2: Wager Mode (High win chance, flat bet to build wager volume)
   - Mode 3: Hybrid Mode (Wager mode that switches to Profit recovery when dropped)
+  - Profit Vault: Secures surplus profits upon recovery completion
   - Central Config: Reads defaults from ~/ssot/dice.env
 ============================================================
 """
@@ -151,7 +152,7 @@ def run_simulation():
     stop_on_win = args.on_win
     bet_target = args.strategy
 
-    # Thresholds & triggers from env or defaults
+    # Thresholds & triggers
     loss_trigger_pct = float(env_cfg.get("LOSS_TRIGGER", 2.0))
     profit_trigger_pct = float(env_cfg.get("PROFIT_TRIGGER", 1.0))
     wager_bet_pct = float(env_cfg.get("WAGER_BET", 2.5))
@@ -166,7 +167,7 @@ def run_simulation():
     # Profit Mode Math
     profit_payout = (1.0 - (house_edge / 100.0)) / (profit_win_chance / 100.0)
     profit_win_mul = profit_payout - 1.0
-    lose_mul = 1.0 + (1.0 / (profit_payout - 1.0)) + (0.05 / profit_payout)
+    lose_mul = (1.0 + (1.0 / (profit_payout - 1.0)) + (0.05 / profit_payout)) if (profit_payout > 1.0) else 2.0
     profit_t_low = int(profit_win_chance * 100)
     profit_t_high = int((100 - profit_win_chance) * 100)
 
@@ -178,6 +179,7 @@ def run_simulation():
 
     # State variables
     balance = start_balance
+    profit_vault = 0.0          # Vault for securing recovered profit
     wagered = 0.0
     total_profit = 0.0
     round_num = 0
@@ -328,7 +330,7 @@ def run_simulation():
             if result == "win":
                 win_amount = current_bet * wager_win_mul
                 balance += win_amount
-                total_profit = balance - start_balance
+                total_profit = (balance - start_balance) + profit_vault
                 nextbet = wager_base_bet
                 loss_streak = 0
                 win_count += 1
@@ -336,7 +338,7 @@ def run_simulation():
             else:
                 balance -= current_bet
                 nextbet = wager_base_bet
-                total_profit = balance - start_balance
+                total_profit = (balance - start_balance) + profit_vault
                 win_streak = 0
                 loss_streak += 1
                 lose_count += 1
@@ -346,7 +348,7 @@ def run_simulation():
             if result == "win":
                 win_amount = current_bet * profit_win_mul
                 balance += win_amount
-                total_profit = balance - start_balance
+                total_profit = (balance - start_balance) + profit_vault
                 nextbet = base_bet
                 loss_streak = 0
                 win_count += 1
@@ -354,14 +356,14 @@ def run_simulation():
             else:
                 balance -= current_bet
                 nextbet = current_bet * lose_mul
-                total_profit = balance - start_balance
+                total_profit = (balance - start_balance) + profit_vault
                 win_streak = 0
                 loss_streak += 1
                 lose_count += 1
                 if loss_streak > max_loss_streak:
                     max_loss_streak = loss_streak
 
-        # Mode Transition Check (Hybrid Mode 3)
+        # Mode Transition Check with Profit Vault Skimming (Hybrid Mode 3)
         if game_mode == 3:
             if current_mode == "WAGER":
                 if balance <= trigger_balance:
@@ -378,8 +380,14 @@ def run_simulation():
                     recovered = True
 
                 if recovered:
+                    surplus = balance - start_balance
+                    profit_vault += surplus
+                    balance = start_balance
+                    total_profit = profit_vault
+
                     print()
-                    print(cn(46, f"  >>> [MODE SWITCH] 🎯 Capital recovered! (Bal: {balance:.2f} >= Start: {start_balance:.2f}) -> RESUME WAGER MODE <<<", True))
+                    print(cn(46, f"  >>> [MODE SWITCH] 🎯 Capital recovered! Secured +{surplus:.8f} to Vault (Total Vault: {profit_vault:.8f}) <<<", True))
+                    print(cn(46, f"  >>> Main Balance reset to {start_balance:.8f} -> RESUME WAGER MODE <<<", True))
                     current_mode = "WAGER"
                     nextbet = wager_base_bet
                     loss_streak = 0
@@ -402,6 +410,7 @@ def run_simulation():
         bal_c = _gr(f"{balance:.8f}")
 
     wagered_c = cn(245, f"{wagered:.8f}", True)
+    vault_c = pos_c(f"+{profit_vault:.8f}")
 
     print()
     print(cn(136, "=" * 74))
@@ -411,13 +420,14 @@ def run_simulation():
         f"  {_wc('Rounds')}: {round_num}  {pos_c('W')}: {win_count}  "
         f"{neg_c('L')}: {lose_count}  {_wc('MaxStreak')}: {max_loss_streak}"
     )
-    print(f"  {_wc('Final Balance')}: {bal_c}")
-    print(f"  {_wc('Net PnL')}: {profit_c}")
-    print(f"  {_wc('Wagered')}: {wagered_c} / {wager_target:.2f}")
+    print(f"  {_wc('Active Balance')}: {bal_c}")
+    print(f"  {_wc('Profit Vault')}:   {vault_c}")
+    print(f"  {_wc('Net Total PnL')}:  {profit_c}")
+    print(f"  {_wc('Wagered')}:        {wagered_c} / {wager_target:.2f}")
 
-    if balance > start_balance:
+    if total_profit > 0:
         print(pos_c("  Result: PROFIT"))
-    elif start_balance > balance:
+    elif total_profit < 0:
         print(neg_c("  Result: LOSS"))
     else:
         print(_gr("  Result: BREAK EVEN"))
