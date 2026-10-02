@@ -460,9 +460,13 @@ _C(){
 get_real_width() {
     local text="$1"
     # 1. Strip Bash PS1 prompt delimiters (\[ \])
-    # zsh-safe: "${text//\\[/}" is a "bad pattern" under zsh (it reads \[ as
-    # a bracket expression). A character class works identically in both.
-    text="${text//[\[\]]/}"
+    # "${text//\[/}" is a "bad pattern" under zsh, but the character-class
+    # form that replaced it is WRONG IN BASH: `\[` inside a bash pattern is
+    # an escaped literal, so nothing is removed and the backslashes survive
+    # ("\[\]|\[\]" measured 5 instead of 1). Two separate passes work in
+    # both shells.
+    text="${text//\\[/}"
+    text="${text//\\]/}"
 
     # 2. ??? ANSI escape codes ??? OSC sequences
     local plain_text

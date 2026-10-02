@@ -708,30 +708,62 @@ alias d_='draw_'
 # ============================================================
 get_real_width() {
     local text="$1"
+    # Bash PS1 prompt delimiters \[ \]
+    # REGRESSION FIX 2026-10-03: an earlier edit swapped this to the
+    # zsh-safe form "${text//[\[\]]/}". That form is WRONG IN BASH: inside a
+    # bash pattern \[ is an escaped literal, so the bracket is never
+    # consumed and the backslashes survive — "\[\]|\[\]" measured 5 columns
+    # instead of 1, and every prompt border rendered 4 columns too wide.
+    # Strip the backslash and the bracket in two separate passes: valid in
+    # both shells (bash needs the escape, zsh tolerates it), and neither
+    # form leaves a bare unescaped bracket that zsh rejects as a bad pattern.
     text="${text//\\[/}"
     text="${text//\\]/}"
 
-    local plain_text
-    plain_text=$(printf '%s' "$text" | sed -E $'s/\x1b\\[[0-9;?]*[a-zA-Z]//g; s/\x1b\\][^\x07\x1b]*(\x07|\x1b\\\\)//g')
-
+    # Strip ANSI + measure in ONE python pass.
+    # BUG FIXED 2026-10-03: this used to pipe through
+    #   sed -E $'s/\x1b\\[[0-9;?]*[a-zA-Z]//g'
+    # Two failure modes, both observed on real machines:
+    #   1. `\x1b` inside $'...' is expansion-dependent — where it did not
+    #      expand to a real ESC byte, sed never matched, every CSI stayed
+    #      in the string and python counted escape characters as columns
+    #      (get_real_width returned 369 for a 40-column prompt).
+    #   2. It ran sed + python as two processes per prompt redraw.
+    # python sees the bytes directly and regexes them unambiguously.
     if command -v python3 >/dev/null 2>&1; then
         python3 -c '
-import sys, unicodedata
+import re, sys, unicodedata
+
 text = sys.argv[1]
+
+# --- strip ANSI entirely (no shell/sed involvement) ---
+# CSI: ESC [ params intermediates final   e.g. ESC[1;38;5;82m
+text = re.sub(r"\x1b\[[0-9;?]*[ -/]*[@-~]", "", text)
+# OSC: ESC ] ... (BEL | ESC \)            e.g. hyperlinks, titles
+text = re.sub(r"\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)", "", text)
+# Other 2-byte escapes (charset selection etc.)
+text = re.sub(r"\x1b[@-Z\\-_]", "", text)
+
 w = 0
 for ch in text:
-    if unicodedata.combining(ch) or ch == "\ufe0f":
+    if unicodedata.combining(ch):
         continue
-    code = ord(ch)
-    if (0x1F300 <= code <= 0x1FAFF) or (0x2600 <= code <= 0x27BF) or (0x2300 <= code <= 0x23FF):
-        w += 2
+    if ch == "\ufe0f":          # VARIATION SELECTOR-16: zero-width
         continue
-    eaw = unicodedata.east_asian_width(ch)
-    w += 2 if eaw in ("W", "F") else 1
+    if ch == "\ufe0e":          # VARIATION SELECTOR-15: zero-width
+        continue
+    # Width is decided by East_Asian_Width alone. The old code forced
+    # 0x2300-0x23FF / 0x2600-0x27BF / emoji to 2 columns, which made
+    # "\u2727" (WHITE FOUR POINTED STAR, EAW=Neutral=1) render the
+    # border one column too wide. Neutral chars are 1 column.
+    w += 2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1
 print(w)
-' "$plain_text" 2>/dev/null || echo "${#plain_text}"
+' "$text" 2>/dev/null || echo "${#text}"
     else
-        echo "${#plain_text}"
+        # No python3: count characters, minus the ones we can strip in bash.
+        local plain
+        plain=$(printf '%s' "$text" | sed 's/\x1b\[[0-9;?]*[a-zA-Z]//g' 2>/dev/null)
+        printf '%s' "${plain:-$text}" | wc -m
     fi
 }
 
