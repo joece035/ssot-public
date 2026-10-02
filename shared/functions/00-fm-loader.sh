@@ -16,9 +16,14 @@ _FM_MANAGER_PATH="${SSOT:-$repository}/core/bash-manager.sh"
 # Usage: _register_lazy <source_file> <func1> [func2 ...]
 # ============================================================
 _register_lazy() {
+    # NOTE (zsh 5.9 bug): ต้องประกาศ local ทุกตัว "ครั้งเดียว" นอกลูป
+    # ถ้า `local <var>` อยู่ *ภายใน* for loop → zsh จะ dump "name=value"
+    # ลง stdout ทุกรอบ (เห็นเป็น stub=$'fm_learn() {...}' เต็มจอตอน login)
+    # เป็น bug ของ zsh 5.9 เอง ไม่ใช่ quoting bug — bash ไม่เจอ
     local source_file="$1"
     shift
     local func_names=("$@")
+    local func stub
 
     if [[ ! -f "$source_file" ]]; then
         echo "⚠️  _register_lazy: File not found: $source_file" >&2
@@ -28,7 +33,6 @@ _register_lazy() {
     for func in "${func_names[@]}"; do
         # ใช้ printf เพื่อสร้าง stub function body อย่างปลอดภัย
         # หลีกเลี่ยง quoting hell ใน eval string ที่ซับซ้อน
-        local stub
         stub="$(printf '%s() {
     unset -f %s 2>/dev/null
     if source %s; then
