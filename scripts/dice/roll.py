@@ -12,6 +12,7 @@ Supports:
 """
 
 import argparse
+import math
 import os
 from pathlib import Path
 import random
@@ -687,5 +688,212 @@ def run_simulation():
     print(cn(136, "=" * 74))
 
 
+# ─────────────────────────────────────────
+# [CALC] BASEBET CALCULATOR
+# ─────────────────────────────────────────
+def calc_basebet():
+    """
+    Optimal BaseBet Calculator.
+    Formula: BaseBet = Balance * (mul - 1) / (mul^N - 1)
+    Default N is derived from: P(N consecutive losses) < risk_threshold
+    => N = ceil(log(risk) / log(1 - win_chance))
+    """
+    parser = argparse.ArgumentParser(
+        description="BaseBet Calculator — find the safe bet size to survive N losses",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="Example: roll.py calc --balance 10000 --mul 2.0 --chance 4.95\n"
+               "         roll.py calc --balance 10000 --mul 20 --chance 4.95 --max-loss-n 10"
+    )
+    parser.add_argument("--balance",     "-b",  type=float, required=True,
+                        help="Starting balance")
+    parser.add_argument("--mul",         "-m",  type=float, required=True,
+                        help="Loss multiplier (e.g. 2.0 for Martingale, 20 for your custom)")
+    parser.add_argument("--chance",      "-c",  type=float, required=True,
+                        help="Win chance %% (e.g. 4.95 for 4.95%%)")
+    parser.add_argument("--max-loss-n",  "-n",  type=int,   default=None,
+                        help="Max consecutive losses to cover (default: auto-calculated from --risk)")
+    parser.add_argument("--risk",        "-r",  type=float, default=0.001,
+                        help="Acceptable probability of hitting the streak (default: 0.001 = 0.1%%)")
+    parser.add_argument("--coverage",    "-cov", type=float, default=1.0,
+                        help="Fraction of balance to use as coverage (default: 1.0 = 100%%)")
+    args = parser.parse_args()
+
+    balance      = args.balance
+    mul          = args.mul
+    win_chance_p = args.chance / 100.0
+    loss_p       = 1.0 - win_chance_p
+    risk         = args.risk
+    coverage     = args.coverage
+
+    # Derived N from math if not provided
+    if args.max_loss_n is not None:
+        n_user = args.max_loss_n
+        n_auto = None
+    else:
+        if loss_p >= 1.0:
+            n_auto = 999
+        else:
+            n_auto = math.ceil(math.log(risk) / math.log(loss_p))
+        n_user = None
+
+    n_cover = n_user if n_user is not None else n_auto
+
+    def basebet_for(n: int, bal: float, m: float) -> float:
+        if m == 1.0:
+            return (bal * coverage) / n
+        try:
+            # Use log to avoid float overflow: m^n = exp(n * log(m))
+            log_mn = n * math.log(m)
+            if log_mn > 700:  # exp(710) ~ float max, guard overflow
+                # BaseBet ≈ balance * (m-1) / m^n ≈ ~0, but display as log-space estimate
+                log_basebet = math.log(bal * coverage * (m - 1.0)) - log_mn
+                return math.exp(log_basebet)
+            denom = math.exp(log_mn) - 1.0
+            if denom <= 0:
+                return 0.0
+            return (bal * coverage * (m - 1.0)) / denom
+        except (OverflowError, ValueError):
+            return 0.0
+
+    def total_exposure(n: int, base: float, m: float) -> float:
+        if m == 1.0:
+            return base * n
+        try:
+            mn = math.exp(n * math.log(m)) if n * math.log(m) < 700 else float("inf")
+            return base * (mn - 1.0) / (m - 1.0)
+        except (OverflowError, ValueError):
+            return float("inf")
+
+    sep = cn(136, "=" * 74)
+
+    print()
+    print(sep)
+    print(cn(255, "  BASEBET CALCULATOR", True))
+    print(sep)
+    print(f"  {_wc('Balance')}:       {pos_c(f'{balance:.8f}')}"
+          f"  {_wc('Coverage')}:    {cn(220, f'{coverage*100:.1f}%', True)}")
+    print(f"  {_wc('Multiplier')}:    {cn(220, f'{mul:.5f}x', True)}"
+          f"  {_wc('Win Chance')}: {cn(220, f'{args.chance:.4f}%', True)}")
+    print(f"  {_wc('Loss Prob')}:     {cn(220, f'{loss_p*100:.4f}%', True)}")
+    print(sep)
+
+    # Auto N info
+    if n_auto is not None:
+        streak_prob = loss_p ** n_auto
+        print(f"  {_wc('Risk Threshold')}:    {cn(208, f'{risk*100:.3f}%', True)}"
+              f"  (1 in {cn(220, f'{1/risk:,.0f}', True)} sessions)")
+        print(f"  {_wc('Auto N (math)')}:     {cn(46, str(n_auto), True)}"
+              f"  {_gr(f'(actual streak prob = {streak_prob:.6%})')}")
+    else:
+        streak_prob = loss_p ** n_user
+        print(f"  {_wc('Manual N')}:         {cn(46, str(n_user), True)}"
+              f"  {_gr(f'(streak prob = {streak_prob:.6%})')}")
+
+    print(sep)
+
+    def fmt_val(v: float, width: int = 18) -> str:
+        """Smart format: fixed 8dp for normal values, scientific for tiny ones."""
+        if v == 0.0:
+            return f"{'0.00000000':>{width}}"
+        if v != float("inf") and (abs(v) < 1e-7 or abs(v) > 1e15):
+            return f"{v:>{width}.6e}"
+        return f"{v:>{width}.8f}"
+
+    # ─── Min Practical Bet Threshold ───────────────────────────────────────
+    # Most platforms minimum is 0.00000001 (1 satoshi equivalent)
+    MIN_PRACTICAL_BET = 1e-8
+
+    # Find max N that balance can actually cover (BaseBet >= MIN_PRACTICAL_BET)
+    # BaseBet = balance * (m-1) / (m^N - 1)  >= min_bet
+    # => m^N - 1 <= balance * (m-1) / min_bet
+    # => N <= log(balance*(m-1)/min_bet + 1) / log(m)
+    if mul == 1.0:
+        max_coverable_n = int(balance * coverage / MIN_PRACTICAL_BET)
+    else:
+        try:
+            max_n_float = math.log(balance * coverage * (mul - 1.0) / MIN_PRACTICAL_BET + 1.0) / math.log(mul)
+            max_coverable_n = int(max_n_float)
+        except (ValueError, ZeroDivisionError):
+            max_coverable_n = 0
+
+    # Main result
+    base = basebet_for(n_cover, balance, mul)
+    exposure = total_exposure(n_cover, base, mul)
+    exp_pct = f"{(exposure/balance)*100:.2f}%" if exposure != float("inf") else "∞"
+    is_feasible = base >= MIN_PRACTICAL_BET
+
+    if not is_feasible:
+        # ── INSUFFICIENT BALANCE WARNING ─────────────────────────────────
+        print(cn(196, "  ╔══════════════════════════════════════════════════════════════════╗", True))
+        print(cn(196, f"  ║  ⛔  BALANCE INSUFFICIENT TO COVER THIS STRATEGY               ║", True))
+        print(cn(196, "  ╚══════════════════════════════════════════════════════════════════╝", True))
+        print()
+        print(f"  {_wc('Requested N')}:         {cn(196, str(n_cover), True)}"
+              f"  {_gr(f'(requires BaseBet = {fmt_val(base).strip()})')}")
+        print(f"  {_wc('Min Practical Bet')}:  {cn(220, f'{MIN_PRACTICAL_BET:.8f}', True)}")
+        print()
+        print(cn(208, f"  ⚠  Your balance of {balance:.8f} can only support up to:", True))
+        print()
+        rec_base = basebet_for(max_coverable_n, balance, mul)
+        print(f"  {pos_c('>>> Max Coverable N')}:  {cn(46, str(max_coverable_n), True)}"
+              f"  {_gr(f'(streak prob = {loss_p**max_coverable_n:.6%})')}")
+        print(f"  {pos_c('>>> Recommended BaseBet')}: {cn(226, fmt_val(rec_base).strip(), True)}")
+        print()
+        print(cn(245, "  Tip: Lower the multiplier, reduce N, or increase your balance.", False))
+        print()
+        # Update to max coverable for the rest of the output
+        n_cover = max_coverable_n
+        base = rec_base
+        exposure = total_exposure(n_cover, base, mul)
+        exp_pct = f"{(exposure/balance)*100:.2f}%" if exposure != float("inf") else "∞"
+    else:
+        print(f"  {_wc('Cover N Losses')}:   {cn(46, str(n_cover), True)}")
+        print(f"  {pos_c('>>> Recommended BaseBet')}: {cn(226, fmt_val(base).strip(), True)}")
+        print(f"  {_wc('Max Exposure')}:     {cn(208, fmt_val(exposure).strip(), True)}"
+              f"  {_gr(f'({exp_pct} of balance)')}")
+
+    # Bet progression table for N_cover
+    print(sep)
+    print(f"  {_wc('Bet Progression (consecutive losses)')}"
+          f"  {_gr(f'[BaseBet={fmt_val(base).strip()} | Mul={mul}x]')}")
+    print(sep)
+    acc = 0.0
+    b = base
+    limit = min(n_cover, 30)
+    for i in range(1, limit + 1):
+        acc += b
+        b_c = neg_c(fmt_val(b)) if b > balance * 0.1 else cn(245, fmt_val(b), False)
+        acc_c = neg_c(fmt_val(acc)) if acc >= balance else cn(220, fmt_val(acc), False)
+        print(f"  Loss #{i:>3d}: Bet = {b_c} | Cumulative = {acc_c}")
+        b *= mul
+    if n_cover > 30:
+        print(f"  {_gr(f'  ... ({n_cover - 30} more levels, showing first 30 only)')}")
+
+    # Scenario table: compare N presets
+    print(sep)
+    print(f"  {_wc('Scenario Comparison')} {_gr(f'(Balance={balance} | Mul={mul}x | Chance={args.chance}%)')}")
+    print(sep)
+    n_list = sorted(set([5, 10, 15, 20, n_cover] + ([n_user] if n_user else [])))
+    print(f"  {'N (Losses)':>12} | {'BaseBet':>18} | {'Exposure':>18} | Streak Prob")
+    print(f"  {'-'*12}-+-{'-'*18}-+-{'-'*18}-+-{'-'*16}")
+    for n in n_list:
+        bb = basebet_for(n, balance, mul)
+        exp = total_exposure(n, bb, mul)
+        try:
+            prob = loss_p ** n
+        except OverflowError:
+            prob = 0.0
+        mark = cn(226, " <<<", True) if n == n_cover else ""
+        print(f"  {n:>12} | {cn(220, fmt_val(bb), True)} | {cn(208, fmt_val(exp), True)} | {cn(245, f'{prob:.8%}', False)}{mark}")
+
+    print(sep)
+    print()
+
+
 if __name__ == "__main__":
-    run_simulation()
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1] == "calc":
+        sys.argv.pop(1)  # remove 'calc' subcommand
+        calc_basebet()
+    else:
+        run_simulation()
