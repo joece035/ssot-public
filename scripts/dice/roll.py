@@ -189,6 +189,7 @@ def run_simulation():
     loss_streak = 0
     max_loss_streak = 0
     wrong_side = 0
+    win_history: list[tuple[float, int, str]] = []
 
     if game_mode == 2:
         current_mode = "WAGER"
@@ -363,6 +364,9 @@ def run_simulation():
                 if loss_streak > max_loss_streak:
                     max_loss_streak = loss_streak
 
+        if result == "win":
+            win_history.append((win_amount, round_num, round_mode))
+
         # Mode Transition Check with Profit Vault Skimming (Hybrid Mode 3)
         if game_mode == 3:
             if current_mode == "WAGER":
@@ -434,6 +438,17 @@ def run_simulation():
 
     if stop_reason:
         print(cn(45, f"  Stop Reason: {stop_reason}"))
+
+    print(cn(136, "=" * 74))
+    print(f"  {pos_c('TOP 5 BIGGEST WINS')}")
+    print(cn(136, "=" * 74))
+    if win_history:
+        top5 = sorted(win_history, key=lambda x: x[0], reverse=True)[:5]
+        for rank, (amt, r_num, r_mode) in enumerate(top5, 1):
+            w_mode_c = cn(208, r_mode, True) if r_mode == "PROFIT" else cn(75, r_mode, True)
+            print(f"  #{rank}. {pos_c(f'+{amt:12.8f}')} | {_wc(f'Round {r_num}')} | {w_mode_c}")
+    else:
+        print(f"  {_gr('No wins recorded.')}")
 
     print(cn(136, "=" * 74))
     print(f"  {pos_c('Rare Number')}")

@@ -97,6 +97,33 @@ if [[ -n "$CLI_WAGER_TARGET" ]]; then
     WAGER_TARGET="$CLI_WAGER_TARGET"
 fi
 
+# ─────────────────────────────────────────
+# [1.5] MATH HELPERS
+# ─────────────────────────────────────────
+fadd() {
+    mth "$1+$2" 8 d
+}
+
+fsub() {
+    mth "$1-$2" 8 d
+}
+
+fmul() {
+    mth "$1*$2" 8 d
+}
+
+float_div() {
+    mth "$1/$2" 8 d
+}
+
+fgt() {
+    awk -v a="$1" -v b="$2" 'BEGIN { exit !(a > b) }'
+}
+
+fgte() {
+    awk -v a="$1" -v b="$2" 'BEGIN { exit !(a >= b) }'
+}
+
 STOP_LOSS=$(mth "($STOP_LOSS_TARGET/100)*$START_BALANCE" 8 d)
 WAGER_BASE_BET=$(mth "($WAGER_BET/100)*$START_BALANCE" 8 d)
 
@@ -130,6 +157,7 @@ lose_count=0
 loss_streak=0
 max_loss_streak=0
 last_roll=0
+win_history=""
 
 # Initial Mode & Initial Bet
 if [[ "$GAME_MODE" == "2" ]]; then
@@ -155,32 +183,6 @@ rare_number1100x=0
 rare_number990x=0
 wrong_side=0
 
-# ─────────────────────────────────────────
-# [3] MATH HELPERS
-# ─────────────────────────────────────────
-fadd() {
-    mth "$1+$2" 8 d
-}
-
-fsub() {
-    mth "$1-$2" 8 d
-}
-
-fmul() {
-    mth "$1*$2" 8 d
-}
-
-float_div() {
-    mth "$1/$2" 8 d
-}
-
-fgt() {
-    awk -v a="$1" -v b="$2" 'BEGIN { exit !(a > b) }'
-}
-
-fgte() {
-    awk -v a="$1" -v b="$2" 'BEGIN { exit !(a >= b) }'
-}
 
 # ─────────────────────────────────────────
 # [4] ROLL DICE (Mode Aware)
@@ -517,6 +519,11 @@ while (( round < MAX_ROUNDS )); do
     # --- settle math & check mode transitions ---
     dobet "$result" "$current_bet" "$round_mode"
 
+    # --- record win history ---
+    if [[ "$result" == "win" ]]; then
+        win_history+="${win_amount}|${round}|${round_mode}"$'\n'
+    fi
+
     # --- hunting ---
     hunting "$last_roll"
 
@@ -561,6 +568,27 @@ else
 fi
 
 [[ -n "$stop_reason" ]] && cn 45 b "  Stop Reason: $stop_reason"
+cn 136 b "=========================================================================="
+printf "  $(+c "TOP 5 BIGGEST WINS")\n"
+cn 136 b "=========================================================================="
+if [[ -n "$win_history" ]]; then
+    rank=1
+    while IFS='|' read -r w_amt w_rnd w_mod; do
+        [[ -z "$w_amt" ]] && continue
+        printf -v w_amt_fmt "%12.8f" "$w_amt"
+        w_amt_c="$(+c "+$w_amt_fmt")"
+        w_rnd_c="$(_wc "Round $w_rnd")"
+        if [[ "$w_mod" == "PROFIT" ]]; then
+            w_mod_c="$(cn 208 b "$w_mod")"
+        else
+            w_mod_c="$(cn 75 b "$w_mod")"
+        fi
+        printf "  #%d. %s | %s | %s\n" "$rank" "$w_amt_c" "$w_rnd_c" "$w_mod_c"
+        ((rank++))
+    done < <(printf "%s" "$win_history" | LC_ALL=C sort -t'|' -k1,1rn | head -n 5)
+else
+    printf "  $(_gr "No wins recorded.")\n"
+fi
 cn 136 b "=========================================================================="
 printf "  $(+c "Rare Number")\n" 
 cn 136 b "=========================================================================="
