@@ -143,10 +143,10 @@ alias ssh-audit='bash $SSOT/bootstrap/script/ssh_audit.sh'
 alias py="python3"
 # --codetrans
 export b2p_path="$SSOT/bash_to_python/codetrans.py"
-alias 2py='python3 $b2p_path'
+alias 2py='$_py $b2p_path'
 
 # -- dice simulator
 
-alias dice="bash $SSOT/roll.sh"
-alias dicepy="$_py $SSOT/roll.py"
+alias dice="bash $SSOT/scripts/dice/roll.sh"
+alias dicepy="$_py $SSOT/scripts/dice/roll.py"
 alias dcf='micro $SSOT/dice.env'
