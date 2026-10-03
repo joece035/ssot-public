@@ -54,6 +54,10 @@ def load_env_config() -> dict[str, str]:
                     key, val = line.split("=", 1)
                     val = val.split("#", 1)[0].strip().strip("\"'")
                     config[key.strip()] = val
+    # Allow OS environment variables to override
+    for k, v in os.environ.items():
+        if k in config or k.startswith("CUSTOM_"):
+            config[k] = v
     return config
 
 # ─────────────────────────────────────────
@@ -73,9 +77,9 @@ def parse_arguments(env_cfg: dict[str, str]):
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
-        "-m", "--mode", type=int, choices=[1, 2, 3],
+        "-m", "--mode", type=int, choices=[1, 2, 3, 4],
         default=cfg_get("GAME_MODE", 3, int),
-        help="Game mode: 1(profit), 2(wager), 3(hybrid)"
+        help="Game mode: 1(profit), 2(wager), 3(hybrid), 4(custom)"
     )
     parser.add_argument(
         "-b", "--basebet", type=float,
@@ -177,6 +181,57 @@ def run_simulation():
     wager_t_low = int(wager_win_chance * 100)
     wager_t_high = int((100 - wager_win_chance) * 100)
 
+    # Mode 4 (Custom Strategy) Configurations
+    c_base_bet = float(env_cfg.get("CUSTOM_BASE_BET", 0.000081))
+    c_win_chance = float(env_cfg.get("CUSTOM_WIN_CHANCE", 49.50))
+    c_bet_target = str(env_cfg.get("CUSTOM_BET_TARGET", "high")).strip().lower()
+
+    c_loss_mul = float(env_cfg.get("CUSTOM_LOSS_MUL", 2.0))
+    c_loss_mul_every = int(env_cfg.get("CUSTOM_LOSS_MUL_EVERY", 1))
+    c_loss_reset_first = int(env_cfg.get("CUSTOM_LOSS_RESET_FIRST", 0))
+    c_loss_chg_bet_streak = int(env_cfg.get("CUSTOM_LOSS_CHANGE_BET_STREAK", 0))
+    c_loss_chg_bet_val = float(env_cfg.get("CUSTOM_LOSS_CHANGE_BET_VALUE", 0.0))
+    c_loss_chg_chance_streak = int(env_cfg.get("CUSTOM_LOSS_CHANGE_CHANCE_STREAK", 0))
+    c_loss_chg_chance_val = float(env_cfg.get("CUSTOM_LOSS_CHANGE_CHANCE_VALUE", 0.0))
+
+    c_win_mul = float(env_cfg.get("CUSTOM_WIN_MUL", 1.0))
+    c_win_reset_base = int(env_cfg.get("CUSTOM_WIN_RESET_BASE", 1))
+
+    c_rst_after_bets = int(env_cfg.get("CUSTOM_RESET_AFTER_BETS", 0))
+    c_rst_loss_streak = int(env_cfg.get("CUSTOM_RESET_ON_LOSS_STREAK", 0))
+    c_rst_loss_tot_every = int(env_cfg.get("CUSTOM_RESET_ON_LOSS_TOTAL_EVERY", 0))
+    c_rst_loss_val_row = float(env_cfg.get("CUSTOM_RESET_ON_LOSS_VALUE_ROW", 0.0))
+    c_rst_loss_val_tot_every = float(env_cfg.get("CUSTOM_RESET_ON_LOSS_VALUE_TOTAL_EVERY", 0.0))
+    c_rst_loss_since_max_p = float(env_cfg.get("CUSTOM_RESET_ON_LOSS_SINCE_MAX_PROFIT", 0.0))
+
+    c_rst_win_streak = int(env_cfg.get("CUSTOM_RESET_ON_WIN_STREAK", 0))
+    c_rst_win_tot_every = int(env_cfg.get("CUSTOM_RESET_ON_WIN_TOTAL_EVERY", 0))
+    c_rst_win_val_row = float(env_cfg.get("CUSTOM_RESET_ON_WIN_VALUE_ROW", 0.0))
+    c_rst_win_val_tot_every = float(env_cfg.get("CUSTOM_RESET_ON_WIN_VALUE_TOTAL_EVERY", 0.0))
+    c_rst_win_since_min_p = float(env_cfg.get("CUSTOM_RESET_ON_WIN_SINCE_MIN_PROFIT", 0.0))
+
+    c_stp_after_bets = int(env_cfg.get("CUSTOM_STOP_AFTER_BETS", 0))
+    c_stp_loss_streak = int(env_cfg.get("CUSTOM_STOP_ON_LOSS_STREAK", 0))
+    c_stp_loss_tot = int(env_cfg.get("CUSTOM_STOP_ON_LOSS_TOTAL", 0))
+    c_stp_loss_val_row = float(env_cfg.get("CUSTOM_STOP_ON_LOSS_VALUE_ROW", 0.0))
+    c_stp_loss_val_tot = float(env_cfg.get("CUSTOM_STOP_ON_LOSS_VALUE_TOTAL", 0.0))
+    c_stp_loss_since_max_p = float(env_cfg.get("CUSTOM_STOP_ON_LOSS_SINCE_MAX_PROFIT", 0.0))
+
+    c_stp_win_streak = int(env_cfg.get("CUSTOM_STOP_ON_WIN_STREAK", 0))
+    c_stp_win_tot = int(env_cfg.get("CUSTOM_STOP_ON_WIN_TOTAL", 0))
+    c_stp_win_val_row = float(env_cfg.get("CUSTOM_STOP_ON_WIN_VALUE_ROW", 0.0))
+    c_stp_win_val_tot = float(env_cfg.get("CUSTOM_STOP_ON_WIN_VALUE_TOTAL", 0.0))
+    c_stp_win_since_min_p = float(env_cfg.get("CUSTOM_STOP_ON_WIN_SINCE_MIN_PROFIT", 0.0))
+
+    c_upper_limit_bal = float(env_cfg.get("CUSTOM_UPPER_LIMIT_BALANCE", 0.0))
+    c_lower_limit_bal = float(env_cfg.get("CUSTOM_LOWER_LIMIT_BALANCE", 0.0))
+    c_min_bet = float(env_cfg.get("CUSTOM_MIN_BET", 0.0))
+    c_max_bet = float(env_cfg.get("CUSTOM_MAX_BET", 0.0))
+    c_zigzag_every = int(env_cfg.get("CUSTOM_ZIGZAG_EVERY", 0))
+    c_bets_per_sec = float(env_cfg.get("CUSTOM_BETS_PER_SEC", 0.0))
+    if round_delay == 0.0 and c_bets_per_sec > 0:
+        round_delay = 1.0 / c_bets_per_sec
+
     # State variables
     balance = start_balance
     profit_vault = 0.0          # Vault for securing recovered profit
@@ -191,12 +246,27 @@ def run_simulation():
     wrong_side = 0
     win_history: list[tuple[float, int, str]] = []
 
+    # Custom Mode Runtime State
+    custom_current_chance = c_win_chance
+    active_bet_target = c_bet_target if game_mode == 4 else bet_target
+    max_profit = 0.0
+    min_profit = 0.0
+    loss_value_streak = 0.0
+    total_loss_value = 0.0
+    win_value_streak = 0.0
+    total_win_value = 0.0
+    zigzag_count = 0
+    loss_since_last_mul = 0
+
     if game_mode == 2:
         current_mode = "WAGER"
         nextbet = wager_base_bet
     elif game_mode == 3:
         current_mode = "WAGER"
         nextbet = wager_base_bet
+    elif game_mode == 4:
+        current_mode = "CUSTOM"
+        nextbet = c_base_bet
     else:
         current_mode = "PROFIT"
         nextbet = base_bet
@@ -222,19 +292,25 @@ def run_simulation():
         nonlocal wrong_side
         roll = random.randint(0, 9999)
 
-        if mode == "WAGER":
+        if mode == "CUSTOM":
+            t_low = int(custom_current_chance * 100)
+            t_high = int((100.0 - custom_current_chance) * 100)
+            cur_target = active_bet_target
+        elif mode == "WAGER":
             t_low, t_high = wager_t_low, wager_t_high
+            cur_target = bet_target
         else:
             t_low, t_high = profit_t_low, profit_t_high
+            cur_target = bet_target
 
-        if bet_target == "low":
+        if cur_target == "low":
             if roll < t_low:
                 result = "win"
             else:
                 result = "lose"
                 if roll >= t_high:
                     wrong_side += 1
-        else:  # bet_target == "high"
+        else:  # cur_target == "high"
             if roll >= t_high:
                 result = "win"
             else:
@@ -251,10 +327,39 @@ def run_simulation():
             return f"MAX_STREAK: {loss_streak} consecutive losses"
         if current_nextbet > balance:
             return f"BET_GT_BAL: bet={current_nextbet:.8f} balance={balance:.8f}"
-        if total_profit >= stop_profit:
-            return f"PROFIT REACHED: {stop_profit:.8f}"
-        if wagered >= wager_target:
-            return f"WAGER REACHED: {wager_target:.2f}"
+
+        if game_mode == 4:
+            if c_upper_limit_bal > 0 and balance >= c_upper_limit_bal:
+                return f"UPPER LIMIT: balance={balance:.8f} >= {c_upper_limit_bal:.8f}"
+            if c_lower_limit_bal > 0 and balance <= c_lower_limit_bal:
+                return f"LOWER LIMIT: balance={balance:.8f} <= {c_lower_limit_bal:.8f}"
+            if c_stp_after_bets > 0 and round_num >= c_stp_after_bets:
+                return f"STOP AFTER BETS: reached {c_stp_after_bets} bets"
+            if c_stp_loss_streak > 0 and loss_streak >= c_stp_loss_streak:
+                return f"STOP ON LOSS STREAK: {loss_streak} losses in a row"
+            if c_stp_loss_tot > 0 and lose_count >= c_stp_loss_tot:
+                return f"STOP ON TOTAL LOSSES: {lose_count} losses"
+            if c_stp_loss_val_row > 0 and loss_value_streak >= c_stp_loss_val_row:
+                return f"STOP ON VALUE LOST IN A ROW: {loss_value_streak:.8f}"
+            if c_stp_loss_val_tot > 0 and total_loss_value >= c_stp_loss_val_tot:
+                return f"STOP ON TOTAL VALUE LOST: {total_loss_value:.8f}"
+            if c_stp_loss_since_max_p > 0 and (max_profit - total_profit) >= c_stp_loss_since_max_p:
+                return f"STOP ON LOSS SINCE MAX PROFIT: {(max_profit - total_profit):.8f}"
+            if c_stp_win_streak > 0 and win_streak >= c_stp_win_streak:
+                return f"STOP ON WIN STREAK: {win_streak} wins in a row"
+            if c_stp_win_tot > 0 and win_count >= c_stp_win_tot:
+                return f"STOP ON TOTAL WINS: {win_count} wins"
+            if c_stp_win_val_row > 0 and win_value_streak >= c_stp_win_val_row:
+                return f"STOP ON VALUE WON IN A ROW: {win_value_streak:.8f}"
+            if c_stp_win_val_tot > 0 and total_win_value >= c_stp_win_val_tot:
+                return f"STOP ON TOTAL VALUE WON: {total_win_value:.8f}"
+            if c_stp_win_since_min_p > 0 and (total_profit - min_profit) >= c_stp_win_since_min_p:
+                return f"STOP ON WIN SINCE MIN PROFIT: {(total_profit - min_profit):.8f}"
+        else:
+            if total_profit >= stop_profit:
+                return f"PROFIT REACHED: {stop_profit:.8f}"
+            if wagered >= wager_target:
+                return f"WAGER REACHED: {wager_target:.2f}"
         return ""
 
     def print_round(r_num: int, roll: int, result: str, bet: float, mode_played: str, win_amt: float):
@@ -265,15 +370,31 @@ def run_simulation():
 
         bal_c = neg_c(bal_fmt) if start_balance > balance else cn(28, bal_fmt, True)
 
-        active_high = wager_t_high if mode_played == "WAGER" else profit_t_high
-        active_low = wager_t_low if mode_played == "WAGER" else profit_t_low
+        if mode_played == "CUSTOM":
+            active_high = int((100.0 - custom_current_chance) * 100)
+            active_low = int(custom_current_chance * 100)
+            cur_target = active_bet_target
+        elif mode_played == "WAGER":
+            active_high = wager_t_high
+            active_low = wager_t_low
+            cur_target = bet_target
+        else:
+            active_high = profit_t_high
+            active_low = profit_t_low
+            cur_target = bet_target
 
-        if (bet_target == "low" and roll >= active_high) or (bet_target == "high" and roll < active_low):
+        if (cur_target == "low" and roll >= active_high) or (cur_target == "high" and roll < active_low):
             roll_c = cn(45, roll_fmt, True)
         else:
             roll_c = cn(245, roll_fmt, False)
 
-        mode_badge = cn(208, "PROFIT", True) if mode_played == "PROFIT" else cn(75, "WAGER ", True)
+        if mode_played == "CUSTOM":
+            mode_badge = cn(39, "CUSTOM", True)
+        elif mode_played == "PROFIT":
+            mode_badge = cn(208, "PROFIT", True)
+        else:
+            mode_badge = cn(75, "WAGER ", True)
+
         icon = pos_c("WIN ") if result == "win" else neg_c("LOSS")
 
         if mode_played == "WAGER":
@@ -300,9 +421,14 @@ def run_simulation():
     print(cn(136, "=" * 74))
     print(cn(255, "  DICE SIMULATOR - MULTI MODE ENGINE (Python)"))
     print(cn(136, "=" * 74))
-    print(f" Mode: {current_mode} | Bal: {start_balance:.8f} | Base: {base_bet:.8f} | WagerBet: {wager_base_bet:.8f}")
-    print(f" ProfitWC: {profit_win_chance:.2f}% ({profit_payout:.4f}x) | WagerWC: {wager_win_chance:.2f}% ({wager_payout:.4f}x)")
-    print(f" StopProfit: +{stop_profit:.8f} | WagerTarget: {wager_target:.2f} | LossTrigger: -{loss_trigger_pct:.1f}% (<={trigger_balance:.2f})")
+    if current_mode == "CUSTOM":
+        print(f" Mode: CUSTOM | Bal: {start_balance:.8f} | Base: {c_base_bet:.8f} | Chance: {c_win_chance:.2f}% | Target: {active_bet_target.upper()}")
+        print(f" LossMul: {c_loss_mul:.2f}x (every {c_loss_mul_every}) | WinMul: {c_win_mul:.2f}x (resetBase={bool(c_win_reset_base)})")
+        print(f" ZigZag: every {c_zigzag_every} bets | Limits: MinBet={c_min_bet:.8f} MaxBet={c_max_bet:.8f}")
+    else:
+        print(f" Mode: {current_mode} | Bal: {start_balance:.8f} | Base: {base_bet:.8f} | WagerBet: {wager_base_bet:.8f}")
+        print(f" ProfitWC: {profit_win_chance:.2f}% ({profit_payout:.4f}x) | WagerWC: {wager_win_chance:.2f}% ({wager_payout:.4f}x)")
+        print(f" StopProfit: +{stop_profit:.8f} | WagerTarget: {wager_target:.2f} | LossTrigger: -{loss_trigger_pct:.1f}% (<={trigger_balance:.2f})")
     print(cn(136, "=" * 74))
 
     stop_reason = ""
@@ -327,7 +453,103 @@ def run_simulation():
 
         # Settle Math
         win_amount = 0.0
-        if round_mode == "WAGER":
+        if round_mode == "CUSTOM":
+            c_payout = (1.0 - (house_edge / 100.0)) / (custom_current_chance / 100.0)
+            c_win_multiplier = c_payout - 1.0
+            if result == "win":
+                win_amount = current_bet * c_win_multiplier
+                balance += win_amount
+                total_profit = balance - start_balance
+                max_profit = max(max_profit, total_profit)
+                min_profit = min(min_profit, total_profit)
+
+                win_count += 1
+                win_streak += 1
+                loss_streak = 0
+                loss_value_streak = 0.0
+                win_value_streak += win_amount
+                total_win_value += win_amount
+                loss_since_last_mul = 0
+                custom_current_chance = c_win_chance  # Reset dynamic chance
+
+                if c_win_reset_base == 1:
+                    nextbet = c_base_bet
+                else:
+                    nextbet = current_bet * c_win_mul
+
+                # On Win Reset Triggers
+                if c_rst_win_streak > 0 and win_streak % c_rst_win_streak == 0:
+                    nextbet = c_base_bet
+                if c_rst_win_tot_every > 0 and win_count % c_rst_win_tot_every == 0:
+                    nextbet = c_base_bet
+                if c_rst_win_val_row > 0 and win_value_streak >= c_rst_win_val_row:
+                    nextbet = c_base_bet
+                    win_value_streak = 0.0
+                if c_rst_win_val_tot_every > 0 and total_win_value >= c_rst_win_val_tot_every:
+                    nextbet = c_base_bet
+                if c_rst_win_since_min_p > 0 and (total_profit - min_profit) >= c_rst_win_since_min_p:
+                    nextbet = c_base_bet
+            else:
+                balance -= current_bet
+                total_profit = balance - start_balance
+                max_profit = max(max_profit, total_profit)
+                min_profit = min(min_profit, total_profit)
+
+                win_streak = 0
+                win_value_streak = 0.0
+                loss_streak += 1
+                lose_count += 1
+                loss_value_streak += current_bet
+                total_loss_value += current_bet
+                loss_since_last_mul += 1
+                if loss_streak > max_loss_streak:
+                    max_loss_streak = loss_streak
+
+                # Multiplier calculation
+                if c_loss_reset_first == 1 and loss_streak == 1:
+                    nextbet = c_base_bet
+                elif loss_since_last_mul >= c_loss_mul_every:
+                    nextbet = current_bet * c_loss_mul
+                    loss_since_last_mul = 0
+                else:
+                    nextbet = current_bet
+
+                # Dynamic changes after streak
+                if c_loss_chg_bet_streak > 0 and loss_streak >= c_loss_chg_bet_streak:
+                    nextbet = c_loss_chg_bet_val
+                if c_loss_chg_chance_streak > 0 and loss_streak >= c_loss_chg_chance_streak:
+                    custom_current_chance = c_loss_chg_chance_val
+
+                # On Loss Reset Triggers
+                if c_rst_loss_streak > 0 and loss_streak % c_rst_loss_streak == 0:
+                    nextbet = c_base_bet
+                if c_rst_loss_tot_every > 0 and lose_count % c_rst_loss_tot_every == 0:
+                    nextbet = c_base_bet
+                if c_rst_loss_val_row > 0 and loss_value_streak >= c_rst_loss_val_row:
+                    nextbet = c_base_bet
+                    loss_value_streak = 0.0
+                if c_rst_loss_val_tot_every > 0 and total_loss_value >= c_rst_loss_val_tot_every:
+                    nextbet = c_base_bet
+                if c_rst_loss_since_max_p > 0 and (max_profit - total_profit) >= c_rst_loss_since_max_p:
+                    nextbet = c_base_bet
+
+            # General Reset Triggers
+            if c_rst_after_bets > 0 and round_num % c_rst_after_bets == 0:
+                nextbet = c_base_bet
+
+            # Min / Max Bet Cap
+            if c_min_bet > 0 and nextbet < c_min_bet:
+                nextbet = c_min_bet
+            if c_max_bet > 0 and nextbet > c_max_bet:
+                nextbet = c_max_bet
+
+            # Zig-Zag Toggle
+            if c_zigzag_every > 0:
+                zigzag_count += 1
+                if zigzag_count >= c_zigzag_every:
+                    active_bet_target = "low" if active_bet_target == "high" else "high"
+                    zigzag_count = 0
+        elif round_mode == "WAGER":
             if result == "win":
                 win_amount = current_bet * wager_win_mul
                 balance += win_amount
@@ -445,7 +667,12 @@ def run_simulation():
     if win_history:
         top5 = sorted(win_history, key=lambda x: x[0], reverse=True)[:5]
         for rank, (amt, r_num, r_mode) in enumerate(top5, 1):
-            w_mode_c = cn(208, r_mode, True) if r_mode == "PROFIT" else cn(75, r_mode, True)
+            if r_mode == "CUSTOM":
+                w_mode_c = cn(39, r_mode, True)
+            elif r_mode == "PROFIT":
+                w_mode_c = cn(208, r_mode, True)
+            else:
+                w_mode_c = cn(75, r_mode, True)
             print(f"  #{rank}. {pos_c(f'+{amt:12.8f}')} | {_wc(f'Round {r_num}')} | {w_mode_c}")
     else:
         print(f"  {_gr('No wins recorded.')}")
